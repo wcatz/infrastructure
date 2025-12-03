@@ -1,0 +1,48 @@
+# Cloudflared Tunnel Values - Staging Environment
+# These values override the base cloudflared-values.yaml for staging environment
+
+# Replica count for staging (production-like but smaller)
+replicaCount: 2
+
+# Cloudflare tunnel configuration
+cloudflare:
+  tunnelName: "infrastructure-staging-tunnel"
+  # tunnelId: "your-staging-tunnel-id"  # Set via secret or override
+
+# Staging ingress rules
+ingress:
+  # Example staging services
+  # - hostname: app.staging.example.com
+  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  # - hostname: api.staging.example.com
+  #   service: http://api-service.default.svc.cluster.local:8080
+  # - hostname: monitoring.staging.example.com
+  #   service: http://prometheus-server.monitoring.svc.cluster.local:80
+
+  # Default catch-all rule (required)
+  - service: http_status:404
+
+# Resource limits (moderate for staging)
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Auto-scaling configuration
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  # Note: Memory-based autoscaling requires Kubernetes 1.23+ and metrics-server
+  targetMemoryUtilizationPercentage: 80
+
+# Staging-specific environment variables
+env:
+  - name: TUNNEL_LOGLEVEL
+    value: "info"
+  - name: TUNNEL_TRANSPORT_PROTOCOL
+    value: "quic"

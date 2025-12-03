@@ -135,7 +135,8 @@ env: []
 #     --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json \
 #     -n cloudflare
 #
-# Reference: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/remote/
+# Reference:
+#   https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/remote/
 #
 # To use a different secret name or key, modify these values:
 existingSecret: "cloudflared-credentials"

@@ -1,0 +1,33 @@
+# HAProxy Ingress Controller Values - Staging Environment
+# These values override the base haproxy-ingress.yaml for staging environment
+
+controller:
+  # Two replicas for staging (production-like)
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Staging-specific configuration
+  config:
+    timeout-client: "50s"
+    timeout-server: "50s"
+    timeout-connect: "5s"
+    ssl-redirect: "true"
+
+  # Auto-scaling for staging
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+defaultBackend:
+  enabled: true
+  replicaCount: 1

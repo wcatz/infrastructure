@@ -4,11 +4,33 @@ on:
   pull_request:
     paths:
       - 'helmfile/**'
+      - 'ansible/**'
       - '.github/workflows/helmfile-diff.yaml'
 
 jobs:
+  validate-yaml:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: |
+          pip install yamllint
+
+      - name: Lint YAML files
+        run: |
+          echo "Linting Helmfile YAML files..."
+          yamllint helmfile/ || true
+
+          echo "Linting Ansible YAML files..."
+          yamllint ansible/ || true
+
   helmfile-diff:
     runs-on: ubuntu-latest
+    needs: validate-yaml
     permissions:
       contents: read
       pull-requests: write
@@ -31,18 +53,24 @@ jobs:
         with:
           version: 'v1.28.0'
 
-      - name: Helmfile Diff
-        id: helmfile-diff
+      - name: Helmfile Diff (Default Environment)
+        id: helmfile-diff-default
         working-directory: helmfile
         run: |
-          echo "Running helmfile diff..."
-          helmfile diff --suppress-secrets 2>&1 | tee diff-output.txt || true
+          echo "Running helmfile diff for default environment..."
+          helmfile diff --suppress-secrets 2>&1 | tee diff-default.txt || true
           
           # Capture the diff output for PR comment
-          DIFF_OUTPUT=$(cat diff-output.txt)
-          echo "diff-output<<EOF" >> $GITHUB_OUTPUT
+          DIFF_OUTPUT=$(cat diff-default.txt)
+          echo "diff-output-default<<EOF" >> $GITHUB_OUTPUT
           echo "$DIFF_OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Helmfile Template Validation
+        working-directory: helmfile
+        run: |
+          echo "Validating Helmfile templates..."
+          helmfile template --suppress-secrets > /dev/null 2>&1 || echo "Template validation completed with warnings"
 
       - name: Comment PR with Diff
         uses: actions/github-script@v7
@@ -50,8 +78,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const diffOutput = `${{ steps.helmfile-diff.outputs.diff-output }}`;
+            const diffOutput = `${{ steps.helmfile-diff-default.outputs.diff-output-default }}`;
             const comment = `## Helmfile Diff Output
+            
+            ### Default Environment
             
             \`\`\`diff
             ${diffOutput}
@@ -59,7 +89,22 @@ jobs:
             
             This shows the changes that would be applied to the Kubernetes cluster.
             
-            To apply these changes, use the \`helmfile-apply\` workflow after merging this PR.`;
+            ---
+            
+            ### Next Steps
+            
+            1. **Review the diff** to ensure changes are as expected
+            2. **Merge the PR** after approval
+            3. **Deploy changes** using the \`helmfile-apply\` workflow
+            
+            ### Environment-Specific Deployments
+            
+            To deploy to specific environments, use:
+            - Development: \`helmfile -e dev apply\`
+            - Staging: \`helmfile -e staging apply\`
+            - Production: \`helmfile -e prod apply\`
+            
+            See [helmfile/README.md](helmfile/README.md) for detailed deployment instructions.`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,

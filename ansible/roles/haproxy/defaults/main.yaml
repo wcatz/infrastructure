@@ -5,28 +5,61 @@ haproxy_version: "2.8"
 haproxy_service_enabled: true
 haproxy_service_state: started
 
+# Environment (dev, staging, prod) - defaults to prod
+haproxy_environment: "prod"
+
 # TCP/UDP backend configurations
+# These are example configurations - override in playbook or group_vars
 haproxy_tcp_backends:
+  # Example: MySQL NodePort service in Kubernetes
+  # Configured to load balance across multiple worker nodes
   - name: mysql
     port: 3306
     mode: tcp
     balance: roundrobin
     servers:
-      - name: mysql-1
-        address: 192.168.1.10
-        port: 3306
+      # NodePort services on Kubernetes worker nodes
+      # Replace with your actual worker node IPs and NodePort
+      - name: k8s-worker-1
+        address: 192.168.1.11
+        port: 30306  # Example NodePort for MySQL service
         check: true
         check_interval: 2s
+        rise: 2  # Number of successful checks before marking server up
+        fall: 3  # Number of failed checks before marking server down
+      - name: k8s-worker-2
+        address: 192.168.1.12
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+      - name: k8s-worker-3
+        address: 192.168.1.13
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
 
 haproxy_udp_backends:
+  # Example: WireGuard NodePort service in Kubernetes
   - name: wireguard
     port: 51820
     mode: udp
     balance: roundrobin
     servers:
-      - name: wireguard-1
-        address: 192.168.1.20
-        port: 51820
+      # NodePort services on Kubernetes worker nodes
+      # UDP health checks are not supported, so check is omitted
+      - name: k8s-worker-1
+        address: 192.168.1.11
+        port: 31820  # Example NodePort for WireGuard service
+      - name: k8s-worker-2
+        address: 192.168.1.12
+        port: 31820
+      - name: k8s-worker-3
+        address: 192.168.1.13
+        port: 31820
 
 # Global settings
 haproxy_global:

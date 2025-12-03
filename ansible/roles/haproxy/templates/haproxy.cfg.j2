@@ -42,10 +42,22 @@ frontend {{ backend.name }}_frontend
 backend {{ backend.name }}_backend
     mode {{ backend.mode }}
     balance {{ backend.balance }}
+    # Failover configuration - only add tcp-check if any server has health checks enabled
+{% set has_health_checks = false %}
+{% for server in backend.servers %}
+{% if server.check | default(false) %}
+{% set has_health_checks = true %}
+{% endif %}
+{% endfor %}
+{% if has_health_checks %}
+    option tcp-check
+{% endif %}
 {% for server in backend.servers %}
     server {{ server.name }} {{ server.address }}:{{ server.port }}
 {%- if server.check | default(false) %} check
 {%- if server.check_interval is defined %} inter {{ server.check_interval }}{% endif %}
+{%- if server.rise is defined %} rise {{ server.rise }}{% endif %}
+{%- if server.fall is defined %} fall {{ server.fall }}{% endif %}
 {%- endif %}
 
 {% endfor %}
