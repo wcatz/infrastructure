@@ -1,0 +1,98 @@
+---
+# Playbook to teardown the cluster setup
+# This playbook removes k3s, HAProxy, and Tailscale configurations
+# WARNING: This will destroy your cluster and all data!
+
+- name: Confirm teardown
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Warning message
+      ansible.builtin.debug:
+        msg: "WARNING: This will destroy your cluster and all data!"
+
+- name: Uninstall k3s from worker nodes
+  hosts: worker_nodes
+  become: yes
+  tasks:
+    - name: Stop k3s agent
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: stopped
+      failed_when: false
+
+    - name: Run k3s agent uninstall script
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s-agent-uninstall.sh
+      failed_when: false
+
+- name: Uninstall k3s from control plane
+  hosts: control_plane
+  become: yes
+  tasks:
+    - name: Stop k3s server
+      ansible.builtin.systemd:
+        name: k3s
+        state: stopped
+      failed_when: false
+
+    - name: Run k3s uninstall script
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s-uninstall.sh
+      failed_when: false
+
+    - name: Remove kubeconfig
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/.kube/config"
+        state: absent
+
+- name: Uninstall HAProxy
+  hosts: haproxy_servers
+  become: yes
+  tasks:
+    - name: Stop HAProxy service
+      ansible.builtin.systemd:
+        name: haproxy
+        state: stopped
+      failed_when: false
+
+    - name: Remove HAProxy
+      ansible.builtin.apt:
+        name: haproxy
+        state: absent
+        purge: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Remove HAProxy configuration
+      ansible.builtin.file:
+        path: /etc/haproxy
+        state: absent
+
+- name: Remove Tailscale (optional)
+  hosts: all
+  become: yes
+  tasks:
+    - name: Disconnect Tailscale
+      ansible.builtin.command:
+        cmd: tailscale down
+      failed_when: false
+
+    - name: Stop Tailscale service
+      ansible.builtin.systemd:
+        name: tailscaled
+        state: stopped
+      failed_when: false
+
+    - name: Optionally remove Tailscale package
+      ansible.builtin.apt:
+        name: tailscale
+        state: absent
+      when: ansible_os_family == "Debian" and remove_tailscale is defined and remove_tailscale
+
+- name: Display completion message
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Completion message
+      ansible.builtin.debug:
+        msg: "Teardown complete. All services have been stopped and uninstalled."

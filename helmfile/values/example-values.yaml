@@ -1,0 +1,75 @@
+---
+# Example values file for Helmfile deployments
+# Customize these values according to your application requirements
+
+# NGINX Ingress Controller Values
+nginx-ingress-values:
+  controller:
+    replicaCount: 2
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    service:
+      type: LoadBalancer
+      externalTrafficPolicy: Local
+    metrics:
+      enabled: true
+
+# cert-manager Values
+cert-manager-values:
+  installCRDs: true
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# Example Application Values
+my-app-values:
+  replicaCount: 3
+  image:
+    repository: nginx
+    tag: "1.25"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: app.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: app-tls
+        hosts:
+          - app.example.com
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# Development-specific values
+development-values:
+  environment: development
+  debug: true
+  logLevel: debug
+
+# Production-specific values
+production-values:
+  environment: production
+  debug: false
+  logLevel: info

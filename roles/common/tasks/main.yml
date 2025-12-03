@@ -1,0 +1,60 @@
+---
+# Common role - Basic system setup and updates
+# This role performs common tasks across all nodes
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Update all packages to the latest version
+  ansible.builtin.apt:
+    upgrade: dist
+  when: ansible_os_family == "Debian"
+
+- name: Install common packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - vim
+      - git
+      - htop
+      - net-tools
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Set timezone
+  community.general.timezone:
+    name: UTC
+
+- name: Disable swap for Kubernetes
+  ansible.builtin.shell: |
+    swapoff -a
+    sed -i '/swap/d' /etc/fstab
+  when: "'kubernetes_cluster' in group_names"
+
+- name: Enable kernel modules for Kubernetes
+  ansible.builtin.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+  when: "'kubernetes_cluster' in group_names"
+
+- name: Configure sysctl for Kubernetes
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+  when: "'kubernetes_cluster' in group_names"

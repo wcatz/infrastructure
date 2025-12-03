@@ -1,0 +1,43 @@
+---
+# Playbook to deploy applications using Helmfile
+# This playbook deploys Kubernetes workloads to the cluster
+
+- name: Deploy applications to Kubernetes cluster
+  hosts: control_plane[0]
+  become: yes
+  roles:
+    - apps
+
+- name: Verify application deployments
+  hosts: control_plane[0]
+  become: yes
+  tasks:
+    - name: Get all pods across all namespaces
+      ansible.builtin.command:
+        cmd: k3s kubectl get pods --all-namespaces
+      register: all_pods
+      changed_when: false
+
+    - name: Display all pods
+      ansible.builtin.debug:
+        var: all_pods.stdout_lines
+
+    - name: Get all services across all namespaces
+      ansible.builtin.command:
+        cmd: k3s kubectl get services --all-namespaces
+      register: all_services
+      changed_when: false
+
+    - name: Display all services
+      ansible.builtin.debug:
+        var: all_services.stdout_lines
+
+    - name: Get all deployments across all namespaces
+      ansible.builtin.command:
+        cmd: k3s kubectl get deployments --all-namespaces
+      register: all_deployments
+      changed_when: false
+
+    - name: Display all deployments
+      ansible.builtin.debug:
+        var: all_deployments.stdout_lines

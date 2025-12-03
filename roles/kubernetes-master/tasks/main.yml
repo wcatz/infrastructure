@@ -1,0 +1,64 @@
+---
+# Kubernetes Master role - Set up k3s control plane
+# Configures the k3s server (master/control plane) nodes
+
+- name: Check if k3s is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_installed
+
+- name: Download k3s installation script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+  when: not k3s_installed.stat.exists
+
+- name: Install k3s server
+  ansible.builtin.shell: |
+    INSTALL_K3S_VERSION="{{ k3s_version }}" \
+    K3S_TOKEN="{{ k3s_token }}" \
+    sh /tmp/k3s-install.sh server \
+    --disable traefik \
+    --write-kubeconfig-mode 644
+  when: not k3s_installed.stat.exists
+  environment:
+    INSTALL_K3S_SKIP_ENABLE: "false"
+
+- name: Wait for k3s to be ready
+  ansible.builtin.wait_for:
+    port: 6443
+    delay: 5
+    timeout: 300
+
+- name: Create .kube directory
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.kube"
+    state: directory
+    mode: '0755'
+
+- name: Copy kubeconfig to user home
+  ansible.builtin.copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ ansible_env.HOME }}/.kube/config"
+    remote_src: yes
+    mode: '0600'
+
+- name: Get k3s node token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_node_token
+
+- name: Display k3s node token
+  ansible.builtin.debug:
+    msg: "K3s node token: {{ k3s_node_token.content | b64decode }}"
+
+- name: Verify k3s installation
+  ansible.builtin.command:
+    cmd: k3s kubectl get nodes
+  register: k3s_nodes
+  changed_when: false
+
+- name: Display k3s nodes
+  ansible.builtin.debug:
+    var: k3s_nodes.stdout_lines

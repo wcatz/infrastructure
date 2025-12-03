@@ -1,0 +1,51 @@
+---
+# Tailscale role - Install and configure Tailscale
+# Provides secure private networking between nodes
+
+- name: Add Tailscale GPG key
+  ansible.builtin.apt_key:
+    url: https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Add Tailscale repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://pkgs.tailscale.com/stable/ubuntu {{ ansible_distribution_release }} main"
+    state: present
+    filename: tailscale
+  when: ansible_os_family == "Debian"
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Start and enable Tailscale service
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: started
+    enabled: yes
+
+- name: Authenticate Tailscale
+  ansible.builtin.command:
+    cmd: "tailscale up --authkey={{ tailscale_auth_key }} --accept-routes"
+  when: tailscale_auth_key is defined and tailscale_auth_key != ""
+  register: tailscale_up
+  changed_when: "'Success' in tailscale_up.stdout"
+  failed_when: false
+
+- name: Get Tailscale status
+  ansible.builtin.command:
+    cmd: tailscale status
+  register: tailscale_status
+  changed_when: false
+
+- name: Display Tailscale status
+  ansible.builtin.debug:
+    var: tailscale_status.stdout_lines

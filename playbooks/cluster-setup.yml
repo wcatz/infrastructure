@@ -1,0 +1,62 @@
+---
+# Main playbook to set up the k3s cluster
+# This playbook orchestrates the complete cluster setup including:
+# - Common system setup
+# - Tailscale networking
+# - k3s control plane
+# - k3s worker nodes
+# - HAProxy load balancer
+
+- name: Common setup for all nodes
+  hosts: all
+  become: yes
+  roles:
+    - common
+
+- name: Configure Tailscale on all nodes
+  hosts: all
+  become: yes
+  roles:
+    - tailscale
+
+- name: Setup Kubernetes control plane
+  hosts: control_plane
+  become: yes
+  roles:
+    - kubernetes-master
+
+- name: Setup Kubernetes worker nodes
+  hosts: worker_nodes
+  become: yes
+  roles:
+    - kubernetes-worker
+
+- name: Setup HAProxy load balancer
+  hosts: haproxy_servers
+  become: yes
+  roles:
+    - haproxy
+
+- name: Verify cluster setup
+  hosts: control_plane[0]
+  become: yes
+  tasks:
+    - name: Get all nodes
+      ansible.builtin.command:
+        cmd: k3s kubectl get nodes -o wide
+      register: cluster_nodes
+      changed_when: false
+
+    - name: Display cluster nodes
+      ansible.builtin.debug:
+        var: cluster_nodes.stdout_lines
+
+    - name: Get all namespaces
+      ansible.builtin.command:
+        cmd: k3s kubectl get namespaces
+      register: cluster_namespaces
+      changed_when: false
+
+    - name: Display cluster namespaces
+      ansible.builtin.debug:
+        var: cluster_namespaces.stdout_lines

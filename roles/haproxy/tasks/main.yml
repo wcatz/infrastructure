@@ -1,0 +1,50 @@
+---
+# HAProxy role - Install and configure HAProxy as load balancer
+# Provides load balancing and ingress for Kubernetes services
+
+- name: Install HAProxy
+  ansible.builtin.apt:
+    name: haproxy
+    state: present
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Backup original HAProxy configuration
+  ansible.builtin.copy:
+    src: /etc/haproxy/haproxy.cfg
+    dest: /etc/haproxy/haproxy.cfg.backup
+    remote_src: yes
+    force: no
+
+- name: Create HAProxy configuration directory
+  ansible.builtin.file:
+    path: /etc/haproxy/conf.d
+    state: directory
+    mode: '0755'
+
+- name: Enable HAProxy service
+  ansible.builtin.systemd:
+    name: haproxy
+    enabled: yes
+    state: started
+
+- name: Configure firewall for HAProxy
+  ansible.builtin.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - '80'
+    - '443'
+    - '8404'  # HAProxy stats
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Verify HAProxy is running
+  ansible.builtin.systemd:
+    name: haproxy
+    state: started
+  register: haproxy_status
+
+- name: Display HAProxy status
+  ansible.builtin.debug:
+    msg: "HAProxy is {{ haproxy_status.status.ActiveState }}"

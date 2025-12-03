@@ -1,0 +1,64 @@
+---
+# Apps role - Deploy Kubernetes workloads using Helmfile
+# Manages application deployments to the k3s cluster
+
+- name: Install Helm
+  ansible.builtin.shell: |
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Verify Helm installation
+  ansible.builtin.command:
+    cmd: helm version
+  register: helm_version
+  changed_when: false
+
+- name: Display Helm version
+  ansible.builtin.debug:
+    var: helm_version.stdout
+
+- name: Install Helmfile
+  ansible.builtin.get_url:
+    url: "https://github.com/helmfile/helmfile/releases/download/v0.159.0/helmfile_0.159.0_linux_amd64.tar.gz"
+    dest: /tmp/helmfile.tar.gz
+    mode: '0644'
+
+- name: Extract Helmfile
+  ansible.builtin.unarchive:
+    src: /tmp/helmfile.tar.gz
+    dest: /usr/local/bin
+    remote_src: yes
+    creates: /usr/local/bin/helmfile
+
+- name: Make Helmfile executable
+  ansible.builtin.file:
+    path: /usr/local/bin/helmfile
+    mode: '0755'
+
+- name: Verify Helmfile installation
+  ansible.builtin.command:
+    cmd: helmfile version
+  register: helmfile_version
+  changed_when: false
+
+- name: Display Helmfile version
+  ansible.builtin.debug:
+    var: helmfile_version.stdout
+
+- name: Copy Helmfile configuration
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../helmfile/"
+    dest: /opt/helmfile/
+    mode: '0755'
+
+- name: Deploy applications with Helmfile
+  ansible.builtin.command:
+    cmd: helmfile sync
+    chdir: /opt/helmfile
+  register: helmfile_sync
+  changed_when: "'has been upgraded' in helmfile_sync.stdout or 'has been installed' in helmfile_sync.stdout"
+
+- name: Display Helmfile sync output
+  ansible.builtin.debug:
+    var: helmfile_sync.stdout_lines

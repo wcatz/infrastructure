@@ -1,0 +1,64 @@
+---
+# Helmfile configuration for deploying Kubernetes applications
+# This file defines the Helm releases to be deployed to the cluster
+
+repositories:
+  # Add your Helm chart repositories here
+  - name: stable
+    url: https://charts.helm.sh/stable
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: ingress-nginx
+    url: https://kubernetes.github.io/ingress-nginx
+  - name: jetstack
+    url: https://charts.jetstack.io
+
+releases:
+  # Example: NGINX Ingress Controller
+  - name: nginx-ingress
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.8.3
+    values:
+      - values/nginx-ingress-values.yaml
+    set:
+      - name: controller.service.type
+        value: LoadBalancer
+
+  # Example: cert-manager for TLS certificates
+  - name: cert-manager
+    namespace: cert-manager
+    chart: jetstack/cert-manager
+    version: v1.13.2
+    values:
+      - values/cert-manager-values.yaml
+    set:
+      - name: installCRDs
+        value: true
+
+  # Example: Application deployment
+  # Uncomment and customize for your applications
+  # - name: my-app
+  #   namespace: default
+  #   chart: bitnami/nginx
+  #   version: 15.4.4
+  #   values:
+  #     - values/my-app-values.yaml
+
+helmDefaults:
+  # Default settings for all releases
+  atomic: true
+  cleanupOnFail: true
+  wait: true
+  timeout: 600
+  recreatePods: false
+  force: false
+
+# Environment-specific configuration
+environments:
+  development:
+    values:
+      - values/development-values.yaml
+  production:
+    values:
+      - values/production-values.yaml

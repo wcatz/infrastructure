@@ -1,0 +1,44 @@
+---
+# Kubernetes Worker role - Set up k3s worker nodes
+# Configures the k3s agent (worker) nodes
+
+- name: Check if k3s agent is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s-agent
+  register: k3s_agent_installed
+
+- name: Download k3s installation script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+  when: not k3s_agent_installed.stat.exists
+
+- name: Get master node IP
+  ansible.builtin.set_fact:
+    k3s_master_ip: "{{ hostvars[groups['control_plane'][0]]['ansible_host'] }}"
+
+- name: Install k3s agent
+  ansible.builtin.shell: |
+    INSTALL_K3S_VERSION="{{ k3s_version }}" \
+    K3S_URL="https://{{ k3s_master_ip }}:6443" \
+    K3S_TOKEN="{{ k3s_token }}" \
+    sh /tmp/k3s-install.sh agent
+  when: not k3s_agent_installed.stat.exists
+  environment:
+    INSTALL_K3S_SKIP_ENABLE: "false"
+
+- name: Wait for k3s agent to be ready
+  ansible.builtin.wait_for:
+    timeout: 30
+  delegate_to: localhost
+
+- name: Verify k3s agent is running
+  ansible.builtin.systemd:
+    name: k3s-agent
+    state: started
+  register: k3s_agent_status
+
+- name: Display k3s agent status
+  ansible.builtin.debug:
+    msg: "K3s agent is {{ k3s_agent_status.status.ActiveState }}"

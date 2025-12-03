@@ -1,0 +1,68 @@
+---
+# Production Inventory
+# Define your hosts for production environment
+
+all:
+  children:
+    kubernetes_cluster:
+      children:
+        control_plane:
+          hosts:
+            prod-k3s-master-01:
+              ansible_host: 10.0.1.10
+              ansible_user: ubuntu
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+            prod-k3s-master-02:
+              ansible_host: 10.0.1.11
+              ansible_user: ubuntu
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+            prod-k3s-master-03:
+              ansible_host: 10.0.1.12
+              ansible_user: ubuntu
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+        
+        worker_nodes:
+          hosts:
+            prod-k3s-worker-01:
+              ansible_host: 10.0.1.20
+              ansible_user: ubuntu
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+            prod-k3s-worker-02:
+              ansible_host: 10.0.1.21
+              ansible_user: ubuntu
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+            prod-k3s-worker-03:
+              ansible_host: 10.0.1.22
+              ansible_user: ubuntu
+              ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      
+      vars:
+        k3s_version: v1.28.4+k3s1
+        k3s_token: changeme_prod_token
+        environment: production
+
+    haproxy_servers:
+      hosts:
+        prod-haproxy-01:
+          ansible_host: 10.0.1.30
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+        prod-haproxy-02:
+          ansible_host: 10.0.1.31
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+      vars:
+        haproxy_backend_servers:
+          - name: prod-k3s-worker-01
+            address: 10.0.1.20
+            port: 80
+          - name: prod-k3s-worker-02
+            address: 10.0.1.21
+            port: 80
+          - name: prod-k3s-worker-03
+            address: 10.0.1.22
+            port: 80
+
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
