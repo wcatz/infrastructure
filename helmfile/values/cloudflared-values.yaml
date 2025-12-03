@@ -125,7 +125,18 @@ env: []
   #   value: "true"
 
 # Secret configuration
-# The tunnel credentials should be stored in a Kubernetes secret
+# The tunnel credentials MUST be stored in a Kubernetes secret before deploying
+# Secret name: cloudflared-credentials (in the cloudflare namespace)
+# Secret key: credentials.json (containing the tunnel credentials JSON)
+#
+# To create the required secret:
+#   kubectl create namespace cloudflare
+#   kubectl create secret generic cloudflared-credentials \
+#     --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json \
+#     -n cloudflare
+#
 # Reference: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/remote/
+#
+# To use a different secret name or key, modify these values:
 existingSecret: "cloudflared-credentials"
 existingSecretKey: "credentials.json"

@@ -42,6 +42,8 @@ This opens a browser window to authenticate and select your domain.
 
 ### 3. Create a Tunnel
 
+Choose a descriptive tunnel name, preferably including your organization and environment (e.g., `mycompany-prod-tunnel`, `myapp-staging-tunnel`). This example uses `infrastructure-tunnel` for demonstration.
+
 ```bash
 cloudflared tunnel create infrastructure-tunnel
 ```
@@ -375,12 +377,13 @@ To rotate credentials:
 
 ## Multi-Environment Setup
 
-For staging/production environments:
+For staging/production environments, create separate tunnels with environment-specific names:
 
 **Create separate tunnels:**
 ```bash
-cloudflared tunnel create infrastructure-staging
-cloudflared tunnel create infrastructure-production
+# Use descriptive names: <organization>-<environment>-tunnel
+cloudflared tunnel create mycompany-staging-tunnel
+cloudflared tunnel create mycompany-production-tunnel
 ```
 
 **Use environment-specific values:**
@@ -388,6 +391,8 @@ cloudflared tunnel create infrastructure-production
 helmfile -f helmfile.yaml -e staging apply
 helmfile -f helmfile.yaml -e production apply
 ```
+
+> **Note**: Using environment-specific tunnel names (e.g., `mycompany-prod-tunnel` instead of `infrastructure-tunnel`) helps with organization and management in multi-environment setups.
 
 ## References
 

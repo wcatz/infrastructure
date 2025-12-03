@@ -43,7 +43,10 @@ backend {{ backend.name }}_backend
     mode {{ backend.mode }}
     balance {{ backend.balance }}
 {% for server in backend.servers %}
-    server {{ server.name }} {{ server.address }}:{{ server.port }}{% if server.check | default(false) %} check{% if server.check_interval is defined %} inter {{ server.check_interval }}{% endif %}{% endif %}
+    server {{ server.name }} {{ server.address }}:{{ server.port }}
+{%- if server.check | default(false) %} check
+{%- if server.check_interval is defined %} inter {{ server.check_interval }}{% endif %}
+{%- endif %}
 
 {% endfor %}
 {% endfor %}
