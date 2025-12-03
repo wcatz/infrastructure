@@ -3,6 +3,8 @@ repositories:
     url: https://prometheus-community.github.io/helm-charts
   - name: ingress-nginx
     url: https://kubernetes.github.io/ingress-nginx
+  - name: haproxy-ingress
+    url: https://haproxy-ingress.github.io/charts
 
 releases:
   - name: prometheus
@@ -19,3 +21,10 @@ releases:
     version: 4.8.3
     values:
       - values/nginx-ingress-values.yaml
+  - name: haproxy-ingress
+    namespace: haproxy-ingress
+    createNamespace: true
+    chart: haproxy-ingress/haproxy-ingress
+    version: 0.14.6
+    values:
+      - values/haproxy-ingress.yaml
