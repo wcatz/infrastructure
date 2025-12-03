@@ -80,6 +80,13 @@ This repository contains infrastructure management tools and GitOps workflows fo
 - **HTTP/HTTPS Services**: See [CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md)
 - **Multi-Environment**: See [Helmfile README](helmfile/README.md#environment-management)
 
+### Testing and Validation
+- **[Testing Guide](TESTING.md)**: Comprehensive testing procedures for all components
+- **Pre-Deployment Testing**: YAML validation, template rendering, syntax checks
+- **Service Testing**: HAProxy, Cloudflared, end-to-end flows
+- **Failover Testing**: Simulate failures and verify automatic recovery
+- **Performance Testing**: Load testing and benchmarking procedures
+
 ## Structure
 
 - **ansible/**: Ansible playbooks and roles for infrastructure automation
