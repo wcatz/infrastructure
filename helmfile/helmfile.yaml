@@ -1,39 +1,11 @@
-repositories:
-  - name: prometheus-community
-    url: https://prometheus-community.github.io/helm-charts
-  - name: ingress-nginx
-    url: https://kubernetes.github.io/ingress-nginx
-  - name: haproxy-ingress
-    url: https://haproxy-ingress.github.io/charts
-  - name: cloudflare
-    url: https://cloudflare.github.io/helm-charts
+helmDefaults:
+  wait: true
+  timeout: 600
+  recreatePods: false
+  force: false
 
-releases:
-  - name: prometheus
-    namespace: monitoring
-    createNamespace: true
-    chart: prometheus-community/prometheus
-    version: 25.8.2
-    values:
-      - values/prometheus-values.yaml
-  - name: nginx-ingress
-    namespace: ingress-nginx
-    createNamespace: true
-    chart: ingress-nginx/ingress-nginx
-    version: 4.8.3
-    values:
-      - values/nginx-ingress-values.yaml
-  - name: haproxy-ingress
-    namespace: haproxy-ingress
-    createNamespace: true
-    chart: haproxy-ingress/haproxy-ingress
-    version: 0.14.6
-    values:
-      - values/haproxy-ingress.yaml
-  - name: cloudflared
-    namespace: cloudflare
-    createNamespace: true
-    chart: cloudflare/cloudflare-tunnel-remote
-    version: 0.3.0
-    values:
-      - values/cloudflared-values.yaml
+{{ readFile "config/repositories.yaml.gotmpl" | tpl }}
+
+{{ readFile "config/enabled.yaml" }}
+
+{{ readFile "config/releases.yaml.gotmpl" | tpl }}

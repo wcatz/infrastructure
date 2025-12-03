@@ -28,7 +28,7 @@ cloudflare:
 ingress:
   # Example ingress rules - customize for your services
   # - hostname: app.example.com
-  #   service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
   # - hostname: api.example.com
   #   service: http://api-service.default.svc.cluster.local:8080
   # - hostname: monitoring.example.com

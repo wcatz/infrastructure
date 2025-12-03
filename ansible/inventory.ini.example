@@ -1,11 +1,29 @@
 # Ansible Inventory Example
 # Copy this file and customize for your environment
 
+[k3s_servers]
+# k3s server nodes (control plane)
+# Example:
+# k3s-server-01 ansible_host=192.168.1.10 ansible_user=ubuntu
+
+[k3s_agents]
+# k3s agent nodes (workers)
+# Example:
+# k3s-agent-01 ansible_host=192.168.1.11 ansible_user=ubuntu
+# k3s-agent-02 ansible_host=192.168.1.12 ansible_user=ubuntu
+
 [haproxy_servers]
-# Add your HAProxy server hostnames or IPs here
+# HAProxy TCP/UDP load balancer servers
 # Example:
 # haproxy-01 ansible_host=192.168.1.5 ansible_user=ubuntu
-# haproxy-02 ansible_host=192.168.1.6 ansible_user=ubuntu
+
+[k3s_servers:vars]
+# Common variables for k3s servers
+# ansible_python_interpreter=/usr/bin/python3
+
+[k3s_agents:vars]
+# Common variables for k3s agents
+# ansible_python_interpreter=/usr/bin/python3
 
 [haproxy_servers:vars]
 # Common variables for HAProxy servers

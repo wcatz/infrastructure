@@ -1,0 +1,25 @@
+---
+# k3s Deployment Playbook
+# This playbook deploys k3s without Traefik for HAProxy ingress
+
+- name: Deploy k3s Server
+  hosts: k3s_servers
+  become: true
+
+  roles:
+    - k3s
+
+  vars:
+    k3s_server_enabled: true
+    k3s_agent_enabled: false
+
+- name: Deploy k3s Agents
+  hosts: k3s_agents
+  become: true
+
+  roles:
+    - k3s
+
+  vars:
+    k3s_server_enabled: false
+    k3s_agent_enabled: true

@@ -9,14 +9,67 @@ ansible/
 ├── ansible.cfg              # Ansible configuration
 ├── inventory.ini.example    # Inventory template
 ├── playbooks/              # Ansible playbooks
+│   ├── deploy-k3s.yaml     # k3s cluster deployment
 │   └── deploy-haproxy.yaml # HAProxy deployment playbook
 └── roles/                  # Ansible roles
+    ├── k3s/               # k3s role (Traefik disabled)
+    │   ├── defaults/      # Default variables
+    │   ├── handlers/      # Service handlers
+    │   └── tasks/         # Main tasks
     └── haproxy/           # HAProxy role
         ├── defaults/      # Default variables
         ├── handlers/      # Service handlers
         ├── tasks/         # Main tasks
         └── templates/     # Configuration templates
 ```
+
+## k3s Role
+
+The k3s role deploys a Kubernetes cluster with Traefik disabled, allowing HAProxy to function as the ingress controller.
+
+### Key Features
+
+- **Traefik Disabled**: HAProxy serves as the ingress controller
+- **Lightweight**: k3s is a minimal Kubernetes distribution
+- **Server/Agent Support**: Deploy control plane and worker nodes
+- **Configurable**: Customize network settings, components, etc.
+
+### Usage
+
+1. **Create an inventory file**:
+   ```bash
+   cp inventory.ini.example inventory.ini
+   # Edit inventory.ini - add servers to [k3s_servers] and [k3s_agents]
+   ```
+
+2. **Set k3s token** (in playbook or group_vars):
+   ```yaml
+   k3s_token: "your-secure-random-token"
+   ```
+   
+   Generate token: `openssl rand -hex 32`
+
+3. **Deploy k3s**:
+   ```bash
+   ansible-playbook playbooks/deploy-k3s.yaml
+   ```
+
+4. **Verify installation**:
+   ```bash
+   ansible k3s_servers -m shell -a "kubectl get nodes"
+   ```
+
+### Configuration Options
+
+Edit `roles/k3s/defaults/main.yaml`:
+
+- `k3s_version`: k3s version to install (default: v1.28.5+k3s1)
+- `k3s_server_args`: Additional server arguments (Traefik disabled by default)
+- `k3s_cluster_cidr`: Pod network CIDR (default: 10.42.0.0/16)
+- `k3s_service_cidr`: Service network CIDR (default: 10.43.0.0/16)
+- `k3s_tls_san`: Additional TLS SANs for API server certificate
+
+After k3s is deployed, use Helmfile to install HAProxy ingress controller.
 
 ## HAProxy Role
 
@@ -32,7 +85,7 @@ The HAProxy role deploys and configures HAProxy as a TCP/UDP load balancer for n
 1. **Create an inventory file**:
    ```bash
    cp inventory.ini.example inventory.ini
-   # Edit inventory.ini with your server details
+   # Edit inventory.ini with your HAProxy server details
    ```
 
 2. **Customize HAProxy configuration** (optional):

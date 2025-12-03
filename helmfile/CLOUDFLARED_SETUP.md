@@ -123,7 +123,7 @@ cloudflare:
 ingress:
   # Route app.example.com to NGINX ingress controller
   - hostname: app.example.com
-    service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
   
   # Route api.example.com to API service
   - hostname: api.example.com
@@ -255,7 +255,7 @@ Then configure ingress rules:
 ```yaml
 ingress:
   - hostname: "*.apps.example.com"
-    service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
 ```
 
 ## Cloudflare Access Integration

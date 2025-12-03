@@ -4,51 +4,41 @@ This repository contains infrastructure management tools and GitOps workflows fo
 
 ## Traffic Flow Architecture
 
-This infrastructure uses a multi-tier approach for handling different types of traffic:
-
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Internet Traffic                         │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-                    ▼                           ▼
-         ┌──────────────────┐        ┌──────────────────┐
-         │ HTTP/HTTPS       │        │  TCP/UDP         │
-         │ Traffic          │        │  Traffic         │
-         └──────────────────┘        └──────────────────┘
-                    │                           │
-                    ▼                           ▼
-         ┌──────────────────┐        ┌──────────────────┐
-         │  Cloudflared     │        │   HAProxy        │
-         │  (Tunnel)        │        │ Load Balancer    │
-         └──────────────────┘        └──────────────────┘
-                    │                           │
-                    │                           │
-         ┌──────────┴────────┐      ┌──────────┴────────┐
-         │                   │      │                   │
-         ▼                   ▼      ▼                   ▼
-    ┌────────┐         ┌────────┐ ┌────────┐      ┌────────┐
-    │ NGINX  │         │HAProxy │ │ MySQL  │      │WireGuard│
-    │Ingress │         │Ingress │ │ :3306  │      │ :51820 │
-    └────────┘         └────────┘ └────────┘      └────────┘
-         │                   │
-         │                   │
-         ▼                   ▼
-    ┌─────────────────────────────┐
-    │   Kubernetes Services       │
-    │   (HTTP/HTTPS Applications) │
-    └─────────────────────────────┘
+                    Internet Traffic
+                           |
+              ┌────────────┼────────────┐
+              |                         |
+         HTTP/HTTPS                  TCP/UDP
+              |                         |
+              v                         v
+        ┌──────────┐             ┌──────────┐
+        |Cloudflared|             | HAProxy  |
+        | Tunnel   |             |TCP/UDP LB|
+        └──────────┘             └──────────┘
+              |                         |
+              v                         v
+        ┌──────────┐             ┌──────────┐
+        | HAProxy  |             |  MySQL   |
+        | Ingress  |             | :3306    |
+        └──────────┘             └──────────┘
+              |                         |
+              v                         v
+        ┌──────────┐             ┌──────────┐
+        |   k8s    |             |WireGuard |
+        | Services |             | :51820   |
+        └──────────┘             └──────────┘
 ```
 
 ### Traffic Routing Strategy
 
-- **HTTP/HTTPS Traffic**: Routed through Cloudflare tunnels (Cloudflared) to Kubernetes ingress controllers
+- **HTTP/HTTPS Traffic**: 
+  - Cloudflared tunnel → HAProxy Ingress Controller → Kubernetes Services
   - Benefits: DDoS protection, global CDN, SSL/TLS termination, Zero Trust security
   - Use cases: Web applications, APIs, dashboards
 
-- **TCP/UDP Traffic**: Load balanced by HAProxy for non-HTTP services
+- **TCP/UDP Traffic**: 
+  - HAProxy standalone load balancer → Backend servers
   - Benefits: High performance, health checking, protocol flexibility
   - Use cases: MySQL databases, WireGuard VPN, DNS servers, game servers
 
@@ -56,10 +46,18 @@ This infrastructure uses a multi-tier approach for handling different types of t
 
 - **ansible/**: Ansible playbooks and roles for infrastructure automation
   - **playbooks/**: Deployment playbooks
-  - **roles/haproxy/**: HAProxy TCP/UDP load balancer role
+    - `deploy-k3s.yaml`: Deploy k3s without Traefik (for HAProxy ingress)
+    - `deploy-haproxy.yaml`: Deploy HAProxy TCP/UDP load balancer
+  - **roles/**: Ansible roles
+    - `k3s/`: k3s installation role (Traefik disabled)
+    - `haproxy/`: HAProxy TCP/UDP load balancer role
   - **README.md**: Ansible usage documentation
 - **helmfile/**: Helmfile configurations for Kubernetes deployments
-  - **helmfile.yaml**: Main Helmfile configuration defining chart releases
+  - **helmfile.yaml**: Main Helmfile configuration
+  - **config/**: Configuration templates (gotmpl)
+    - `repositories.yaml.gotmpl`: Helm repository definitions
+    - `releases.yaml.gotmpl`: Release definitions
+    - `enabled.yaml`: Enable/disable specific applications
   - **values/**: Helm values files for each chart
   - **CLOUDFLARED_SETUP.md**: Cloudflared tunnel setup guide
 - **.github/workflows/**: GitHub Actions workflows for GitOps automation
@@ -98,16 +96,22 @@ The `helmfile-apply` workflow allows authorized users to manually deploy changes
 
 ## Helmfile Configuration
 
+The Helmfile configuration is organized using gotmpl templates for better maintainability:
+
+- `helmfile/config/repositories.yaml.gotmpl`: Helm chart repositories
+- `helmfile/config/releases.yaml.gotmpl`: Application releases
+- `helmfile/config/enabled.yaml`: Enable/disable applications
+
 ### Adding a New Chart
 
-1. Add the chart repository to `helmfile/helmfile.yaml` under `repositories:`
-2. Add a new release definition under `releases:`
+1. Add the chart repository to `helmfile/config/repositories.yaml.gotmpl`
+2. Add a new release definition in `helmfile/config/releases.yaml.gotmpl`
 3. Create a values file in `helmfile/values/` (e.g., `my-chart-values.yaml`)
-4. Reference the values file in the release definition
+4. Enable the app in `helmfile/config/enabled.yaml`
 
-Example:
+Example release in `releases.yaml.gotmpl`:
 ```yaml
-releases:
+{{- if $enabled.myApp | default false }}
   - name: my-app
     namespace: my-namespace
     createNamespace: true
@@ -115,6 +119,18 @@ releases:
     version: 1.0.0
     values:
       - values/my-app-values.yaml
+{{- end }}
+```
+
+### Enabling/Disabling Applications
+
+Edit `helmfile/config/enabled.yaml` to control which applications are deployed:
+
+```yaml
+enabled:
+  prometheus: true
+  haproxyIngress: true
+  cloudflared: false  # Enable when tunnel credentials are configured
 ```
 
 ### Modifying Chart Values
@@ -125,14 +141,43 @@ releases:
 4. Merge the PR after approval
 5. Manually trigger the `helmfile-apply` workflow to deploy
 
-## Example Charts
+## Deployed Applications
 
 This repository includes configurations for:
 
 - **Prometheus**: Monitoring and alerting stack (namespace: `monitoring`)
-- **NGINX Ingress Controller**: Ingress controller for HTTP/HTTPS routing (namespace: `ingress-nginx`)
-- **HAProxy Ingress Controller**: Alternative ingress controller with advanced load balancing (namespace: `haproxy-ingress`)
-- **Cloudflared**: Cloudflare tunnel for secure HTTP/HTTPS ingress (namespace: `cloudflare`)
+- **HAProxy Ingress Controller**: Kubernetes ingress controller (namespace: `haproxy-ingress`)
+- **Cloudflared**: Cloudflare tunnel for secure HTTP/HTTPS ingress (namespace: `cloudflare`, disabled by default)
+
+## k3s Installation
+
+k3s is installed via Ansible with Traefik disabled, allowing HAProxy to serve as the ingress controller.
+
+### Quick Start
+
+1. **Configure inventory**:
+   ```bash
+   cd ansible
+   cp inventory.ini.example inventory.ini
+   # Edit inventory.ini - add servers to [k3s_servers] and [k3s_agents] groups
+   ```
+
+2. **Set k3s token** (in playbook or group_vars):
+   ```yaml
+   k3s_token: "your-secure-token-here"
+   ```
+
+3. **Deploy k3s**:
+   ```bash
+   ansible-playbook playbooks/deploy-k3s.yaml
+   ```
+
+4. **Verify installation**:
+   ```bash
+   ansible k3s_servers -m shell -a "kubectl get nodes"
+   ```
+
+The k3s cluster will be ready for HAProxy ingress controller deployment via Helmfile.
 
 ## HAProxy TCP/UDP Load Balancer
 
@@ -238,16 +283,22 @@ Cloudflared creates secure tunnels from your Kubernetes cluster to Cloudflare's 
    
    ingress:
      - hostname: app.example.com
-       service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+       service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
      - hostname: api.example.com
        service: http://api-service.default.svc.cluster.local:8080
      - service: http_status:404
    ```
 
-5. **Deploy via Helmfile**:
+5. **Enable cloudflared** in `helmfile/config/enabled.yaml`:
+   ```yaml
+   enabled:
+     cloudflared: true
+   ```
+
+6. **Deploy via Helmfile**:
    ```bash
    cd helmfile
-   helmfile -l name=cloudflared apply
+   helmfile apply
    ```
 
 ### Detailed Setup
@@ -298,7 +349,7 @@ Add to ingress rules:
 ```yaml
 ingress:
   - hostname: "*.apps.example.com"
-    service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
 ```
 
 #### Managing DNS via Cloudflare Dashboard

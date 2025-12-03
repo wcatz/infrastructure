@@ -1,0 +1,7 @@
+# Enabled applications
+# Set to false to disable deployment of specific apps
+
+enabled:
+  prometheus: true
+  haproxyIngress: true
+  cloudflared: false  # Enable when tunnel credentials are configured
