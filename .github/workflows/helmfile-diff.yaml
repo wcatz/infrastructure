@@ -1,0 +1,69 @@
+name: Helmfile Diff
+
+on:
+  pull_request:
+    paths:
+      - 'helmfile/**'
+      - '.github/workflows/helmfile-diff.yaml'
+
+jobs:
+  helmfile-diff:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Helmfile
+        uses: mamezou-tech/setup-helmfile@v2.0.0
+        with:
+          helmfile-version: 'v0.159.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.3'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Helmfile Diff
+        id: helmfile-diff
+        working-directory: helmfile
+        run: |
+          echo "Running helmfile diff..."
+          helmfile diff --suppress-secrets 2>&1 | tee diff-output.txt || true
+          
+          # Capture the diff output for PR comment
+          DIFF_OUTPUT=$(cat diff-output.txt)
+          echo "diff-output<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment PR with Diff
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const diffOutput = `${{ steps.helmfile-diff.outputs.diff-output }}`;
+            const comment = `## Helmfile Diff Output
+            
+            \`\`\`diff
+            ${diffOutput}
+            \`\`\`
+            
+            This shows the changes that would be applied to the Kubernetes cluster.
+            
+            To apply these changes, use the \`helmfile-apply\` workflow after merging this PR.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

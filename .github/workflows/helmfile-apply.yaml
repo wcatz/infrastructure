@@ -1,0 +1,60 @@
+name: Helmfile Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - production
+          - staging
+
+jobs:
+  helmfile-apply:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Helmfile
+        uses: mamezou-tech/setup-helmfile@v2.0.0
+        with:
+          helmfile-version: 'v0.159.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.3'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure Kubernetes Context
+        run: |
+          # This is a placeholder for configuring kubectl context
+          # In a real scenario, you would configure kubeconfig here
+          # Example:
+          # echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          echo "Note: Configure your Kubernetes cluster credentials via repository secrets"
+          echo "Set KUBECONFIG secret with base64-encoded kubeconfig content"
+
+      - name: Helmfile Apply
+        working-directory: helmfile
+        run: |
+          echo "Running helmfile apply for environment: ${{ github.event.inputs.environment }}"
+          helmfile apply --suppress-secrets
+
+      - name: Deployment Summary
+        run: |
+          echo "✅ Helmfile deployment completed successfully for environment: ${{ github.event.inputs.environment }}"
+          echo "Deployment triggered by: ${{ github.actor }}"
+          echo "Commit SHA: ${{ github.sha }}"
