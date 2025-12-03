@@ -11,12 +11,12 @@ cloudflare:
 
 # Development ingress rules
 ingress:
-  # Example dev services
+  # Example ingress rules
   # - hostname: app.dev.example.com
   #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
   # - hostname: api.dev.example.com
   #   service: http://api-service.default.svc.cluster.local:8080
-  
+
   # Default catch-all rule (required)
   - service: http_status:404
 

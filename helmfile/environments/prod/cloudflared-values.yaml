@@ -23,7 +23,7 @@ ingress:
   #   originRequest:
   #     # Add authentication via Cloudflare Access for monitoring
   #     httpHostHeader: monitoring.example.com
-  
+
   # Default catch-all rule (required)
   - service: http_status:404
 
@@ -52,6 +52,7 @@ env:
   - name: TUNNEL_TRANSPORT_PROTOCOL
     value: "quic"
   - name: TUNNEL_NO_AUTOUPDATE
-    value: "true"  # Disable auto-updates in production for stability
-                   # Manually update cloudflared during scheduled maintenance windows
-                   # Check for updates: https://github.com/cloudflare/cloudflared/releases
+    value: "true"
+    # Disable auto-updates in production for stability
+    # Manually update cloudflared during scheduled maintenance windows
+    # Check for updates: https://github.com/cloudflare/cloudflared/releases

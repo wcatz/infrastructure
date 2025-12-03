@@ -1,0 +1,14 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+  document-start: disable
+  comments-indentation: disable
+  trailing-spaces: enable
+
+ignore: |
+  helmfile/helmfile.yaml
+  helmfile/config/*.gotmpl

@@ -18,7 +18,7 @@ ingress:
   #   service: http://api-service.default.svc.cluster.local:8080
   # - hostname: monitoring.staging.example.com
   #   service: http://prometheus-server.monitoring.svc.cluster.local:80
-  
+
   # Default catch-all rule (required)
   - service: http_status:404
 
