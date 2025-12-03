@@ -3,7 +3,7 @@
 
 controller:
   replicaCount: 2
-  
+
   resources:
     requests:
       cpu: 100m
@@ -11,7 +11,7 @@ controller:
     limits:
       cpu: 200m
       memory: 256Mi
-  
+
   # HAProxy-specific configuration
   config:
     # Timeout configurations
@@ -24,15 +24,15 @@ controller:
     timeout-server: "50s"
     timeout-server-fin: "50s"
     timeout-tunnel: "1h"
-    
+
     # Keep-alive settings
     backend-check-interval: "2s"
     forwardfor: "add"
     maxconn-server: "1000"
-    
+
     # SSL/TLS settings
     ssl-redirect: "true"
-    
+
   service:
     type: LoadBalancer
     externalTrafficPolicy: Local
@@ -42,12 +42,12 @@ controller:
     # annotations:
     #   service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
     #   service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
-  
+
   metrics:
     enabled: true
     serviceMonitor:
       enabled: true
-  
+
   autoscaling:
     enabled: true
     minReplicas: 2

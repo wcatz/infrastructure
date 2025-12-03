@@ -1,0 +1,131 @@
+# Cloudflared Tunnel Helm Chart Values
+# These values configure Cloudflared for HTTP/HTTPS ingress through Cloudflare tunnels
+
+# Replica count for high availability
+replicaCount: 2
+
+# Cloudflare tunnel configuration
+cloudflare:
+  # Tunnel token or credentials
+  # Create a tunnel at https://one.dash.cloudflare.com/ and get the token
+  # The token should be stored as a Kubernetes secret
+  # kubectl create secret generic cloudflared-credentials \
+  #   --from-literal=credentials.json='<tunnel-credentials-json>' \
+  #   -n cloudflare
+
+  # Tunnel name (optional, for reference)
+  tunnelName: "infrastructure-tunnel"
+
+  # Tunnel ID - obtained when creating the tunnel
+  # tunnelId: "your-tunnel-id"
+
+  # Account and zone configuration
+  # account: "your-account-id"
+  # zone: "example.com"
+
+# Ingress rules for routing traffic
+# Configure which services should be accessible through the tunnel
+ingress:
+  # Example ingress rules - customize for your services
+  # - hostname: app.example.com
+  #   service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+  # - hostname: api.example.com
+  #   service: http://api-service.default.svc.cluster.local:8080
+  # - hostname: monitoring.example.com
+  #   service: http://prometheus-server.monitoring.svc.cluster.local:80
+
+  # Default catch-all rule (required)
+  - service: http_status:404
+
+# Resource limits and requests
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "2000"
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: cloudflared
+
+# Auto-scaling configuration
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - cloudflared
+          topologyKey: kubernetes.io/hostname
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  port: 2000
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /ready
+    port: 2000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 2000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+# Additional environment variables
+env: []
+  # - name: TUNNEL_LOGLEVEL
+  #   value: "info"
+  # - name: TUNNEL_TRANSPORT_PROTOCOL
+  #   value: "quic"
+  # - name: TUNNEL_NO_AUTOUPDATE
+  #   value: "true"
+
+# Secret configuration
+# The tunnel credentials should be stored in a Kubernetes secret
+# Reference: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/remote/
+existingSecret: "cloudflared-credentials"
+existingSecretKey: "credentials.json"

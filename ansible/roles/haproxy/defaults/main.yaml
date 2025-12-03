@@ -1,0 +1,47 @@
+---
+# Default variables for HAProxy role
+
+haproxy_version: "2.8"
+haproxy_service_enabled: true
+haproxy_service_state: started
+
+# TCP/UDP backend configurations
+haproxy_tcp_backends:
+  - name: mysql
+    port: 3306
+    mode: tcp
+    balance: roundrobin
+    servers:
+      - name: mysql-1
+        address: 192.168.1.10
+        port: 3306
+        check: true
+        check_interval: 2s
+
+haproxy_udp_backends:
+  - name: wireguard
+    port: 51820
+    mode: udp
+    balance: roundrobin
+    servers:
+      - name: wireguard-1
+        address: 192.168.1.20
+        port: 51820
+
+# Global settings
+haproxy_global:
+  maxconn: 4096
+  log_socket: /dev/log
+  log_level: info
+  stats_socket: /var/run/haproxy.sock
+  stats_level: admin
+
+# Default settings
+haproxy_defaults:
+  mode: tcp
+  log: global
+  option_tcplog: true
+  timeout_connect: 5s
+  timeout_client: 50s
+  timeout_server: 50s
+  retries: 3

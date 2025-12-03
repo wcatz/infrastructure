@@ -1,12 +1,67 @@
 # Infrastructure Management
 
-This repository contains infrastructure management tools and GitOps workflows.
+This repository contains infrastructure management tools and GitOps workflows for Kubernetes and non-Kubernetes infrastructure.
+
+## Traffic Flow Architecture
+
+This infrastructure uses a multi-tier approach for handling different types of traffic:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Internet Traffic                         │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │                           │
+                    ▼                           ▼
+         ┌──────────────────┐        ┌──────────────────┐
+         │ HTTP/HTTPS       │        │  TCP/UDP         │
+         │ Traffic          │        │  Traffic         │
+         └──────────────────┘        └──────────────────┘
+                    │                           │
+                    ▼                           ▼
+         ┌──────────────────┐        ┌──────────────────┐
+         │  Cloudflared     │        │   HAProxy        │
+         │  (Tunnel)        │        │ Load Balancer    │
+         └──────────────────┘        └──────────────────┘
+                    │                           │
+                    │                           │
+         ┌──────────┴────────┐      ┌──────────┴────────┐
+         │                   │      │                   │
+         ▼                   ▼      ▼                   ▼
+    ┌────────┐         ┌────────┐ ┌────────┐      ┌────────┐
+    │ NGINX  │         │HAProxy │ │ MySQL  │      │WireGuard│
+    │Ingress │         │Ingress │ │ :3306  │      │ :51820 │
+    └────────┘         └────────┘ └────────┘      └────────┘
+         │                   │
+         │                   │
+         ▼                   ▼
+    ┌─────────────────────────────┐
+    │   Kubernetes Services       │
+    │   (HTTP/HTTPS Applications) │
+    └─────────────────────────────┘
+```
+
+### Traffic Routing Strategy
+
+- **HTTP/HTTPS Traffic**: Routed through Cloudflare tunnels (Cloudflared) to Kubernetes ingress controllers
+  - Benefits: DDoS protection, global CDN, SSL/TLS termination, Zero Trust security
+  - Use cases: Web applications, APIs, dashboards
+
+- **TCP/UDP Traffic**: Load balanced by HAProxy for non-HTTP services
+  - Benefits: High performance, health checking, protocol flexibility
+  - Use cases: MySQL databases, WireGuard VPN, DNS servers, game servers
 
 ## Structure
 
+- **ansible/**: Ansible playbooks and roles for infrastructure automation
+  - **playbooks/**: Deployment playbooks
+  - **roles/haproxy/**: HAProxy TCP/UDP load balancer role
+  - **README.md**: Ansible usage documentation
 - **helmfile/**: Helmfile configurations for Kubernetes deployments
   - **helmfile.yaml**: Main Helmfile configuration defining chart releases
   - **values/**: Helm values files for each chart
+  - **CLOUDFLARED_SETUP.md**: Cloudflared tunnel setup guide
 - **.github/workflows/**: GitHub Actions workflows for GitOps automation
   - **helmfile-diff.yaml**: Automatic diff on pull requests
   - **helmfile-apply.yaml**: Manual deployment workflow
@@ -72,13 +127,193 @@ releases:
 
 ## Example Charts
 
-This repository includes example configurations for:
+This repository includes configurations for:
 
 - **Prometheus**: Monitoring and alerting stack (namespace: `monitoring`)
-- **NGINX Ingress Controller**: Ingress controller for routing (namespace: `ingress-nginx`)
+- **NGINX Ingress Controller**: Ingress controller for HTTP/HTTPS routing (namespace: `ingress-nginx`)
 - **HAProxy Ingress Controller**: Alternative ingress controller with advanced load balancing (namespace: `haproxy-ingress`)
+- **Cloudflared**: Cloudflare tunnel for secure HTTP/HTTPS ingress (namespace: `cloudflare`)
 
-### HAProxy Ingress Controller
+## HAProxy TCP/UDP Load Balancer
+
+HAProxy is deployed as a standalone TCP/UDP load balancer for non-HTTP services using Ansible. This is separate from the HAProxy Ingress Controller used for Kubernetes HTTP traffic.
+
+### Supported Services
+
+- **TCP Services**: MySQL (3306), PostgreSQL (5432), Redis (6379), SSH, etc.
+- **UDP Services**: WireGuard VPN (51820), DNS (53), QUIC, game servers, etc.
+
+### Quick Start
+
+1. **Configure your inventory**:
+   ```bash
+   cd ansible
+   cp inventory.ini.example inventory.ini
+   # Edit inventory.ini with your HAProxy server details
+   ```
+
+2. **Customize backend services** (edit `ansible/roles/haproxy/defaults/main.yaml` or override in playbook):
+   ```yaml
+   haproxy_tcp_backends:
+     - name: mysql
+       port: 3306
+       mode: tcp
+       balance: roundrobin
+       servers:
+         - name: mysql-1
+           address: 192.168.1.10
+           port: 3306
+           check: true
+           check_interval: 2s
+   
+   haproxy_udp_backends:
+     - name: wireguard
+       port: 51820
+       mode: udp
+       balance: roundrobin
+       servers:
+         - name: wireguard-1
+           address: 192.168.1.20
+           port: 51820
+   ```
+
+3. **Deploy HAProxy**:
+   ```bash
+   cd ansible
+   ansible-playbook playbooks/deploy-haproxy.yaml
+   ```
+
+4. **Monitor HAProxy**:
+   - Statistics page: `http://<haproxy-server>:8404/stats`
+   - Check status: `systemctl status haproxy`
+
+### Configuration Details
+
+See [ansible/README.md](ansible/README.md) for detailed configuration options, examples, and troubleshooting.
+
+## Cloudflared (Cloudflare Tunnel)
+
+Cloudflared creates secure tunnels from your Kubernetes cluster to Cloudflare's edge network, providing HTTP/HTTPS ingress without exposing servers directly to the internet.
+
+### Key Features
+
+- **Zero Trust Security**: Built-in authentication and access control
+- **DDoS Protection**: Automatic protection via Cloudflare's network
+- **Global CDN**: Content delivery from Cloudflare's edge locations
+- **No Open Ports**: Outbound-only connections from your cluster
+- **SSL/TLS**: Automatic certificate management
+- **High Availability**: Multi-replica deployment with auto-scaling
+
+### Quick Start
+
+1. **Install cloudflared CLI** and create a tunnel:
+   ```bash
+   # Install CLI (macOS)
+   brew install cloudflare/cloudflare/cloudflared
+   
+   # Login and create tunnel
+   cloudflared tunnel login
+   cloudflared tunnel create infrastructure-tunnel
+   ```
+
+2. **Create Kubernetes secret** with tunnel credentials:
+   ```bash
+   kubectl create namespace cloudflare
+   kubectl create secret generic cloudflared-credentials \
+     --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json \
+     -n cloudflare
+   ```
+
+3. **Configure DNS records**:
+   ```bash
+   cloudflared tunnel route dns infrastructure-tunnel app.example.com
+   cloudflared tunnel route dns infrastructure-tunnel api.example.com
+   ```
+
+4. **Update Helmfile values** (`helmfile/values/cloudflared-values.yaml`):
+   ```yaml
+   cloudflare:
+     tunnelName: "infrastructure-tunnel"
+     tunnelId: "<TUNNEL-ID>"
+   
+   ingress:
+     - hostname: app.example.com
+       service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+     - hostname: api.example.com
+       service: http://api-service.default.svc.cluster.local:8080
+     - service: http_status:404
+   ```
+
+5. **Deploy via Helmfile**:
+   ```bash
+   cd helmfile
+   helmfile -l name=cloudflared apply
+   ```
+
+### Detailed Setup
+
+See [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md) for:
+- Complete setup instructions
+- DNS configuration guide
+- Ingress rule examples
+- Cloudflare Access integration
+- Monitoring and troubleshooting
+- Security best practices
+
+### Cloudflare DNS Management
+
+#### Adding Services
+
+When adding new services to expose via Cloudflare tunnel:
+
+1. **Create DNS record**:
+   ```bash
+   cloudflared tunnel route dns infrastructure-tunnel newservice.example.com
+   ```
+
+2. **Add ingress rule** to `helmfile/values/cloudflared-values.yaml`:
+   ```yaml
+   ingress:
+     - hostname: newservice.example.com
+       service: http://service-name.namespace.svc.cluster.local:port
+     # ... existing rules ...
+     - service: http_status:404  # Keep as last rule
+   ```
+
+3. **Apply changes**:
+   ```bash
+   cd helmfile
+   helmfile -l name=cloudflared apply
+   ```
+
+#### Wildcard Domains
+
+For wildcard subdomains (e.g., `*.apps.example.com`):
+
+```bash
+cloudflared tunnel route dns infrastructure-tunnel "*.apps.example.com"
+```
+
+Add to ingress rules:
+```yaml
+ingress:
+  - hostname: "*.apps.example.com"
+    service: http://nginx-ingress-controller.ingress-nginx.svc.cluster.local:80
+```
+
+#### Managing DNS via Cloudflare Dashboard
+
+Alternatively, manage DNS records via the Cloudflare dashboard:
+
+1. Go to https://dash.cloudflare.com/
+2. Select your domain
+3. Navigate to **DNS** → **Records**
+4. Add CNAME record:
+   - **Name**: subdomain (e.g., `app`)
+   - **Target**: `<TUNNEL-ID>.cfargotunnel.com`
+   - **Proxy status**: Proxied (orange cloud icon)
+
+### HAProxy Ingress Controller (Kubernetes)
 
 The HAProxy Ingress Controller provides a robust alternative for managing ingress resources in the Kubernetes cluster. HAProxy is known for its high performance, reliability, and advanced load balancing features.
 

@@ -1,0 +1,12 @@
+# Ansible Inventory Example
+# Copy this file and customize for your environment
+
+[haproxy_servers]
+# Add your HAProxy server hostnames or IPs here
+# Example:
+# haproxy-01 ansible_host=192.168.1.5 ansible_user=ubuntu
+# haproxy-02 ansible_host=192.168.1.6 ansible_user=ubuntu
+
+[haproxy_servers:vars]
+# Common variables for HAProxy servers
+# ansible_python_interpreter=/usr/bin/python3

@@ -5,6 +5,8 @@ repositories:
     url: https://kubernetes.github.io/ingress-nginx
   - name: haproxy-ingress
     url: https://haproxy-ingress.github.io/charts
+  - name: cloudflare
+    url: https://cloudflare.github.io/helm-charts
 
 releases:
   - name: prometheus
@@ -28,3 +30,10 @@ releases:
     version: 0.14.6
     values:
       - values/haproxy-ingress.yaml
+  - name: cloudflared
+    namespace: cloudflare
+    createNamespace: true
+    chart: cloudflare/cloudflare-tunnel-remote
+    version: 0.3.0
+    values:
+      - values/cloudflared-values.yaml
