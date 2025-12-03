@@ -42,6 +42,7 @@ autoscaling:
   minReplicas: 3
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
+  # Note: Memory-based autoscaling requires Kubernetes 1.23+ and metrics-server
   targetMemoryUtilizationPercentage: 70
 
 # Production-specific environment variables
@@ -52,3 +53,5 @@ env:
     value: "quic"
   - name: TUNNEL_NO_AUTOUPDATE
     value: "true"  # Disable auto-updates in production for stability
+                   # Manually update cloudflared during scheduled maintenance windows
+                   # Check for updates: https://github.com/cloudflare/cloudflared/releases

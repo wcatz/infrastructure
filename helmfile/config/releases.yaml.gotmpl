@@ -17,14 +17,15 @@ releases:
     version: 25.8.2
     values:
       - values/prometheus-values.yaml
-      # Environment-specific overrides
-      {{- if eq $env "dev" }}
+      # TODO: Create environment-specific Prometheus values for resource optimization
+      # Uncomment when environment-specific values are needed:
+      # {{- if eq $env "dev" }}
       # - environments/dev/prometheus-values.yaml
-      {{- else if eq $env "staging" }}
+      # {{- else if eq $env "staging" }}
       # - environments/staging/prometheus-values.yaml
-      {{- else if eq $env "prod" }}
+      # {{- else if eq $env "prod" }}
       # - environments/prod/prometheus-values.yaml
-      {{- end }}
+      # {{- end }}
 {{- end }}
 
 {{- if $enabled.haproxyIngress | default true }}
