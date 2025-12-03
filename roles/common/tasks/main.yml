@@ -33,9 +33,16 @@
     name: UTC
 
 - name: Disable swap for Kubernetes
-  ansible.builtin.shell: |
-    swapoff -a
-    sed -i '/swap/d' /etc/fstab
+  ansible.builtin.command:
+    cmd: swapoff -a
+  changed_when: false
+  when: "'kubernetes_cluster' in group_names"
+
+- name: Remove swap entries from /etc/fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '\sswap\s'
+    state: absent
   when: "'kubernetes_cluster' in group_names"
 
 - name: Enable kernel modules for Kubernetes

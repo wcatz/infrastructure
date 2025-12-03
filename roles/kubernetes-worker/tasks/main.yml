@@ -28,10 +28,10 @@
   environment:
     INSTALL_K3S_SKIP_ENABLE: "false"
 
-- name: Wait for k3s agent to be ready
-  ansible.builtin.wait_for:
-    timeout: 30
-  delegate_to: localhost
+- name: Wait for k3s agent to connect
+  ansible.builtin.pause:
+    seconds: 30
+    prompt: "Waiting for k3s agent to connect to the control plane"
 
 - name: Verify k3s agent is running
   ansible.builtin.systemd:
