@@ -1,0 +1,36 @@
+{{- /*
+This template uses .Values.enabled to conditionally enable/disable releases.
+The enabled configuration is loaded from config/enabled.yaml in the main helmfile.
+*/ -}}
+{{ $enabled := .Values.enabled | default dict }}
+
+releases:
+{{- if $enabled.prometheus | default true }}
+  - name: prometheus
+    namespace: monitoring
+    createNamespace: true
+    chart: prometheus-community/prometheus
+    version: 25.8.2
+    values:
+      - values/prometheus-values.yaml
+{{- end }}
+
+{{- if $enabled.haproxyIngress | default true }}
+  - name: haproxy-ingress
+    namespace: haproxy-ingress
+    createNamespace: true
+    chart: haproxy-ingress/haproxy-ingress
+    version: 0.14.6
+    values:
+      - values/haproxy-ingress.yaml
+{{- end }}
+
+{{- if $enabled.cloudflared | default false }}
+  - name: cloudflared
+    namespace: cloudflare
+    createNamespace: true
+    chart: cloudflare/cloudflare-tunnel-remote
+    version: 0.3.0
+    values:
+      - values/cloudflared-values.yaml
+{{- end }}

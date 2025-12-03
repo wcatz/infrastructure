@@ -1,0 +1,18 @@
+---
+# Default variables for Tailscale role
+
+# Tailscale auth key (required)
+# Get this from https://login.tailscale.com/admin/settings/keys
+# tailscale_auth_key: "tskey-auth-xxxxx"
+
+# Tailscale version (optional, default is latest)
+tailscale_version: "latest"
+
+# Tailscale up arguments
+tailscale_args: "--accept-routes --advertise-exit-node=false"
+
+# Additional options
+tailscale_enable_ssh: false
+tailscale_accept_dns: true
+tailscale_advertise_tags: []
+# Example: tailscale_advertise_tags: ["tag:server", "tag:production"]

@@ -1,0 +1,68 @@
+---
+# Tasks for k3s role
+
+- name: Download k3s installation script
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_url }}"
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+
+- name: Install k3s server
+  ansible.builtin.shell: |
+    INSTALL_K3S_VERSION={{ k3s_version }} \
+    K3S_TOKEN={{ k3s_token | default('') }} \
+    sh /tmp/k3s-install.sh server {{ k3s_server_args | join(' ') }}
+  args:
+    creates: /usr/local/bin/k3s
+  when: k3s_server_enabled
+  notify: Restart k3s
+
+- name: Wait for k3s to be ready
+  ansible.builtin.wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    state: present
+    timeout: 300
+  when: k3s_server_enabled
+
+- name: Create .kube directory
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/.kube"
+    state: directory
+    mode: '0755'
+  when: k3s_server_enabled
+
+- name: Copy kubeconfig to .kube/config
+  ansible.builtin.copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ ansible_env.HOME }}/.kube/config"
+    remote_src: true
+    mode: '0600'
+  when: k3s_server_enabled
+
+- name: Validate k3s_token for agent installation
+  ansible.builtin.assert:
+    that:
+      - k3s_token is defined
+      - k3s_token | length > 0
+    fail_msg: "k3s_token must be set for agent nodes"
+  when: k3s_agent_enabled
+
+- name: Install k3s agent
+  ansible.builtin.shell: |
+    INSTALL_K3S_VERSION={{ k3s_version }} \
+    K3S_URL=https://{{ hostvars[groups['k3s_servers'][0]]['ansible_host'] }}:6443 \
+    K3S_TOKEN={{ k3s_token }} \
+    sh /tmp/k3s-install.sh agent
+  args:
+    creates: /usr/local/bin/k3s
+  when: k3s_agent_enabled
+  notify: Restart k3s
+
+- name: Verify k3s installation
+  ansible.builtin.command: k3s --version
+  register: k3s_version_output
+  changed_when: false
+
+- name: Display k3s version
+  ansible.builtin.debug:
+    var: k3s_version_output.stdout

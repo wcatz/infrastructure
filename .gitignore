@@ -1,0 +1,35 @@
+# Ansible
+ansible/inventory.ini
+ansible/*.retry
+ansible/.vault_pass
+*.pyc
+__pycache__/
+
+# Helmfile
+helmfile/secrets/
+*.dec
+*-dec.yaml
+
+# Cloudflare credentials (should be in Kubernetes secrets, not in git)
+*.pem
+credentials.json
+cert.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# Temporary files
+/tmp/
+*.tmp

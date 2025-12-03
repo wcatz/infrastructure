@@ -1,0 +1,21 @@
+---
+# Setup Tailscale VPN
+# This playbook installs and configures Tailscale
+
+- name: Setup Tailscale
+  hosts: all
+  become: true
+
+  roles:
+    - tailscale
+
+  vars:
+    # REQUIRED: Set your Tailscale auth key
+    # Get it from: https://login.tailscale.com/admin/settings/keys
+    # tailscale_auth_key: "tskey-auth-xxxxx"
+
+    # Optional overrides:
+    # tailscale_args: "--accept-routes --advertise-exit-node=false"
+    # tailscale_enable_ssh: false
+    # tailscale_accept_dns: true
+    # tailscale_advertise_tags: ["tag:server"]

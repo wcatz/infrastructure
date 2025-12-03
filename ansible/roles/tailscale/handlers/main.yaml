@@ -1,0 +1,9 @@
+---
+# Tailscale handlers
+
+- name: Restart tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: restarted
+  listen: Restart tailscaled
+  become: true

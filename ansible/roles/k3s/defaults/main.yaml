@@ -1,0 +1,37 @@
+---
+# Default variables for k3s role
+
+# k3s version - update as needed
+# Check latest releases: https://github.com/k3s-io/k3s/releases
+k3s_version: "v1.28.5+k3s1"
+k3s_install_url: "https://get.k3s.io"
+
+# Disable Traefik to use HAProxy as ingress controller
+k3s_server_args:
+  - "--disable=traefik"
+  - "--write-kubeconfig-mode=644"
+
+# Optional: Disable other components if needed
+# k3s_disable_components:
+#   - traefik
+#   - servicelb
+#   - metrics-server
+
+# k3s token for agent nodes (generate with: openssl rand -hex 32)
+k3s_token: ""
+
+# Server node configuration
+k3s_server_enabled: true
+k3s_agent_enabled: false
+
+# Network configuration
+k3s_cluster_cidr: "10.42.0.0/16"
+k3s_service_cidr: "10.43.0.0/16"
+k3s_cluster_dns: "10.43.0.10"
+
+# TLS SAN (additional hostnames/IPs for the certificate)
+k3s_tls_san: []
+# Example:
+# k3s_tls_san:
+#   - "k3s.example.com"
+#   - "192.168.1.100"
