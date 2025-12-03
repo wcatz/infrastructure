@@ -10,12 +10,33 @@ on:
         type: choice
         options:
           - default
-          - production
+          - dev
           - staging
+          - production
 
 jobs:
+  validate-before-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: |
+          pip install yamllint
+
+      - name: Lint YAML files
+        run: |
+          echo "Linting Helmfile YAML files..."
+          find helmfile -name '*.yaml' -o -name '*.yml' | xargs yamllint -d "{extends: default, rules: {line-length: {max: 120}, document-start: disable}}"
+          
+          echo "✅ YAML validation passed"
+
   helmfile-apply:
     runs-on: ubuntu-latest
+    needs: validate-before-deploy
     environment: ${{ github.event.inputs.environment }}
     permissions:
       contents: read
@@ -47,14 +68,37 @@ jobs:
           echo "Note: Configure your Kubernetes cluster credentials via repository secrets"
           echo "Set KUBECONFIG secret with base64-encoded kubeconfig content"
 
+      - name: Helmfile Diff (Pre-deployment)
+        working-directory: helmfile
+        run: |
+          echo "Running helmfile diff for environment: ${{ github.event.inputs.environment }}"
+          if [ "${{ github.event.inputs.environment }}" = "default" ]; then
+            helmfile diff --suppress-secrets || true
+          else
+            helmfile -e ${{ github.event.inputs.environment }} diff --suppress-secrets || true
+          fi
+
       - name: Helmfile Apply
         working-directory: helmfile
         run: |
           echo "Running helmfile apply for environment: ${{ github.event.inputs.environment }}"
-          helmfile apply --suppress-secrets
+          if [ "${{ github.event.inputs.environment }}" = "default" ]; then
+            helmfile apply --suppress-secrets
+          else
+            helmfile -e ${{ github.event.inputs.environment }} apply --suppress-secrets
+          fi
+
+      - name: Verify Deployment
+        run: |
+          echo "Verifying deployment..."
+          # Add verification commands here
+          # kubectl get pods -A
+          # kubectl get svc -A
 
       - name: Deployment Summary
         run: |
-          echo "✅ Helmfile deployment completed successfully for environment: ${{ github.event.inputs.environment }}"
-          echo "Deployment triggered by: ${{ github.actor }}"
+          echo "✅ Helmfile deployment completed successfully"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Triggered by: ${{ github.actor }}"
           echo "Commit SHA: ${{ github.sha }}"
+          echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"

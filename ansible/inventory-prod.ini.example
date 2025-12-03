@@ -1,0 +1,113 @@
+# Production Environment Inventory
+# This file demonstrates how to configure HAProxy for production environment
+
+[haproxy_servers]
+haproxy-prod-01 ansible_host=192.168.1.5 ansible_user=ubuntu hostname=haproxy-prod-01
+# For HA, uncomment and configure a second HAProxy instance
+# haproxy-prod-02 ansible_host=192.168.1.6 ansible_user=ubuntu hostname=haproxy-prod-02
+
+[haproxy_servers:vars]
+# Production-specific HAProxy configuration
+haproxy_environment=prod
+
+# Production Kubernetes worker nodes
+haproxy_tcp_backends:
+  - name: mysql
+    port: 3306
+    mode: tcp
+    balance: leastconn
+    servers:
+      - name: k8s-prod-worker-1
+        address: 192.168.1.11
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+      - name: k8s-prod-worker-2
+        address: 192.168.1.12
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+      - name: k8s-prod-worker-3
+        address: 192.168.1.13
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+
+  - name: postgresql
+    port: 5432
+    mode: tcp
+    balance: leastconn
+    servers:
+      - name: k8s-prod-worker-1
+        address: 192.168.1.11
+        port: 30432
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+      - name: k8s-prod-worker-2
+        address: 192.168.1.12
+        port: 30432
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+      - name: k8s-prod-worker-3
+        address: 192.168.1.13
+        port: 30432
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+
+  - name: redis
+    port: 6379
+    mode: tcp
+    balance: roundrobin
+    servers:
+      - name: k8s-prod-worker-1
+        address: 192.168.1.11
+        port: 30379
+        check: true
+        check_interval: 1s
+        rise: 2
+        fall: 2
+      - name: k8s-prod-worker-2
+        address: 192.168.1.12
+        port: 30379
+        check: true
+        check_interval: 1s
+        rise: 2
+        fall: 2
+      - name: k8s-prod-worker-3
+        address: 192.168.1.13
+        port: 30379
+        check: true
+        check_interval: 1s
+        rise: 2
+        fall: 2
+
+haproxy_udp_backends:
+  - name: wireguard
+    port: 51820
+    mode: udp
+    balance: roundrobin
+    servers:
+      - name: k8s-prod-worker-1
+        address: 192.168.1.11
+        port: 31820
+      - name: k8s-prod-worker-2
+        address: 192.168.1.12
+        port: 31820
+      - name: k8s-prod-worker-3
+        address: 192.168.1.13
+        port: 31820
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3

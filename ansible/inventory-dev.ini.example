@@ -1,0 +1,47 @@
+# Development Environment Inventory
+# This file demonstrates how to configure HAProxy for dev environment
+
+[haproxy_servers]
+haproxy-dev ansible_host=192.168.2.5 ansible_user=ubuntu hostname=haproxy-dev-01
+
+[haproxy_servers:vars]
+# Development-specific HAProxy configuration
+haproxy_environment=dev
+
+# Development Kubernetes worker nodes
+haproxy_tcp_backends:
+  - name: mysql
+    port: 3306
+    mode: tcp
+    balance: leastconn
+    servers:
+      - name: k8s-dev-worker-1
+        address: 192.168.2.11
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+      - name: k8s-dev-worker-2
+        address: 192.168.2.12
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+
+haproxy_udp_backends:
+  - name: wireguard
+    port: 51820
+    mode: udp
+    balance: roundrobin
+    servers:
+      - name: k8s-dev-worker-1
+        address: 192.168.2.11
+        port: 31820
+      - name: k8s-dev-worker-2
+        address: 192.168.2.12
+        port: 31820
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3

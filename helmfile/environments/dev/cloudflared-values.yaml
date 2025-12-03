@@ -1,0 +1,43 @@
+# Cloudflared Tunnel Values - Development Environment
+# These values override the base cloudflared-values.yaml for dev environment
+
+# Replica count for development (lower for resource savings)
+replicaCount: 1
+
+# Cloudflare tunnel configuration
+cloudflare:
+  tunnelName: "infrastructure-dev-tunnel"
+  # tunnelId: "your-dev-tunnel-id"  # Set via secret or override
+
+# Development ingress rules
+ingress:
+  # Example dev services
+  # - hostname: app.dev.example.com
+  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  # - hostname: api.dev.example.com
+  #   service: http://api-service.default.svc.cluster.local:8080
+  
+  # Default catch-all rule (required)
+  - service: http_status:404
+
+# Resource limits (reduced for dev)
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# Auto-scaling configuration (disabled for dev)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+
+# Development-specific environment variables
+env:
+  - name: TUNNEL_LOGLEVEL
+    value: "debug"
+  - name: TUNNEL_TRANSPORT_PROTOCOL
+    value: "quic"

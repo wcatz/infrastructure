@@ -4,6 +4,21 @@ helmDefaults:
   recreatePods: false
   force: false
 
+# Environment definitions
+environments:
+  default:
+    values:
+      - config/enabled.yaml
+  dev:
+    values:
+      - config/enabled.yaml
+  staging:
+    values:
+      - config/enabled.yaml
+  prod:
+    values:
+      - config/enabled.yaml
+
 {{ readFile "config/repositories.yaml.gotmpl" | tpl }}
 
 {{ readFile "config/enabled.yaml" }}

@@ -157,55 +157,120 @@ After k3s is deployed, use Helmfile to install HAProxy ingress controller.
 
 ## HAProxy Role
 
-The HAProxy role deploys and configures HAProxy as a TCP/UDP load balancer for non-HTTP services.
+The HAProxy role deploys and configures HAProxy as a TCP/UDP load balancer for Kubernetes NodePort services and non-HTTP traffic.
 
 ### Supported Services
 
-- **TCP Services**: MySQL (3306), PostgreSQL, Redis, etc.
-- **UDP Services**: WireGuard (51820), DNS, etc.
+- **TCP Services**: MySQL (3306), PostgreSQL (5432), Redis (6379), SSH, custom services
+- **UDP Services**: WireGuard VPN (51820), DNS (53), QUIC, game servers
 
-### Usage
+### Quick Start
 
-1. **Create an inventory file**:
-   ```bash
-   cp inventory.ini.example inventory.ini
-   # Edit inventory.ini with your HAProxy server details
+#### Option 1: Environment-Specific Inventory (Recommended)
+
+Use pre-configured inventory files for each environment:
+
+```bash
+# Development environment
+cp inventory-dev.ini.example inventory-dev.ini
+vim inventory-dev.ini  # Customize with your dev cluster IPs
+ansible-playbook -i inventory-dev.ini playbooks/deploy-haproxy.yaml
+
+# Staging environment
+cp inventory-staging.ini.example inventory-staging.ini
+vim inventory-staging.ini  # Customize with your staging cluster IPs
+ansible-playbook -i inventory-staging.ini playbooks/deploy-haproxy.yaml
+
+# Production environment
+cp inventory-prod.ini.example inventory-prod.ini
+vim inventory-prod.ini  # Customize with your prod cluster IPs
+ansible-playbook -i inventory-prod.ini playbooks/deploy-haproxy.yaml
+```
+
+#### Option 2: Generic Inventory
+
+For simple deployments or testing:
+
+```bash
+cp inventory.ini.example inventory.ini
+vim inventory.ini  # Add HAProxy server and customize backends
+ansible-playbook playbooks/deploy-haproxy.yaml
+```
+
+### NodePort Load Balancing Configuration
+
+Configure HAProxy to load balance across Kubernetes worker NodePorts:
+
+**Example: MySQL NodePort Service**
+
+1. **Deploy Kubernetes service with NodePort**:
+   ```yaml
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: mysql
+     namespace: databases
+   spec:
+     type: NodePort
+     ports:
+       - port: 3306
+         targetPort: 3306
+         nodePort: 30306
+     selector:
+       app: mysql
    ```
 
-2. **Customize HAProxy configuration** (optional):
-   
-   Edit `roles/haproxy/defaults/main.yaml` or override in the playbook:
-   
+2. **Configure HAProxy backend** (in inventory or playbook vars):
    ```yaml
    haproxy_tcp_backends:
      - name: mysql
-       port: 3306
+       port: 3306  # HAProxy listens on standard port
        mode: tcp
-       balance: roundrobin
+       balance: leastconn
        servers:
-         - name: mysql-1
-           address: 192.168.1.10
-           port: 3306
-           check: true
-           check_interval: 2s
-         - name: mysql-2
+         - name: k8s-worker-1
            address: 192.168.1.11
-           port: 3306
+           port: 30306  # NodePort on worker
            check: true
            check_interval: 2s
-   
-   haproxy_udp_backends:
-     - name: wireguard
-       port: 51820
-       mode: udp
-       balance: roundrobin
-       servers:
-         - name: wireguard-1
-           address: 192.168.1.20
-           port: 51820
+           rise: 2
+           fall: 3
+         - name: k8s-worker-2
+           address: 192.168.1.12
+           port: 30306
+           check: true
+           check_interval: 2s
+           rise: 2
+           fall: 3
+         - name: k8s-worker-3
+           address: 192.168.1.13
+           port: 30306
+           check: true
+           check_interval: 2s
+           rise: 2
+           fall: 3
    ```
 
 3. **Deploy HAProxy**:
+   ```bash
+   cd ansible
+   ansible-playbook playbooks/deploy-haproxy.yaml
+   ```
+
+4. **Access MySQL** via HAProxy on standard port:
+   ```bash
+   mysql -h <haproxy-ip> -P 3306 -u user -p
+   ```
+
+### Multi-Environment Deployment
+
+The inventory examples include configurations for dev, staging, and production:
+
+- **inventory-dev.ini.example**: Development with 2 workers, minimal services
+- **inventory-staging.ini.example**: Staging with 3 workers, production-like setup
+- **inventory-prod.ini.example**: Production with 3 workers, all services
+
+See [HAPROXY_NODEPORT.md](HAPROXY_NODEPORT.md) for comprehensive NodePort load balancing documentation.
    ```bash
    cd ansible
    ansible-playbook playbooks/deploy-haproxy.yaml

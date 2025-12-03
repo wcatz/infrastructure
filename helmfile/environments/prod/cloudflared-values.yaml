@@ -1,0 +1,54 @@
+# Cloudflared Tunnel Values - Production Environment
+# These values override the base cloudflared-values.yaml for production environment
+
+# Replica count for production (high availability)
+replicaCount: 3
+
+# Cloudflare tunnel configuration
+cloudflare:
+  tunnelName: "infrastructure-prod-tunnel"
+  # tunnelId: "your-prod-tunnel-id"  # Set via secret or override
+
+# Production ingress rules
+ingress:
+  # Example production services
+  # - hostname: app.example.com
+  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  # - hostname: api.example.com
+  #   service: http://api-service.default.svc.cluster.local:8080
+  # - hostname: www.example.com
+  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  # - hostname: monitoring.example.com
+  #   service: http://prometheus-server.monitoring.svc.cluster.local:80
+  #   originRequest:
+  #     # Add authentication via Cloudflare Access for monitoring
+  #     httpHostHeader: monitoring.example.com
+  
+  # Default catch-all rule (required)
+  - service: http_status:404
+
+# Resource limits (optimized for production)
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Auto-scaling configuration (aggressive for production)
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 70
+
+# Production-specific environment variables
+env:
+  - name: TUNNEL_LOGLEVEL
+    value: "info"
+  - name: TUNNEL_TRANSPORT_PROTOCOL
+    value: "quic"
+  - name: TUNNEL_NO_AUTOUPDATE
+    value: "true"  # Disable auto-updates in production for stability

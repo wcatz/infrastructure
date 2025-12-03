@@ -1,8 +1,12 @@
 {{- /*
 This template uses .Values.enabled to conditionally enable/disable releases.
 The enabled configuration is loaded from config/enabled.yaml in the main helmfile.
+
+Environment-specific values are loaded from environments/{env}/ directories.
+Supported environments: dev, staging, prod
 */ -}}
 {{ $enabled := .Values.enabled | default dict }}
+{{ $env := .Environment.Name | default "default" }}
 
 releases:
 {{- if $enabled.prometheus | default true }}
@@ -13,6 +17,14 @@ releases:
     version: 25.8.2
     values:
       - values/prometheus-values.yaml
+      # Environment-specific overrides
+      {{- if eq $env "dev" }}
+      # - environments/dev/prometheus-values.yaml
+      {{- else if eq $env "staging" }}
+      # - environments/staging/prometheus-values.yaml
+      {{- else if eq $env "prod" }}
+      # - environments/prod/prometheus-values.yaml
+      {{- end }}
 {{- end }}
 
 {{- if $enabled.haproxyIngress | default true }}
@@ -23,6 +35,14 @@ releases:
     version: 0.14.6
     values:
       - values/haproxy-ingress.yaml
+      # Environment-specific overrides
+      {{- if eq $env "dev" }}
+      - environments/dev/haproxy-ingress.yaml
+      {{- else if eq $env "staging" }}
+      - environments/staging/haproxy-ingress.yaml
+      {{- else if eq $env "prod" }}
+      - environments/prod/haproxy-ingress.yaml
+      {{- end }}
 {{- end }}
 
 {{- if $enabled.cloudflared | default false }}
@@ -33,4 +53,12 @@ releases:
     version: 0.3.0
     values:
       - values/cloudflared-values.yaml
+      # Environment-specific overrides
+      {{- if eq $env "dev" }}
+      - environments/dev/cloudflared-values.yaml
+      {{- else if eq $env "staging" }}
+      - environments/staging/cloudflared-values.yaml
+      {{- else if eq $env "prod" }}
+      - environments/prod/cloudflared-values.yaml
+      {{- end }}
 {{- end }}

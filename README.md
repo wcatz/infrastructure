@@ -38,28 +38,73 @@ This repository contains infrastructure management tools and GitOps workflows fo
   - Use cases: Web applications, APIs, dashboards
 
 - **TCP/UDP Traffic**: 
-  - HAProxy standalone load balancer → Backend servers
-  - Benefits: High performance, health checking, protocol flexibility
-  - Use cases: MySQL databases, WireGuard VPN, DNS servers, game servers
+  - HAProxy standalone load balancer → Kubernetes Worker NodePorts → Services
+  - Benefits: High performance, health checking, protocol flexibility, automatic failover
+  - Use cases: MySQL databases, WireGuard VPN, DNS servers, game servers, Redis
+  - See [ansible/HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md) for detailed configuration
+
+## Key Features
+
+### HAProxy Load Balancing for NodePorts
+- **NodePort Integration**: Load balance traffic across multiple Kubernetes worker nodes
+- **Health Checks**: Automatic failover when worker nodes become unavailable
+- **Standard Ports**: Expose services on standard ports (e.g., 3306 for MySQL, 51820 for WireGuard)
+- **Scalability**: Add/remove worker nodes without service disruption
+- **Protocol Support**: Both TCP and UDP protocols with optimized configurations
+
+### Cloudflared Tunnel Integration
+- **Zero Trust Security**: Built-in authentication and access control via Cloudflare Access
+- **DDoS Protection**: Automatic protection through Cloudflare's global network
+- **No Public Ports**: Outbound-only connections from cluster to Cloudflare edge
+- **Multi-Environment**: Separate tunnels for dev, staging, and production
+- **High Availability**: Multi-replica deployment with auto-scaling
+
+### Multi-Environment Support
+- **Dedicated Configurations**: Environment-specific values for dev, staging, and production
+- **Resource Optimization**: Scaled resources based on environment requirements
+- **Isolated Deployments**: Separate tunnels and configurations per environment
+- **Easy Promotion**: Consistent structure across environments for smooth promotions
+
+## Quick Links
+
+### Documentation
+- **[Helmfile Management Guide](helmfile/README.md)**: Complete guide for managing releases, environments, and deployments
+- **[HAProxy NodePort Load Balancing](ansible/HAPROXY_NODEPORT.md)**: Detailed HAProxy configuration for Kubernetes NodePorts
+- **[Cloudflared Setup Guide](helmfile/CLOUDFLARED_SETUP.md)**: Complete Cloudflared tunnel configuration and deployment
+- **[DNS Setup Guide](DNS_SETUP.md)**: DNS configuration for both Cloudflare and HAProxy services
+- **[Ansible Documentation](ansible/README.md)**: Ansible playbooks and role documentation
+
+### Configuration Examples
+- **MySQL NodePort**: See [HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md#example-1-mysql-database-nodeport)
+- **WireGuard VPN**: See [HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md#example-2-wireguard-vpn-nodeport)
+- **HTTP/HTTPS Services**: See [CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md)
+- **Multi-Environment**: See [Helmfile README](helmfile/README.md#environment-management)
 
 ## Structure
 
 - **ansible/**: Ansible playbooks and roles for infrastructure automation
   - **playbooks/**: Deployment playbooks
     - `deploy-k3s.yaml`: Deploy k3s without Traefik (for HAProxy ingress)
-    - `deploy-haproxy.yaml`: Deploy HAProxy TCP/UDP load balancer
+    - `deploy-haproxy.yaml`: Deploy HAProxy TCP/UDP load balancer for NodePorts
   - **roles/**: Ansible roles
     - `k3s/`: k3s installation role (Traefik disabled)
-    - `haproxy/`: HAProxy TCP/UDP load balancer role
+    - `haproxy/`: HAProxy TCP/UDP load balancer role with NodePort support
   - **README.md**: Ansible usage documentation
+  - **HAPROXY_NODEPORT.md**: Complete guide for HAProxy NodePort load balancing
 - **helmfile/**: Helmfile configurations for Kubernetes deployments
   - **helmfile.yaml**: Main Helmfile configuration
   - **config/**: Configuration templates (gotmpl)
     - `repositories.yaml.gotmpl`: Helm repository definitions
     - `releases.yaml.gotmpl`: Release definitions
     - `enabled.yaml`: Enable/disable specific applications
-  - **values/**: Helm values files for each chart
+  - **values/**: Base Helm values files for each chart
+  - **environments/**: Environment-specific values (dev, staging, prod)
+    - `dev/`: Development environment overrides
+    - `staging/`: Staging environment overrides
+    - `prod/`: Production environment overrides
+  - **README.md**: Helmfile management guide
   - **CLOUDFLARED_SETUP.md**: Cloudflared tunnel setup guide
+- **DNS_SETUP.md**: DNS configuration guide for Cloudflare and HAProxy
 - **.github/workflows/**: GitHub Actions workflows for GitOps automation
   - **helmfile-diff.yaml**: Automatic diff on pull requests
   - **helmfile-apply.yaml**: Manual deployment workflow
