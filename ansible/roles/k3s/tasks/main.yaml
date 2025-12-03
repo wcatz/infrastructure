@@ -39,6 +39,14 @@
     mode: '0600'
   when: k3s_server_enabled
 
+- name: Validate k3s_token for agent installation
+  ansible.builtin.assert:
+    that:
+      - k3s_token is defined
+      - k3s_token | length > 0
+    fail_msg: "k3s_token must be set for agent nodes"
+  when: k3s_agent_enabled
+
 - name: Install k3s agent
   ansible.builtin.shell: |
     INSTALL_K3S_VERSION={{ k3s_version }} \

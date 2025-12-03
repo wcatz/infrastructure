@@ -1,3 +1,7 @@
+{{- /*
+This template uses .Values.enabled to conditionally enable/disable releases.
+The enabled configuration is loaded from config/enabled.yaml in the main helmfile.
+*/ -}}
 {{ $enabled := .Values.enabled | default dict }}
 
 releases:
