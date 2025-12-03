@@ -49,13 +49,6 @@ jobs:
         with:
           version: 'v3.13.3'
 
-      - name: Install Helm-Diff Plugin
-        run: |
-          # Uninstall any existing version
-          helm plugin uninstall diff || true
-          # Install pinned version v3.6.0
-          helm plugin install https://github.com/databus23/helm-diff --version v3.6.0
-
       - name: Setup Helmfile
         uses: mamezou-tech/setup-helmfile@v2.0.0
         with:
