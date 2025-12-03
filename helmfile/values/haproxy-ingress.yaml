@@ -34,14 +34,10 @@ controller:
     ssl-redirect: "true"
 
   service:
-    type: LoadBalancer
-    externalTrafficPolicy: Local
+    type: ClusterIP  # Only accessible from within cluster (via Cloudflared)
+    # externalTrafficPolicy: Local  # Not needed for ClusterIP
     annotations: {}
-    # For cloud providers, you can add annotations here
-    # Example for AWS:
-    # annotations:
-    #   service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    #   service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    # Cloudflared tunnel connects directly to this ClusterIP service
 
   metrics:
     enabled: true

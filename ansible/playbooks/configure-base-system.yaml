@@ -1,0 +1,16 @@
+---
+# Base System Configuration
+# This playbook configures hostname and Tailscale on all servers
+
+- name: Configure Base System
+  hosts: all
+  become: true
+
+  roles:
+    - hostname
+    - tailscale
+
+  vars:
+    # Set hostname per host in inventory
+    # Set tailscale_auth_key in group_vars or vault
+    # tailscale_auth_key: "tskey-auth-xxxxx"

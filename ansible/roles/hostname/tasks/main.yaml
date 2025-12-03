@@ -1,0 +1,39 @@
+---
+# Tasks for hostname role
+
+- name: Validate hostname is defined
+  ansible.builtin.assert:
+    that:
+      - hostname is defined
+      - hostname | length > 0
+    fail_msg: "hostname variable must be defined"
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ hostname }}"
+  become: true
+
+- name: Update /etc/hosts with hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ hostname }}{% if domain is defined %}.{{ domain }} {{ hostname }}{% endif %}"
+    state: present
+  become: true
+
+- name: Preserve hostname across reboots (Debian/Ubuntu)
+  ansible.builtin.copy:
+    content: "{{ hostname }}\n"
+    dest: /etc/hostname
+    mode: '0644'
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Display current hostname
+  ansible.builtin.command: hostname
+  register: current_hostname
+  changed_when: false
+
+- name: Show configured hostname
+  ansible.builtin.debug:
+    msg: "Hostname set to: {{ current_hostname.stdout }}"

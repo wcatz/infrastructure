@@ -1,0 +1,15 @@
+---
+# Configure System Hostname
+# This playbook sets the system hostname
+
+- name: Configure Hostname
+  hosts: all
+  become: true
+
+  roles:
+    - hostname
+
+  vars:
+    # Override these in your inventory or command line
+    # hostname: "my-server"
+    # domain: "example.com"

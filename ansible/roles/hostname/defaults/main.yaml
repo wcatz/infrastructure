@@ -1,0 +1,11 @@
+---
+# Default variables for hostname role
+
+# Hostname to set (required)
+# hostname: "server-01"
+
+# Domain name (optional)
+# domain: "example.com"
+
+# Full FQDN will be: hostname.domain
+# If domain is not set, only hostname is configured

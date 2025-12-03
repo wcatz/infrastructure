@@ -6,21 +6,105 @@ This directory contains Ansible playbooks and roles for infrastructure automatio
 
 ```
 ansible/
-├── ansible.cfg              # Ansible configuration
-├── inventory.ini.example    # Inventory template
-├── playbooks/              # Ansible playbooks
-│   ├── deploy-k3s.yaml     # k3s cluster deployment
-│   └── deploy-haproxy.yaml # HAProxy deployment playbook
-└── roles/                  # Ansible roles
-    ├── k3s/               # k3s role (Traefik disabled)
-    │   ├── defaults/      # Default variables
-    │   ├── handlers/      # Service handlers
-    │   └── tasks/         # Main tasks
-    └── haproxy/           # HAProxy role
-        ├── defaults/      # Default variables
-        ├── handlers/      # Service handlers
-        ├── tasks/         # Main tasks
-        └── templates/     # Configuration templates
+├── ansible.cfg                      # Ansible configuration
+├── inventory.ini.example            # Inventory template
+├── playbooks/                       # Ansible playbooks
+│   ├── configure-base-system.yaml  # Hostname + Tailscale setup
+│   ├── configure-hostname.yaml     # Set system hostname
+│   ├── setup-tailscale.yaml        # Install and configure Tailscale
+│   ├── deploy-k3s.yaml             # k3s cluster deployment
+│   └── deploy-haproxy.yaml         # HAProxy deployment playbook
+└── roles/                           # Ansible roles
+    ├── hostname/                    # Hostname configuration role
+    │   ├── defaults/                # Default variables
+    │   └── tasks/                   # Main tasks
+    ├── tailscale/                   # Tailscale VPN role
+    │   ├── defaults/                # Default variables
+    │   ├── handlers/                # Service handlers
+    │   └── tasks/                   # Main tasks
+    ├── k3s/                         # k3s role (Traefik disabled)
+    │   ├── defaults/                # Default variables
+    │   ├── handlers/                # Service handlers
+    │   └── tasks/                   # Main tasks
+    └── haproxy/                     # HAProxy role
+        ├── defaults/                # Default variables
+        ├── handlers/                # Service handlers
+        ├── tasks/                   # Main tasks
+        └── templates/               # Configuration templates
+```
+
+## Hostname Role
+
+The hostname role configures system hostnames across your infrastructure.
+
+### Usage
+
+1. **Set hostname per host** in inventory:
+   ```ini
+   [k3s_servers]
+   server-01 ansible_host=192.168.1.10 hostname=k3s-master-01
+   
+   [k3s_servers:vars]
+   domain=k3s.example.com
+   ```
+
+2. **Run the playbook**:
+   ```bash
+   ansible-playbook playbooks/configure-hostname.yaml
+   ```
+
+3. **Or set inline**:
+   ```bash
+   ansible-playbook playbooks/configure-hostname.yaml -e "hostname=my-server domain=example.com"
+   ```
+
+## Tailscale Role
+
+The Tailscale role installs and configures Tailscale VPN on your servers.
+
+### Key Features
+
+- **Zero-config VPN**: Automatic mesh networking
+- **Secure**: WireGuard-based encryption
+- **Cross-platform**: Works on Linux, macOS, Windows
+- **SSH support**: Optional Tailscale SSH
+
+### Usage
+
+1. **Get auth key** from [Tailscale Admin](https://login.tailscale.com/admin/settings/keys)
+
+2. **Set auth key** in group_vars/all.yml:
+   ```yaml
+   tailscale_auth_key: "tskey-auth-xxxxx-yyyyy"
+   tailscale_args: "--accept-routes"
+   tailscale_enable_ssh: false
+   ```
+
+3. **Deploy Tailscale**:
+   ```bash
+   ansible-playbook playbooks/setup-tailscale.yaml
+   ```
+
+4. **Or pass auth key inline**:
+   ```bash
+   ansible-playbook playbooks/setup-tailscale.yaml -e "tailscale_auth_key=tskey-auth-xxxxx"
+   ```
+
+### Configuration Options
+
+Edit `roles/tailscale/defaults/main.yaml`:
+
+- `tailscale_auth_key`: Authentication key (required)
+- `tailscale_args`: Additional arguments for `tailscale up`
+- `tailscale_enable_ssh`: Enable Tailscale SSH (default: false)
+- `tailscale_accept_dns`: Accept Tailscale DNS (default: true)
+- `tailscale_advertise_tags`: Tags for ACL rules (default: [])
+
+Example with tags:
+```yaml
+tailscale_advertise_tags:
+  - "tag:server"
+  - "tag:k3s"
 ```
 
 ## k3s Role
