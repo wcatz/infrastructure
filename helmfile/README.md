@@ -59,20 +59,57 @@ helmfile/
 
 ### Install Tools
 
+> **Note:** Helm is a prerequisite for Helmfile. Install Helm first, verify the installation, then install Helmfile and the required helm-diff plugin.
+
+#### Step 1: Install Helm
+
 **macOS:**
 ```bash
-brew install helm helmfile
+brew install helm
 ```
 
 **Linux:**
 ```bash
-# Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
 
-# Helmfile
+**Verify Helm installation:**
+```bash
+helm version
+```
+
+You should see output showing Helm version 3.13 or later.
+
+#### Step 2: Install Helm-Diff Plugin
+
+The helm-diff plugin is required by Helmfile. Install it with a pinned version to avoid compatibility issues:
+
+```bash
+# Uninstall any existing version
+helm plugin uninstall diff || true
+
+# Install pinned version v3.6.0
+helm plugin install https://github.com/databus23/helm-diff --version v3.6.0
+
+# Verify installation
+helm plugin list
+```
+
+#### Step 3: Install Helmfile
+
+**macOS:**
+```bash
+brew install helmfile
+```
+
+**Linux:**
+```bash
 wget https://github.com/helmfile/helmfile/releases/download/v0.159.0/helmfile_0.159.0_linux_amd64.tar.gz
 tar xzf helmfile_0.159.0_linux_amd64.tar.gz
 sudo mv helmfile /usr/local/bin/
+
+# Verify installation
+helmfile version
 ```
 
 ### Deploy Default Environment
