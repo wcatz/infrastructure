@@ -226,34 +226,34 @@ done
 
 ### 3. HAProxy Ingress Controller Failover
 
-# Verify no connection drops
+```bash
+# Delete HAProxy ingress controller pod
+kubectl delete pod -n haproxy-ingress -l app.kubernetes.io/name=haproxy-ingress --force --grace-period=0
+
+# Verify new pod starts
+kubectl get pods -n haproxy-ingress -w
+
+# Test connectivity during failover
 while true; do
-  mysql -h <haproxy-ip> -P 3306 -u testuser -p -e "SELECT NOW();" 2>&1 | grep -E "(ERROR|NOW)"
-  sleep 0.5
+  curl -s -o /dev/null -w "%{http_code}\n" https://app.example.com
+  sleep 1
 done
 ```
 
 ## Performance Testing
 
-### 1. HAProxy Performance
+### 1. Ingress Performance
 
 ```bash
-# TCP performance test (MySQL)
-sysbench mysql \
-  --mysql-host=<haproxy-ip> \
-  --mysql-port=3306 \
-  --mysql-user=testuser \
-  --mysql-password=testpass \
-  --mysql-db=testdb \
-  --threads=16 \
-  --time=60 \
-  run
+# HTTP load test via Cloudflared
+ab -n 10000 -c 100 https://app.example.com/
 
-# Connection rate test
-for i in {1..1000}; do
-  mysql -h <haproxy-ip> -P 3306 -u testuser -p -e "SELECT 1;" &
-done
-wait
+# Sustained load test
+wrk -t 12 -c 400 -d 30s https://app.example.com/
+
+# Check HAProxy ingress metrics
+kubectl port-forward -n haproxy-ingress svc/haproxy-ingress 9101:9101
+curl http://localhost:9101/metrics
 ```
 
 ### 2. Cloudflared Performance
@@ -272,14 +272,14 @@ wscat -c wss://app.example.com/ws
 ### 3. Network Latency
 
 ```bash
-# Measure latency to HAProxy
-ping -c 100 <haproxy-ip>
-
 # Measure HTTP latency via Cloudflare
 curl -o /dev/null -s -w "Time: %{time_total}s\n" https://app.example.com
 
-# Measure TCP latency
-time echo "SELECT 1;" | mysql -h <haproxy-ip> -P 3306 -u testuser -p
+# Measure to multiple endpoints
+for url in https://app.example.com https://api.example.com; do
+  echo "Testing $url"
+  curl -o /dev/null -s -w "  Total: %{time_total}s\n  Connect: %{time_connect}s\n  StartTransfer: %{time_starttransfer}s\n" $url
+done
 ```
 
 ## Security Testing
@@ -315,14 +315,14 @@ done
 ### 3. Vulnerability Scanning
 
 ```bash
-# Scan HAProxy server
-nmap -sV -sC <haproxy-ip>
+# Scan web application
+nmap -sV -sC app.example.com
 
-# Scan exposed services
-nmap -p 3306,5432,6379,51820 <haproxy-ip>
+# Check SSL/TLS vulnerabilities
+testssl.sh https://app.example.com
 
-# Check for open ports
-nmap -p- <haproxy-ip>
+# Check for common web vulnerabilities
+nikto -h https://app.example.com
 ```
 
 ## Automated Testing
@@ -346,12 +346,16 @@ The repository includes GitHub Actions workflows for automated testing:
 Set up automated monitoring:
 
 ```bash
-# Prometheus metrics
-curl http://<haproxy-ip>:9101/metrics  # HAProxy exporter
-curl http://<cloudflared-pod>:2000/metrics  # Cloudflared metrics
+# Prometheus metrics from HAProxy Ingress
+kubectl port-forward -n haproxy-ingress svc/haproxy-ingress 9101:9101
+curl http://localhost:9101/metrics
+
+# Cloudflared metrics
+kubectl port-forward -n cloudflare svc/cloudflared 2000:2000
+curl http://localhost:2000/metrics
 
 # Grafana dashboards
-# - HAProxy dashboard
+# - HAProxy Ingress dashboard
 # - Cloudflared tunnel metrics
 # - Kubernetes service health
 ```
@@ -359,25 +363,44 @@ curl http://<cloudflared-pod>:2000/metrics  # Cloudflared metrics
 ### 3. Scheduled Testing
 
 ```bash
-# Create a cron job for regular health checks
-cat > /etc/cron.d/infrastructure-health <<EOF
-*/5 * * * * root /usr/local/bin/test-haproxy.sh
-*/5 * * * * root /usr/local/bin/test-cloudflared.sh
+# Create a Kubernetes CronJob for regular health checks
+kubectl apply -f - <<EOF
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: infrastructure-health-check
+  namespace: default
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: health-check
+            image: curlimages/curl:latest
+            command:
+            - /bin/sh
+            - -c
+            - curl -f https://app.example.com/health || exit 1
+          restartPolicy: OnFailure
 EOF
 ```
 
 ## Troubleshooting Failed Tests
 
-### HAProxy Issues
+### HAProxy Ingress Issues
 
 ```bash
-# Check HAProxy logs
-journalctl -u haproxy -f
+# Check HAProxy ingress logs
+kubectl logs -n haproxy-ingress -l app.kubernetes.io/name=haproxy-ingress --tail=100
 
-# Verify configuration
-haproxy -c -f /etc/haproxy/haproxy.cfg
+# Check ingress controller status
+kubectl get pods -n haproxy-ingress
+kubectl describe pod -n haproxy-ingress <pod-name>
 
-# Test backend connectivity
+# Check ingress resources
+kubectl get ingress -A
 nc -zv <worker-ip> 30306
 ```
 
@@ -400,13 +423,16 @@ kubectl run -it curl --image=curlimages/curl -- curl http://haproxy-ingress-cont
 # Check DNS resolution
 dig +trace app.example.com
 
-# Test connectivity
-traceroute <haproxy-ip>
-mtr -r -c 100 <haproxy-ip>
+# Test connectivity to services
+ping app.example.com
+traceroute app.example.com
 
-# Check firewall rules
-sudo iptables -L -n -v
-sudo ufw status verbose
+# Test network path
+mtr -r -c 100 app.example.com
+
+# Check Kubernetes network
+kubectl get svc -A
+kubectl get endpoints -A
 ```
 
 ## Best Practices

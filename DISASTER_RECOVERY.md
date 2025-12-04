@@ -652,8 +652,9 @@ helmfile apply
 #### Step 9: Validate Functionality
 
 ```bash
-# Test HAProxy stats page
-curl http://<haproxy-ip>:8404/stats
+# Test HAProxy Ingress Controller
+kubectl get pods -n haproxy-ingress
+kubectl get svc -n haproxy-ingress
 
 # Test Cloudflared tunnels
 curl https://app.example.com

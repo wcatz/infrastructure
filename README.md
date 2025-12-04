@@ -345,8 +345,9 @@ kubectl get nodes -o wide
 # Verify Helmfile deployments
 helmfile status
 
-# Check HAProxy load balancer
-curl http://<haproxy-ip>:8404/stats
+# Check HAProxy Ingress Controller
+kubectl get pods -n haproxy-ingress
+kubectl get svc -n haproxy-ingress
 
 # Test Cloudflared tunnel
 curl https://app.example.com
