@@ -152,13 +152,13 @@ serverFiles:
               description: "Backup {{ $labels.schedule }} has failed"
           
           - alert: VeleroBackupTooOld
-            expr: time() - velero_backup_last_successful_timestamp > 86400
+            expr: time() - velero_backup_last_successful_timestamp{schedule!=""} > 86400
             for: 5m
             labels:
               severity: warning
             annotations:
               summary: "Velero backup is too old"
-              description: "Last successful backup was more than 24 hours ago"
+              description: "Last successful backup for schedule {{ $labels.schedule }} was more than 24 hours ago"
           
           # Kubernetes alerts
           - alert: KubernetesPersistentVolumeFull

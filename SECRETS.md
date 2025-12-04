@@ -235,7 +235,13 @@ SOPS supports multiple key management systems:
 ```bash
 # Install age
 brew install age  # macOS
-# or: https://github.com/FiloSottile/age/releases
+# or download from https://github.com/FiloSottile/age/releases
+# Linux: verify checksum after download
+wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz
+wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz.sha256
+sha256sum -c age-v1.1.1-linux-amd64.tar.gz.sha256
+tar xzf age-v1.1.1-linux-amd64.tar.gz
+sudo mv age/age /usr/local/bin/
 
 # Generate a key pair
 age-keygen -o key.txt

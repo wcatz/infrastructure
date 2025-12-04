@@ -41,15 +41,20 @@ configuration:
   # Backup storage location (BSL)
   backupStorageLocation:
     - name: default
-      provider: ""  # Set in environment-specific values
-      bucket: ""  # Set in environment-specific values
+      provider: ""  # Set in environment-specific values (e.g., "aws", "azure", "gcp")
+      bucket: ""  # Set in environment-specific values (e.g., "my-velero-backups")
       default: true
       config: {}
-      # AWS example:
+      # AWS S3 example (set in environments/prod/velero-values.yaml):
+      # provider: aws
+      # bucket: my-velero-backups
       # config:
       #   region: us-west-2
       #   s3ForcePathStyle: "false"
-      # Azure example:
+      # 
+      # Azure Blob example:
+      # provider: azure
+      # bucket: velero
       # config:
       #   resourceGroup: my-rg
       #   storageAccount: velerobackups
@@ -57,9 +62,10 @@ configuration:
   # Volume snapshot location (VSL)
   volumeSnapshotLocation:
     - name: default
-      provider: ""  # Set in environment-specific values
+      provider: ""  # Set in environment-specific values (e.g., "aws", "azure", "gcp")
       config: {}
-      # AWS example:
+      # AWS EBS example:
+      # provider: aws
       # config:
       #   region: us-west-2
 
