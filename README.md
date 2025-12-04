@@ -5,43 +5,97 @@ This repository contains infrastructure management tools and GitOps workflows fo
 ## Traffic Flow Architecture
 
 ```
-                    Internet Traffic
-                           |
-              ┌────────────┼────────────┐
-              |                         |
-         HTTP/HTTPS                  TCP/UDP
-              |                         |
-              v                         v
-        ┌──────────┐             ┌──────────┐
-        |Cloudflared|             | HAProxy  |
-        | Tunnel   |             |TCP/UDP LB|
-        └──────────┘             └──────────┘
-              |                         |
-              v                         v
-        ┌──────────┐             ┌──────────┐
-        | HAProxy  |             |  MySQL   |
-        | Ingress  |             | :3306    |
-        └──────────┘             └──────────┘
-              |                         |
-              v                         v
-        ┌──────────┐             ┌──────────┐
-        |   k8s    |             |WireGuard |
-        | Services |             | :51820   |
-        └──────────┘             └──────────┘
+                         Internet Users
+                                │
+                                ▼
+                              DNS
+                                │
+                ┌───────────────┴───────────────┐
+                │                               │
+                ▼                               ▼
+        ┌───────────────┐              ┌───────────────┐
+        │  Cloudflare   │              │    Public     │
+        │    Tunnel     │              │   Internet    │
+        │   (HTTP/S)    │              │  (TCP/UDP)    │
+        └───────────────┘              └───────────────┘
+                │                               │
+                │                               │
+                └───────────────┬───────────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │      HAProxy LB       │
+                    │ Ingress Controller    │
+                    └───────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       Kubernetes Cluster (k3s)                               │
+│                                                                              │
+│         ┌────────────────────────┬────────────────────────┐                 │
+│         │                        │                        │                 │
+│         ▼                        ▼                        ▼                 │
+│  ┌──────────┐            ┌──────────┐            ┌──────────┐              │
+│  │   Web    │            │  MySQL   │            │WireGuard │              │
+│  │   Pods   │            │   Pod    │            │   Pod    │              │
+│  │          │            │ :30306   │            │ :51820   │              │
+│  └──────────┘            └──────────┘            └──────────┘              │
+│                                                                              │
+└────────────────────────────────────┬────────────────────────────────────────┘
+                                     │
+                                     ▼
+                                  GitOps
 ```
 
 ### Traffic Routing Strategy
 
-- **HTTP/HTTPS Traffic**: 
-  - Cloudflared tunnel → HAProxy Ingress Controller → Kubernetes Services
-  - Benefits: DDoS protection, global CDN, SSL/TLS termination, Zero Trust security
-  - Use cases: Web applications, APIs, dashboards
+- **HTTP/HTTPS Traffic via Cloudflared**: 
+  - Flow: Internet → DNS → Cloudflare Tunnel → HAProxy Ingress Controller → Kubernetes Services
+  - Benefits: DDoS protection, global CDN, SSL/TLS termination, Zero Trust security, no exposed ports
+  - Use cases: Web applications, APIs, dashboards (Grafana), admin interfaces
+  - Configuration: Managed via Helmfile, credentials stored in Kubernetes secrets
 
-- **TCP/UDP Traffic**: 
-  - HAProxy standalone load balancer → Kubernetes Worker NodePorts → Services
-  - Benefits: High performance, health checking, protocol flexibility, automatic failover
-  - Use cases: MySQL databases, WireGuard VPN, DNS servers, game servers, Redis
+- **TCP/UDP Traffic via HAProxy Load Balancer**: 
+  - Flow: Internet → DNS → HAProxy Load Balancer → Kubernetes Worker NodePorts → Pod Services
+  - Benefits: High performance, health checking, protocol flexibility, automatic failover, standard ports
+  - Use cases: MySQL databases (3306), WireGuard VPN (51820), DNS servers (53), Redis, PostgreSQL
+  - Configuration: Deployed via Ansible, balances across multiple worker nodes
   - See [ansible/HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md) for detailed configuration
+
+## Infrastructure Stack Components
+
+### Core Infrastructure
+- **Kubernetes Distribution**: k3s (lightweight, production-ready)
+- **Load Balancing**: 
+  - HAProxy TCP/UDP load balancer (external, Ansible-deployed)
+  - HAProxy Ingress Controller (internal, Helmfile-deployed)
+- **Secure Access**: Cloudflared tunnels for Zero Trust HTTP/HTTPS access
+- **Automation**: GitHub Actions for GitOps workflows
+
+### Monitoring & Observability
+- **Prometheus**: Metrics collection and alerting (namespace: `monitoring`)
+- **Grafana**: Visualization dashboards (accessible via Cloudflared tunnel)
+- **HAProxy Stats**: Built-in statistics page for load balancer monitoring
+- **Health Checks**: Automated health checking across all services
+
+### Security & Secrets Management
+- **Kubernetes Secrets**: Native secret storage for sensitive data
+- **Cloudflared Credentials**: Stored as Kubernetes secrets in `cloudflare` namespace
+- **NetworkPolicy**: Network segmentation and pod-to-pod communication control
+- **Zero Trust Access**: Cloudflare Access for authentication and authorization
+- **Secret Suppression**: GitHub Actions workflows configured with `--suppress-secrets`
+
+### Backup & Disaster Recovery
+- **Configuration Backup**: All configurations in Git (GitOps approach)
+- **Helm Release State**: Managed by Helmfile with declarative specifications
+- **Database Backups**: Integration-ready for external backup solutions
+- **Infrastructure as Code**: Complete reproducibility via Ansible and Helmfile
+
+### Multi-Environment Support
+- **Environments**: Development, Staging, and Production configurations
+- **Environment-Specific Values**: Separate configurations per environment
+- **Isolated Deployments**: Dedicated tunnels and resources per environment
+- **Easy Promotion**: Consistent structure for smooth environment promotions
 
 ## Key Features
 
@@ -87,6 +141,179 @@ This repository contains infrastructure management tools and GitOps workflows fo
 - **Failover Testing**: Simulate failures and verify automatic recovery
 - **Performance Testing**: Load testing and benchmarking procedures
 
+## Quick Start Guide
+
+This section provides a prioritized setup sequence for deploying the complete infrastructure stack.
+
+### Prerequisites
+
+- Target servers for k3s cluster (minimum 1 server + 1 agent, recommended 1 server + 2+ agents)
+- HAProxy load balancer server (can be separate or on server node)
+- Ansible installed on control machine
+- SSH access to all target servers
+- Domain name managed by Cloudflare (for Cloudflared tunnels)
+- GitHub account with Actions enabled
+
+### Setup Sequence
+
+#### Phase 1: Core Infrastructure (Required)
+
+**1. Deploy Kubernetes (k3s) Cluster**
+```bash
+cd ansible
+cp inventory.ini.example inventory.ini
+# Edit inventory.ini - add servers to [k3s_servers] and [k3s_agents] groups
+# Set k3s_token in group_vars or playbook
+ansible-playbook playbooks/deploy-k3s.yaml
+```
+- ⏱️ Time: 10-15 minutes
+- 📚 Details: See [ansible/README.md](ansible/README.md)
+
+**2. Deploy HAProxy TCP/UDP Load Balancer**
+```bash
+cd ansible
+# Edit inventory.ini - add HAProxy server to [haproxy] group
+# Configure backends in roles/haproxy/defaults/main.yaml or playbook vars
+ansible-playbook playbooks/deploy-haproxy.yaml
+```
+- ⏱️ Time: 5-10 minutes
+- 📚 Details: See [ansible/HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md)
+
+**3. Install Helmfile Prerequisites**
+```bash
+# Install Helm
+brew install helm  # macOS
+# or: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# Install helm-diff plugin
+helm plugin install https://github.com/databus23/helm-diff --version v3.6.0
+
+# Install Helmfile
+brew install helmfile  # macOS
+# or: Download from https://github.com/helmfile/helmfile/releases
+```
+- ⏱️ Time: 5 minutes
+- 📚 Details: See [helmfile/README.md](helmfile/README.md)
+
+**4. Deploy Core Services (Prometheus, HAProxy Ingress)**
+```bash
+cd helmfile
+# Verify kubeconfig is set
+export KUBECONFIG=/path/to/kubeconfig
+
+# Review what will be deployed
+helmfile diff
+
+# Deploy
+helmfile apply
+```
+- ⏱️ Time: 10-15 minutes
+- 📚 Details: See [helmfile/README.md](helmfile/README.md)
+
+#### Phase 2: Secure Access (Recommended)
+
+**5. Configure Cloudflared Tunnel**
+```bash
+# Install cloudflared CLI
+brew install cloudflare/cloudflare/cloudflared  # macOS
+
+# Create tunnel
+cloudflared tunnel login
+cloudflared tunnel create infrastructure-tunnel
+
+# Create Kubernetes secret
+kubectl create namespace cloudflare
+kubectl create secret generic cloudflared-credentials \
+  --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json \
+  -n cloudflare
+
+# Configure DNS
+cloudflared tunnel route dns infrastructure-tunnel app.example.com
+```
+- ⏱️ Time: 15-20 minutes
+- 📚 Details: See [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md)
+
+**6. Enable and Deploy Cloudflared**
+```bash
+cd helmfile
+# Edit config/enabled.yaml and set cloudflared: true
+# Edit values/cloudflared-values.yaml with tunnel details
+
+helmfile -l name=cloudflared apply
+```
+- ⏱️ Time: 5 minutes
+
+#### Phase 3: GitOps Automation (Recommended)
+
+**7. Configure GitHub Actions**
+```bash
+# In GitHub repository settings:
+# 1. Add KUBECONFIG secret (base64-encoded kubeconfig)
+# 2. Configure branch protection for main/master
+# 3. Enable Actions workflows
+```
+- ⏱️ Time: 10 minutes
+- 📚 Details: Workflows are in `.github/workflows/`
+
+**8. Test GitOps Workflow**
+```bash
+# Make a change to helmfile/config/enabled.yaml
+# Create a pull request
+# Review the automatic diff comment
+# Merge PR
+# Manually trigger helmfile-apply workflow from Actions tab
+```
+- ⏱️ Time: 5-10 minutes
+
+#### Phase 4: Monitoring & Security (Optional but Recommended)
+
+**9. Access Prometheus & Grafana**
+```bash
+# Access Prometheus
+kubectl port-forward -n monitoring svc/prometheus-server 9090:80
+
+# If Grafana is deployed, access via Cloudflared tunnel
+# Add ingress rule in cloudflared-values.yaml:
+# - hostname: grafana.example.com
+#   service: http://grafana.monitoring.svc.cluster.local:80
+```
+- ⏱️ Time: 5 minutes
+- 📚 Note: Grafana deployment optional, can be added to helmfile
+
+**10. Configure NetworkPolicy (Optional)**
+```bash
+# Create NetworkPolicy resources for pod-to-pod communication control
+# Example policies should be added to namespace-specific configurations
+```
+- ⏱️ Time: Variable, depends on security requirements
+
+### Post-Setup Validation
+
+```bash
+# Verify k3s cluster
+kubectl get nodes -o wide
+
+# Verify Helmfile deployments
+helmfile status
+
+# Check HAProxy load balancer
+curl http://<haproxy-ip>:8404/stats
+
+# Test Cloudflared tunnel
+curl https://app.example.com
+
+# Verify monitoring
+kubectl get pods -n monitoring
+```
+
+### Next Steps
+
+1. **Configure DNS**: See [DNS_SETUP.md](DNS_SETUP.md)
+2. **Add Applications**: Follow [helmfile/README.md](helmfile/README.md#adding-new-applications)
+3. **Set Up Backups**: Configure backup solutions for databases and persistent volumes
+4. **Review Security**: Implement NetworkPolicies and review secret management
+5. **Monitor**: Set up Grafana dashboards and Prometheus alerts
+
 ## Structure
 
 - **ansible/**: Ansible playbooks and roles for infrastructure automation
@@ -118,33 +345,64 @@ This repository contains infrastructure management tools and GitOps workflows fo
 
 ## GitOps Workflows
 
-This repository uses GitHub Actions to implement GitOps practices with Helmfile.
+This repository uses GitHub Actions to implement GitOps practices with Helmfile, providing automated validation, deployment previews, and controlled releases.
+
+### Automation Benefits
+
+- **Continuous Validation**: Every PR is automatically validated for YAML syntax and Helmfile correctness
+- **Deployment Preview**: See exactly what changes will be applied before merging
+- **Audit Trail**: All changes tracked in Git with full history
+- **Controlled Deployments**: Manual approval required for production deployments
+- **Secret Security**: Workflows use `--suppress-secrets` to prevent credential exposure
+- **Multi-Environment**: Support for dev, staging, and production environments
 
 ### Helmfile Diff Workflow
 
-The `helmfile-diff` workflow automatically runs on all pull requests that modify the `helmfile/` directory. It provides a detailed diff of changes that would be applied to the Kubernetes cluster.
+The `helmfile-diff` workflow automatically runs on all pull requests that modify the `helmfile/` or `ansible/` directories. It provides detailed validation and preview of changes.
+
+**Features:**
+- YAML linting for syntax validation
+- Helmfile template rendering verification
+- Detailed diff of changes that would be applied
+- Automatic PR comment with diff output
+- No cluster modifications (read-only operation)
 
 **How it works:**
-1. Create a pull request with changes to Helmfile configurations
-2. The workflow automatically triggers and runs `helmfile diff`
-3. A comment is posted to the PR showing the proposed changes
-4. Review the diff output before merging
+1. Create a pull request with changes to Helmfile or Ansible configurations
+2. The workflow automatically triggers and runs validation
+3. YAML files are linted for syntax errors
+4. `helmfile diff` generates a preview of changes
+5. A comment is posted to the PR showing the proposed changes
+6. Review the diff output and address any issues
+7. Iterate until the diff looks correct
+8. Merge the PR after approval
 
 ### Manual Helmfile Apply Workflow
 
 The `helmfile-apply` workflow allows authorized users to manually deploy changes to the Kubernetes cluster after PR approval and merge.
 
+**Features:**
+- Pre-deployment validation with YAML linting
+- Pre-deployment diff preview
+- Environment selection (default, dev, staging, production)
+- Post-deployment verification
+- Deployment audit trail with commit SHA and timestamp
+
 **How to trigger:**
-1. Navigate to the "Actions" tab in GitHub
-2. Select "Helmfile Apply" workflow
-3. Click "Run workflow"
-4. Select the target environment (default, staging, or production)
-5. Click "Run workflow" to start the deployment
+1. Ensure PR is merged to main branch
+2. Navigate to the "Actions" tab in GitHub
+3. Select "Helmfile Apply" workflow
+4. Click "Run workflow"
+5. Select the target environment (default, dev, staging, or production)
+6. Click "Run workflow" to start the deployment
+7. Monitor the workflow execution logs
+8. Verify successful deployment
 
 **Prerequisites:**
-- Configure Kubernetes credentials in repository secrets
-- Set `KUBECONFIG` secret with base64-encoded kubeconfig content
-- Ensure proper RBAC permissions are configured
+- Kubernetes cluster accessible from GitHub Actions
+- Configure `KUBECONFIG` secret with base64-encoded kubeconfig content
+- Ensure proper RBAC permissions are configured in the cluster
+- Branch protection rules configured for production environment
 
 ## Helmfile Configuration
 
@@ -195,11 +453,63 @@ enabled:
 
 ## Deployed Applications
 
-This repository includes configurations for:
+This repository includes configurations for the following core services:
 
-- **Prometheus**: Monitoring and alerting stack (namespace: `monitoring`)
-- **HAProxy Ingress Controller**: Kubernetes ingress controller (namespace: `haproxy-ingress`)
-- **Cloudflared**: Cloudflare tunnel for secure HTTP/HTTPS ingress (namespace: `cloudflare`, disabled by default)
+### Monitoring Stack
+- **Prometheus**: Metrics collection and alerting (namespace: `monitoring`)
+  - Collects metrics from all Kubernetes resources
+  - Configured with service discovery
+  - Alerting rules can be customized in values files
+  - Accessible via port-forward or Cloudflared tunnel
+  
+- **Grafana** (Optional): Visualization dashboards
+  - Can be added to helmfile by creating values/grafana-values.yaml
+  - Integrates with Prometheus for metrics visualization
+  - Access via Cloudflared tunnel for secure remote access
+  - Pre-built dashboards for k8s, HAProxy, and system metrics
+
+### Ingress & Load Balancing
+- **HAProxy Ingress Controller**: Kubernetes HTTP/HTTPS ingress (namespace: `haproxy-ingress`)
+  - High-performance Layer 7 load balancing
+  - SSL/TLS termination
+  - Advanced routing rules
+  - Horizontal pod autoscaling enabled
+  - Prometheus metrics integration
+
+- **HAProxy TCP/UDP Load Balancer** (External): NodePort load balancing
+  - Deployed via Ansible on dedicated server(s)
+  - Balances traffic across Kubernetes worker nodes
+  - Supports both TCP and UDP protocols
+  - Health checks and automatic failover
+  - Statistics dashboard on port 8404
+
+### Secure Access
+- **Cloudflared**: Cloudflare tunnel for secure HTTP/HTTPS ingress (namespace: `cloudflare`)
+  - Disabled by default, enable in config/enabled.yaml after setup
+  - Provides Zero Trust security and DDoS protection
+  - No exposed ports required (outbound-only connections)
+  - Multi-environment support (dev/staging/prod tunnels)
+  - Tunnel credentials stored in Kubernetes secrets
+
+### GitOps & Automation
+- **GitHub Actions Workflows**:
+  - `helmfile-diff`: Automatic PR validation and diff preview
+  - `helmfile-apply`: Manual deployment to cluster
+  - YAML linting and validation
+  - Secret suppression for security
+
+### Security Features
+- **Kubernetes Secrets**: Secure storage for sensitive data
+- **NetworkPolicy**: Network segmentation (add as needed per namespace)
+- **Cloudflare Access**: Authentication layer for Cloudflared tunnels
+- **RBAC**: Kubernetes role-based access control
+- **TLS/SSL**: Automated certificate management via ingress
+
+### Backup & Disaster Recovery
+- **GitOps Approach**: All configurations version-controlled in Git
+- **Helmfile State**: Declarative release management
+- **Database Backups**: Ready for integration with backup solutions like Velero
+- **Documentation**: Comprehensive setup and recovery procedures
 
 ## k3s Installation
 
@@ -485,10 +795,98 @@ To customize the HAProxy ingress behavior:
 
 ## Security
 
-- Never commit sensitive data or secrets to this repository
-- Use Kubernetes secrets or external secret management tools
-- The workflows use `--suppress-secrets` flag to avoid exposing sensitive data in logs
-- Configure repository environments and protection rules for production deployments
+### Best Practices
+
+- **Never commit sensitive data**: Secrets, API keys, passwords, and certificates must never be committed to Git
+- **Use Kubernetes Secrets**: Store sensitive data in Kubernetes secrets, created via kubectl or external secret managers
+- **Secret Suppression**: All GitHub Actions workflows use `--suppress-secrets` flag to prevent credential exposure in logs
+- **Branch Protection**: Configure repository protection rules for production deployments
+- **Environment Secrets**: Use GitHub environment secrets for environment-specific credentials
+
+### Secret Management
+
+**Kubernetes Secrets Creation:**
+```bash
+# Create secret from file
+kubectl create secret generic app-secret \
+  --from-file=config.json=/path/to/config.json \
+  -n namespace
+
+# Create secret from literal values
+kubectl create secret generic db-credentials \
+  --from-literal=username=admin \
+  --from-literal=password=securepassword \
+  -n namespace
+
+# Cloudflared tunnel credentials
+kubectl create secret generic cloudflared-credentials \
+  --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json \
+  -n cloudflare
+```
+
+**External Secret Management:**
+- Consider integrating with external secret managers like HashiCorp Vault, AWS Secrets Manager, or Azure Key Vault
+- Use Kubernetes External Secrets Operator for automatic secret synchronization
+- Rotate secrets regularly and update references in deployments
+
+### NetworkPolicy
+
+NetworkPolicy resources provide network segmentation and control pod-to-pod communication:
+
+```yaml
+# Example: Deny all ingress traffic by default
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+# Example: Allow traffic only from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-ingress
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: web
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: haproxy-ingress
+```
+
+**NetworkPolicy Best Practices:**
+- Implement default-deny policies for production namespaces
+- Allow only necessary traffic between pods
+- Use namespace selectors for cross-namespace communication
+- Test policies in dev/staging before production deployment
+- Document network flow requirements
+- Note: The namespace selector uses the standard Kubernetes label `kubernetes.io/metadata.name` (available in K8s 1.22+)
+
+### Access Control
+
+- **RBAC**: Kubernetes role-based access control configured per namespace
+- **Cloudflare Access**: Zero Trust authentication for Cloudflared tunnels
+- **SSH Access**: Use SSH keys, disable password authentication on servers
+- **kubeconfig**: Protect kubeconfig files with appropriate file permissions (600)
+- **Service Accounts**: Use dedicated service accounts with minimal required permissions
+
+### Security Monitoring
+
+- **Prometheus Alerts**: Configure alerts for security-relevant events
+- **Audit Logs**: Enable Kubernetes audit logging for compliance
+- **Network Monitoring**: Monitor network traffic for anomalies
+- **HAProxy Logs**: Review HAProxy access logs for suspicious activity
+- **Regular Updates**: Keep k3s, Helm charts, and system packages updated
 
 ## License
 This project is licensed under the MIT License.
