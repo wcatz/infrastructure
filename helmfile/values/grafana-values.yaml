@@ -1,0 +1,197 @@
+# Grafana configuration for monitoring and visualization
+# Integrates with Prometheus for metrics visualization
+
+# Admin credentials - CHANGE IN PRODUCTION
+# SECURITY: Use a custom admin username and store credentials in a Kubernetes secret
+# Create secret: kubectl create secret generic grafana-admin --from-literal=admin-user=myadmin --from-literal=admin-password=secure123 -n monitoring
+# Then reference the secret below instead of hardcoding values
+adminUser: admin
+# adminPassword: should be set via secret, not here
+# To use a secret, uncomment and configure:
+# admin:
+#   existingSecret: grafana-admin
+#   userKey: admin-user
+#   passwordKey: admin-password
+
+# Persistence for dashboards and configuration
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClassName: ""  # Use default storage class
+  accessModes:
+    - ReadWriteOnce
+
+# Data sources - Prometheus integration
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server.monitoring.svc.cluster.local:80
+        access: proxy
+        isDefault: true
+        editable: true
+
+# Dashboard providers
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+# Pre-configured dashboards
+dashboards:
+  default:
+    # Kubernetes cluster monitoring
+    kubernetes-cluster:
+      gnetId: 7249
+      revision: 1
+      datasource: Prometheus
+    
+    # Node exporter full
+    node-exporter:
+      gnetId: 1860
+      revision: 31
+      datasource: Prometheus
+    
+    # Kubernetes deployment metrics
+    kubernetes-deployment:
+      gnetId: 8588
+      revision: 1
+      datasource: Prometheus
+    
+    # Prometheus stats
+    prometheus-stats:
+      gnetId: 2
+      revision: 2
+      datasource: Prometheus
+
+# Ingress configuration for external access
+ingress:
+  enabled: false  # Enable via environment-specific overrides
+  ingressClassName: haproxy
+  annotations: {}
+  hosts:
+    - grafana.example.com  # Change to your domain
+  tls: []
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+
+# Resource limits
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Plugins to install
+plugins:
+  - grafana-piechart-panel
+  - grafana-clock-panel
+
+# Enable anonymous access for public dashboards (optional)
+grafana.ini:
+  auth.anonymous:
+    enabled: false
+    org_role: Viewer
+  
+  security:
+    admin_user: admin
+    # admin_password should be set via secret
+  
+  server:
+    root_url: "%(protocol)s://%(domain)s/"
+  
+  analytics:
+    reporting_enabled: false
+    check_for_updates: true
+
+# Environment variables
+env:
+  GF_EXPLORE_ENABLED: "true"
+  GF_ALERTING_ENABLED: "true"
+  GF_UNIFIED_ALERTING_ENABLED: "true"
+
+# Service account
+serviceAccount:
+  create: true
+  name: grafana
+
+# Security context
+securityContext:
+  runAsUser: 472
+  runAsGroup: 472
+  fsGroup: 472
+
+# Image configuration
+image:
+  repository: grafana/grafana
+  tag: ""  # Use chart default
+  pullPolicy: IfNotPresent
+
+# Sidecar for dashboard auto-loading
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    folder: /tmp/dashboards
+    defaultFolderName: null
+    searchNamespace: ALL
+  
+  datasources:
+    enabled: true
+    label: grafana_datasource
+    labelValue: "1"
+    searchNamespace: ALL
+
+# SMTP / email notification (configure for alerting)
+smtp:
+  enabled: false
+  # host: smtp.gmail.com:587
+  # user: your-email@gmail.com
+  # password: your-app-password
+  # from_address: grafana@example.com
+  # from_name: Grafana
+
+# Notifiers for alerting
+notifiers: {}
+#  notifiers.yaml:
+#    notifiers:
+#      - name: email
+#        type: email
+#        uid: email1
+#        org_id: 1
+#        is_default: true
+#        settings:
+#          addresses: admin@example.com
+
+# Replicas for high availability
+replicas: 1
+
+# Pod anti-affinity for HA (when replicas > 1)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - grafana
+          topologyKey: kubernetes.io/hostname

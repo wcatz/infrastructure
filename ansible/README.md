@@ -12,8 +12,7 @@ ansible/
 │   ├── configure-base-system.yaml  # Hostname + Tailscale setup
 │   ├── configure-hostname.yaml     # Set system hostname
 │   ├── setup-tailscale.yaml        # Install and configure Tailscale
-│   ├── deploy-k3s.yaml             # k3s cluster deployment
-│   └── deploy-haproxy.yaml         # HAProxy deployment playbook
+│   └── deploy-k3s.yaml             # k3s cluster deployment
 └── roles/                           # Ansible roles
     ├── hostname/                    # Hostname configuration role
     │   ├── defaults/                # Default variables
@@ -22,15 +21,10 @@ ansible/
     │   ├── defaults/                # Default variables
     │   ├── handlers/                # Service handlers
     │   └── tasks/                   # Main tasks
-    ├── k3s/                         # k3s role (Traefik disabled)
-    │   ├── defaults/                # Default variables
-    │   ├── handlers/                # Service handlers
-    │   └── tasks/                   # Main tasks
-    └── haproxy/                     # HAProxy role
+    └── k3s/                         # k3s role (Traefik disabled)
         ├── defaults/                # Default variables
         ├── handlers/                # Service handlers
-        ├── tasks/                   # Main tasks
-        └── templates/               # Configuration templates
+        └── tasks/                   # Main tasks
 ```
 
 ## Hostname Role
@@ -109,11 +103,11 @@ tailscale_advertise_tags:
 
 ## k3s Role
 
-The k3s role deploys a Kubernetes cluster with Traefik disabled, allowing HAProxy to function as the ingress controller.
+The k3s role deploys a Kubernetes cluster with Traefik disabled, allowing HAProxy Ingress Controller (deployed via Helmfile) to function as the ingress controller.
 
 ### Key Features
 
-- **Traefik Disabled**: HAProxy serves as the ingress controller
+- **Traefik Disabled**: HAProxy Ingress Controller (deployed via Helmfile) serves as the ingress controller
 - **Lightweight**: k3s is a minimal Kubernetes distribution
 - **Server/Agent Support**: Deploy control plane and worker nodes
 - **Configurable**: Customize network settings, components, etc.
@@ -153,175 +147,7 @@ Edit `roles/k3s/defaults/main.yaml`:
 - `k3s_service_cidr`: Service network CIDR (default: 10.43.0.0/16)
 - `k3s_tls_san`: Additional TLS SANs for API server certificate
 
-After k3s is deployed, use Helmfile to install HAProxy ingress controller.
-
-## HAProxy Role
-
-The HAProxy role deploys and configures HAProxy as a TCP/UDP load balancer for Kubernetes NodePort services and non-HTTP traffic.
-
-### Supported Services
-
-- **TCP Services**: MySQL (3306), PostgreSQL (5432), Redis (6379), SSH, custom services
-- **UDP Services**: WireGuard VPN (51820), DNS (53), QUIC, game servers
-
-### Quick Start
-
-#### Option 1: Environment-Specific Inventory (Recommended)
-
-Use pre-configured inventory files for each environment:
-
-```bash
-# Development environment
-cp inventory-dev.ini.example inventory-dev.ini
-vim inventory-dev.ini  # Customize with your dev cluster IPs
-ansible-playbook -i inventory-dev.ini playbooks/deploy-haproxy.yaml
-
-# Staging environment
-cp inventory-staging.ini.example inventory-staging.ini
-vim inventory-staging.ini  # Customize with your staging cluster IPs
-ansible-playbook -i inventory-staging.ini playbooks/deploy-haproxy.yaml
-
-# Production environment
-cp inventory-prod.ini.example inventory-prod.ini
-vim inventory-prod.ini  # Customize with your prod cluster IPs
-ansible-playbook -i inventory-prod.ini playbooks/deploy-haproxy.yaml
-```
-
-#### Option 2: Generic Inventory
-
-For simple deployments or testing:
-
-```bash
-cp inventory.ini.example inventory.ini
-vim inventory.ini  # Add HAProxy server and customize backends
-ansible-playbook playbooks/deploy-haproxy.yaml
-```
-
-### NodePort Load Balancing Configuration
-
-Configure HAProxy to load balance across Kubernetes worker NodePorts:
-
-**Example: MySQL NodePort Service**
-
-1. **Deploy Kubernetes service with NodePort**:
-   ```yaml
-   apiVersion: v1
-   kind: Service
-   metadata:
-     name: mysql
-     namespace: databases
-   spec:
-     type: NodePort
-     ports:
-       - port: 3306
-         targetPort: 3306
-         nodePort: 30306
-     selector:
-       app: mysql
-   ```
-
-2. **Configure HAProxy backend** (in inventory or playbook vars):
-   ```yaml
-   haproxy_tcp_backends:
-     - name: mysql
-       port: 3306  # HAProxy listens on standard port
-       mode: tcp
-       balance: leastconn
-       servers:
-         - name: k8s-worker-1
-           address: 192.168.1.11
-           port: 30306  # NodePort on worker
-           check: true
-           check_interval: 2s
-           rise: 2
-           fall: 3
-         - name: k8s-worker-2
-           address: 192.168.1.12
-           port: 30306
-           check: true
-           check_interval: 2s
-           rise: 2
-           fall: 3
-         - name: k8s-worker-3
-           address: 192.168.1.13
-           port: 30306
-           check: true
-           check_interval: 2s
-           rise: 2
-           fall: 3
-   ```
-
-3. **Deploy HAProxy**:
-   ```bash
-   cd ansible
-   ansible-playbook playbooks/deploy-haproxy.yaml
-   ```
-
-4. **Access MySQL** via HAProxy on standard port:
-   ```bash
-   mysql -h <haproxy-ip> -P 3306 -u user -p
-   ```
-
-### Multi-Environment Deployment
-
-The inventory examples include configurations for dev, staging, and production:
-
-- **inventory-dev.ini.example**: Development with 2 workers, minimal services
-- **inventory-staging.ini.example**: Staging with 3 workers, production-like setup
-- **inventory-prod.ini.example**: Production with 3 workers, all services
-
-See [HAPROXY_NODEPORT.md](HAPROXY_NODEPORT.md) for comprehensive NodePort load balancing documentation.
-   ```bash
-   cd ansible
-   ansible-playbook playbooks/deploy-haproxy.yaml
-   ```
-
-4. **Verify deployment**:
-   ```bash
-   # Check HAProxy status
-   ansible haproxy_servers -m shell -a "systemctl status haproxy"
-   
-   # View HAProxy stats
-   curl http://<haproxy-server>:8404/stats
-   ```
-
-### Configuration Options
-
-#### Global Settings
-- `haproxy_global.maxconn`: Maximum connections (default: 4096)
-- `haproxy_global.log_level`: Log level (default: info)
-
-#### Default Settings
-- `haproxy_defaults.timeout_connect`: Connection timeout (default: 5s)
-- `haproxy_defaults.timeout_client`: Client timeout (default: 50s)
-- `haproxy_defaults.timeout_server`: Server timeout (default: 50s)
-
-#### Backend Configuration
-Each backend supports:
-- `name`: Backend service name
-- `port`: Frontend listening port
-- `mode`: tcp or udp
-- `balance`: Load balancing algorithm (roundrobin, leastconn, source)
-- `servers`: List of backend servers
-  - `name`: Server identifier
-  - `address`: Server IP address
-  - `port`: Server port
-  - `check`: Enable health checks (TCP only)
-  - `check_interval`: Health check interval (TCP only)
-
-### Monitoring
-
-HAProxy provides a statistics page at `http://<haproxy-server>:8404/stats` showing:
-- Backend server status
-- Connection statistics
-- Health check results
-- Traffic metrics
-
-### Security Considerations
-
-1. **Firewall Rules**: The role automatically opens required ports using UFW (Debian-based systems)
-2. **Access Control**: Configure IP whitelisting in the haproxy.cfg template if needed
-3. **Stats Page**: Consider restricting access to the stats page (port 8404) using firewall rules
+After k3s is deployed, use Helmfile to install HAProxy ingress controller and other services.
 
 ## Prerequisites
 
@@ -330,66 +156,11 @@ HAProxy provides a statistics page at `http://<haproxy-server>:8404/stats` showi
 - SSH access to target servers
 - Sudo privileges on target servers
 
-## Example: MySQL Load Balancing
+## Next Steps
 
-```yaml
-haproxy_tcp_backends:
-  - name: mysql
-    port: 3306
-    mode: tcp
-    balance: roundrobin
-    servers:
-      - name: mysql-primary
-        address: 10.0.1.10
-        port: 3306
-        check: true
-        check_interval: 2s
-      - name: mysql-replica-1
-        address: 10.0.1.11
-        port: 3306
-        check: true
-        check_interval: 2s
-      - name: mysql-replica-2
-        address: 10.0.1.12
-        port: 3306
-        check: true
-        check_interval: 2s
-```
+After deploying infrastructure with Ansible:
 
-## Example: WireGuard VPN Load Balancing
-
-```yaml
-haproxy_udp_backends:
-  - name: wireguard
-    port: 51820
-    mode: udp
-    balance: roundrobin
-    servers:
-      - name: wireguard-server-1
-        address: 10.0.2.10
-        port: 51820
-      - name: wireguard-server-2
-        address: 10.0.2.11
-        port: 51820
-```
-
-## Troubleshooting
-
-### Check HAProxy Configuration
-```bash
-ansible haproxy_servers -m shell -a "haproxy -c -f /etc/haproxy/haproxy.cfg"
-```
-
-### View HAProxy Logs
-```bash
-ansible haproxy_servers -m shell -a "journalctl -u haproxy -n 50"
-```
-
-### Test Backend Connectivity
-```bash
-# TCP test
-nc -zv <backend-server> 3306
-
-# UDP test
-nc -zvu <backend-server> 51820
-```
+1. **Configure kubectl access**: Copy kubeconfig from the k3s server
+2. **Deploy services via Helmfile**: See [helmfile/README.md](../helmfile/README.md)
+3. **Set up monitoring**: Deploy Prometheus and Grafana via Helmfile
+4. **Configure ingress**: Deploy HAProxy Ingress Controller via Helmfile
