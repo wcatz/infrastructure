@@ -5,7 +5,7 @@ This guide provides comprehensive testing procedures for validating infrastructu
 ## Table of Contents
 
 - [Pre-Deployment Testing](#pre-deployment-testing)
-- [HAProxy Testing](#haproxy-testing)
+- [Helmfile Testing](#helmfile-testing)
 - [Cloudflared Testing](#cloudflared-testing)
 - [End-to-End Testing](#end-to-end-testing)
 - [Failover Testing](#failover-testing)
@@ -38,114 +38,38 @@ Validate Ansible playbooks and templates:
 ```bash
 cd ansible
 
-# Check syntax
-ansible-playbook playbooks/deploy-haproxy.yaml --syntax-check
+# Check k3s playbook syntax
+ansible-playbook playbooks/deploy-k3s.yaml --syntax-check
 
-# Validate HAProxy configuration
-ansible haproxy_servers -m shell -a "haproxy -c -f /etc/haproxy/haproxy.cfg"
+# Check hostname playbook syntax
+ansible-playbook playbooks/configure-hostname.yaml --syntax-check
 
-# Test connectivity to worker nodes
-ansible haproxy_servers -m shell -a "nc -zv 192.168.1.11 30306"
+# Check tailscale playbook syntax
+ansible-playbook playbooks/setup-tailscale.yaml --syntax-check
 ```
 
-## HAProxy Testing
+## Helmfile Testing
 
-### 1. Service Health Checks
+### 1. Template Validation
 
 ```bash
-# Check HAProxy status
-systemctl status haproxy
+cd helmfile
 
-# View statistics page
-curl http://<haproxy-ip>:8404/stats
+# Render templates without applying
+helmfile template --suppress-secrets > /dev/null
 
-# Check backend server health
-curl http://<haproxy-ip>:8404/stats | grep -A 10 "mysql_backend"
+# Check for errors
+helmfile diff --suppress-secrets
 ```
 
-### 2. TCP Service Testing
-
-**MySQL Example:**
-```bash
-# Test connection to MySQL via HAProxy
-mysql -h <haproxy-ip> -P 3306 -u testuser -p
-
-# Test from multiple clients simultaneously
-for i in {1..10}; do
-  mysql -h <haproxy-ip> -P 3306 -u testuser -p -e "SELECT 'Connection $i' as test;" &
-done
-wait
-
-# Verify load distribution in HAProxy stats
-curl http://<haproxy-ip>:8404/stats | grep -A 20 "mysql_backend"
-```
-
-**PostgreSQL Example:**
-```bash
-# Test connection to PostgreSQL via HAProxy
-psql -h <haproxy-ip> -p 5432 -U testuser -d testdb
-
-# Test connection pool
-for i in {1..10}; do
-  psql -h <haproxy-ip> -p 5432 -U testuser -d testdb -c "SELECT 'Connection $i' as test;" &
-done
-wait
-```
-
-**Redis Example:**
-```bash
-# Test Redis connection
-redis-cli -h <haproxy-ip> -p 6379 ping
-
-# Test commands
-redis-cli -h <haproxy-ip> -p 6379 set testkey "testvalue"
-redis-cli -h <haproxy-ip> -p 6379 get testkey
-
-# Benchmark Redis performance
-redis-benchmark -h <haproxy-ip> -p 6379 -q -n 10000
-```
-
-### 3. UDP Service Testing
-
-**WireGuard Example:**
-```bash
-# Configure WireGuard client
-cat > /etc/wireguard/wg0.conf <<EOF
-[Interface]
-PrivateKey = <your-private-key>
-Address = 10.0.0.2/24
-
-[Peer]
-PublicKey = <server-public-key>
-Endpoint = <haproxy-ip>:51820
-AllowedIPs = 10.0.0.0/24
-PersistentKeepalive = 25
-EOF
-
-# Start WireGuard
-wg-quick up wg0
-
-# Test connectivity
-ping 10.0.0.1
-
-# Check WireGuard status
-wg show
-
-# Stop WireGuard
-wg-quick down wg0
-```
-
-### 4. Load Balancing Verification
+### 2. Values File Validation
 
 ```bash
-# Monitor connections to each backend
-watch -n 1 'curl -s http://<haproxy-ip>:8404/stats | grep -A 20 "mysql_backend"'
+# Validate YAML syntax
+yamllint values/*.yaml
 
-# Generate load and verify distribution
-for i in {1..100}; do
-  mysql -h <haproxy-ip> -P 3306 -u testuser -p -e "SELECT CONNECTION_ID();" &
-done
-wait
+# Check specific values
+helm template prometheus prometheus-community/prometheus -f values/prometheus-values.yaml > /dev/null
 ```
 
 ## Cloudflared Testing
@@ -223,10 +147,6 @@ curl -H "CF-Access-Token: <token>" https://monitoring.example.com
 curl -v https://app.example.com
 kubectl logs -n haproxy-ingress -l app.kubernetes.io/name=haproxy-ingress --tail=20
 kubectl logs -n default -l app=myapp --tail=20
-
-# TCP path: Client → HAProxy LB → Worker NodePort → Service
-mysql -h db.example.com -P 3306 -u testuser -p -e "SELECT 'Connected via HAProxy' as status;"
-kubectl logs -n databases -l app=mysql --tail=20
 ```
 
 ### 2. DNS Resolution Testing
@@ -236,14 +156,9 @@ kubectl logs -n databases -l app=mysql --tail=20
 dig app.example.com
 nslookup app.example.com
 
-# Test DNS resolution for HAProxy
-dig db.example.com
-nslookup db.example.com
-
 # Verify DNS from multiple nameservers
 dig @8.8.8.8 app.example.com
 dig @1.1.1.1 app.example.com
-dig @9.9.9.9 db.example.com
 ```
 
 ### 3. Multi-Environment Testing
@@ -251,64 +166,46 @@ dig @9.9.9.9 db.example.com
 ```bash
 # Development
 curl https://app.dev.example.com
-mysql -h db.dev.example.com -P 3306 -u devuser -p
 
 # Staging
 curl https://app.staging.example.com
-mysql -h db.staging.example.com -P 3306 -u staginguser -p
 
 # Production
 curl https://app.example.com
-mysql -h db.example.com -P 3306 -u produser -p
 ```
 
 ## Failover Testing
 
-### 1. HAProxy Backend Failover
+### 1. Pod Failover
 
-**Simulate worker node failure:**
+**Simulate pod failure:**
 ```bash
-# On a worker node, block traffic to NodePort
-sudo iptables -A INPUT -p tcp --dport 30306 -j DROP
+# Delete a pod to test Kubernetes self-healing
+kubectl delete pod -n default -l app=myapp --force --grace-period=0
 
-# Verify HAProxy marks server as down
-curl http://<haproxy-ip>:8404/stats | grep k8s-worker-1
+# Verify new pod starts
+kubectl get pods -n default -l app=myapp -w
 
-# Test connectivity (should still work via other workers)
-mysql -h <haproxy-ip> -P 3306 -u testuser -p -e "SELECT 'Failover test' as status;"
-
-# Restore traffic
-sudo iptables -D INPUT -p tcp --dport 30306 -j DROP
-
-# Verify HAProxy marks server as up
-curl http://<haproxy-ip>:8404/stats | grep k8s-worker-1
+# Test connectivity during failover
+while true; do
+  curl -s -o /dev/null -w "%{http_code}\n" https://app.example.com
+  sleep 1
+done
 ```
 
-**Simulate complete node failure:**
+**Simulate node failure:**
 ```bash
-# Shutdown a worker node
-ssh k8s-worker-1 "sudo shutdown -h now"
+# Drain a worker node
+kubectl drain k8s-worker-1 --ignore-daemonsets --delete-emptydir-data
 
-# Wait for health check to fail (6 seconds with fall=3, inter=2s)
-sleep 10
+# Verify pods reschedule to other nodes
+kubectl get pods -A -o wide | grep k8s-worker-1
 
-# Verify server marked down
-curl http://<haproxy-ip>:8404/stats | grep k8s-worker-1
+# Test service availability
+curl https://app.example.com
 
-# Test connectivity (should work via remaining workers)
-for i in {1..20}; do
-  mysql -h <haproxy-ip> -P 3306 -u testuser -p -e "SELECT CONNECTION_ID();" &
-done
-wait
-
-# Bring node back up
-# ... restart node ...
-
-# Wait for health check to pass (4 seconds with rise=2, inter=2s)
-sleep 10
-
-# Verify server marked up
-curl http://<haproxy-ip>:8404/stats | grep k8s-worker-1
+# Uncordon the node
+kubectl uncordon k8s-worker-1
 ```
 
 ### 2. Cloudflared Pod Failover
@@ -327,15 +224,7 @@ while true; do
 done
 ```
 
-### 3. HAProxy Graceful Reload
-
-```bash
-# Update HAProxy configuration
-# Edit ansible/roles/haproxy/defaults/main.yaml
-
-# Apply changes with graceful reload
-cd ansible
-ansible-playbook playbooks/deploy-haproxy.yaml
+### 3. HAProxy Ingress Controller Failover
 
 # Verify no connection drops
 while true; do

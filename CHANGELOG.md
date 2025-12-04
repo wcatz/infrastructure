@@ -60,8 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ansible/README.md for Ansible documentation
 - CLOUDFLARED_SETUP.md for tunnel setup
 - DNS_SETUP.md for DNS configuration
-- HAPROXY_NODEPORT.md for load balancer setup
 - TESTING.md for testing procedures
+- CONTRIBUTING.md for contribution guidelines
+- SECRETS.md for secret management
+- DISASTER_RECOVERY.md for DR procedures
 
 ---
 

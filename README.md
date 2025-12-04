@@ -55,29 +55,25 @@ This repository contains infrastructure management tools and GitOps workflows fo
   - Use cases: Web applications, APIs, dashboards (Grafana), admin interfaces
   - Configuration: Managed via Helmfile, credentials stored in Kubernetes secrets
 
-- **TCP/UDP Traffic via HAProxy Load Balancer**: 
-  - Flow: Internet → DNS → HAProxy Load Balancer → Kubernetes Worker NodePorts → Pod Services
-  - Benefits: High performance, health checking, protocol flexibility, automatic failover, standard ports
-  - Use cases: MySQL databases (3306), WireGuard VPN (51820), DNS servers (53), Redis, PostgreSQL
-  - Configuration: Deployed via Ansible, balances across multiple worker nodes
-  - See [ansible/HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md) for detailed configuration
+- **Direct Traffic to Services**: 
+  - Flow: Internet → DNS → Kubernetes Services (LoadBalancer/NodePort)
+  - Use cases: TCP/UDP services like MySQL databases, WireGuard VPN, DNS servers
+  - Configuration: Kubernetes Service resources with type LoadBalancer or NodePort
 
 ## Infrastructure Stack Components
 
 ### Core Infrastructure
 - **Kubernetes Distribution**: k3s (lightweight, production-ready)
 - **Load Balancing**: 
-  - HAProxy TCP/UDP load balancer (external, Ansible-deployed)
-  - HAProxy Ingress Controller (internal, Helmfile-deployed)
+  - HAProxy Ingress Controller (Helmfile-deployed for HTTP/HTTPS traffic)
 - **Secure Access**: Cloudflared tunnels for Zero Trust HTTP/HTTPS access
 - **Automation**: GitHub Actions for GitOps workflows
 
 ### Monitoring & Observability
 - **Prometheus**: Metrics collection and alerting (namespace: `monitoring`)
-- **Grafana**: Visualization dashboards with pre-configured dashboards for HAProxy, k3s, and Cloudflared
+- **Grafana**: Visualization dashboards with pre-configured dashboards for HAProxy Ingress, k3s, and Cloudflared
 - **Alertmanager**: Alert routing and notification management
-- **Custom Dashboards**: HAProxy stats, Cloudflared tunnel metrics, k3s cluster health
-- **HAProxy Stats**: Built-in statistics page for load balancer monitoring
+- **Custom Dashboards**: HAProxy Ingress metrics, Cloudflared tunnel metrics, k3s cluster health
 - **Health Checks**: Automated health checking across all services
 - **Service Monitoring**: Prometheus ServiceMonitor for automatic metrics discovery
 
@@ -132,9 +128,8 @@ This repository contains infrastructure management tools and GitOps workflows fo
 
 ### Documentation
 - **[Helmfile Management Guide](helmfile/README.md)**: Complete guide for managing releases, environments, and deployments
-- **[HAProxy NodePort Load Balancing](ansible/HAPROXY_NODEPORT.md)**: Detailed HAProxy configuration for Kubernetes NodePorts
 - **[Cloudflared Setup Guide](helmfile/CLOUDFLARED_SETUP.md)**: Complete Cloudflared tunnel configuration and deployment
-- **[DNS Setup Guide](DNS_SETUP.md)**: DNS configuration for both Cloudflare and HAProxy services
+- **[DNS Setup Guide](DNS_SETUP.md)**: DNS configuration for Cloudflare services
 - **[Ansible Documentation](ansible/README.md)**: Ansible playbooks and role documentation
 - **[Secret Management Guide](SECRETS.md)**: Comprehensive guide for managing secrets with External Secrets Operator and SOPS
 - **[Disaster Recovery Guide](DISASTER_RECOVERY.md)**: DR procedures, RTO/RPO targets, and restore runbooks
@@ -142,8 +137,6 @@ This repository contains infrastructure management tools and GitOps workflows fo
 - **[Changelog](CHANGELOG.md)**: Record of all notable changes
 
 ### Configuration Examples
-- **MySQL NodePort**: See [HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md#example-1-mysql-database-nodeport)
-- **WireGuard VPN**: See [HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md#example-2-wireguard-vpn-nodeport)
 - **HTTP/HTTPS Services**: See [CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md)
 - **Multi-Environment**: See [Helmfile README](helmfile/README.md#environment-management)
 - **Secret Management**: See [SECRETS.md](SECRETS.md) for External Secrets Operator and SOPS examples
@@ -184,17 +177,7 @@ ansible-playbook playbooks/deploy-k3s.yaml
 - ⏱️ Time: 10-15 minutes
 - 📚 Details: See [ansible/README.md](ansible/README.md)
 
-**2. Deploy HAProxy TCP/UDP Load Balancer**
-```bash
-cd ansible
-# Edit inventory.ini - add HAProxy server to [haproxy] group
-# Configure backends in roles/haproxy/defaults/main.yaml or playbook vars
-ansible-playbook playbooks/deploy-haproxy.yaml
-```
-- ⏱️ Time: 5-10 minutes
-- 📚 Details: See [ansible/HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md)
-
-**3. Install Helmfile Prerequisites**
+**2. Install Helmfile Prerequisites**
 ```bash
 # Install Helm
 brew install helm  # macOS
@@ -210,7 +193,7 @@ brew install helmfile  # macOS
 - ⏱️ Time: 5 minutes
 - 📚 Details: See [helmfile/README.md](helmfile/README.md)
 
-**4. Deploy Core Services (Prometheus, HAProxy Ingress)**
+**3. Deploy Core Services (Prometheus, HAProxy Ingress)**
 ```bash
 cd helmfile
 # Verify kubeconfig is set
@@ -227,7 +210,7 @@ helmfile apply
 
 #### Phase 2: Secure Access (Recommended)
 
-**5. Configure Cloudflared Tunnel**
+**4. Configure Cloudflared Tunnel**
 ```bash
 # Install cloudflared CLI
 brew install cloudflare/cloudflare/cloudflared  # macOS
@@ -248,7 +231,7 @@ cloudflared tunnel route dns infrastructure-tunnel app.example.com
 - ⏱️ Time: 15-20 minutes
 - 📚 Details: See [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md)
 
-**6. Enable and Deploy Cloudflared**
+**5. Enable and Deploy Cloudflared**
 ```bash
 cd helmfile
 # Edit config/enabled.yaml and set cloudflared: true
@@ -260,7 +243,7 @@ helmfile -l name=cloudflared apply
 
 #### Phase 3: GitOps Automation (Recommended)
 
-**7. Configure GitHub Actions**
+**6. Configure GitHub Actions**
 ```bash
 # In GitHub repository settings:
 # 1. Add KUBECONFIG secret (base64-encoded kubeconfig)
@@ -270,7 +253,7 @@ helmfile -l name=cloudflared apply
 - ⏱️ Time: 10 minutes
 - 📚 Details: Workflows are in `.github/workflows/`
 
-**8. Test GitOps Workflow**
+**7. Test GitOps Workflow**
 ```bash
 # Make a change to helmfile/config/enabled.yaml
 # Create a pull request
@@ -282,7 +265,7 @@ helmfile -l name=cloudflared apply
 
 #### Phase 4: Monitoring & Security (Optional but Recommended)
 
-**9. Deploy Monitoring Stack (Grafana)**
+**8. Deploy Monitoring Stack (Grafana)**
 ```bash
 cd helmfile
 # Grafana is enabled by default in config/enabled.yaml
@@ -292,9 +275,9 @@ helmfile -l name=grafana apply
 kubectl get pods -n monitoring
 ```
 - ⏱️ Time: 5-10 minutes
-- 📚 Details: Grafana comes with pre-configured dashboards for HAProxy, k3s, and Cloudflared
+- 📚 Details: Grafana comes with pre-configured dashboards for HAProxy Ingress, k3s, and Cloudflared
 
-**10. Access Prometheus & Grafana**
+**9. Access Prometheus & Grafana**
 ```bash
 # Access Prometheus
 kubectl port-forward -n monitoring svc/prometheus-server 9090:80
@@ -319,7 +302,7 @@ helmfile -l name=cloudflared apply
 - ⏱️ Time: 5 minutes
 - 📚 Details: See [SECRETS.md](SECRETS.md) for securing admin credentials
 
-**11. Configure NetworkPolicy**
+**10. Configure NetworkPolicy**
 ```bash
 # Apply pre-configured network policies
 kubectl apply -f helmfile/manifests/network-policies.yaml
@@ -333,7 +316,7 @@ kubectl get networkpolicies -A
 - ⏱️ Time: 10-15 minutes
 - 📚 Details: Policies for production, databases, monitoring, and cloudflare namespaces
 
-**12. Setup Backup with Velero (Recommended for Production)**
+**11. Setup Backup with Velero (Recommended for Production)**
 ```bash
 # Configure cloud storage backend (S3, Azure, or GCS)
 # See DISASTER_RECOVERY.md for detailed setup
@@ -385,12 +368,11 @@ kubectl get pods -n monitoring
 - **ansible/**: Ansible playbooks and roles for infrastructure automation
   - **playbooks/**: Deployment playbooks
     - `deploy-k3s.yaml`: Deploy k3s without Traefik (for HAProxy ingress)
-    - `deploy-haproxy.yaml`: Deploy HAProxy TCP/UDP load balancer for NodePorts
   - **roles/**: Ansible roles
     - `k3s/`: k3s installation role (Traefik disabled)
-    - `haproxy/`: HAProxy TCP/UDP load balancer role with NodePort support
+    - `hostname/`: Hostname configuration role
+    - `tailscale/`: Tailscale VPN configuration role
   - **README.md**: Ansible usage documentation
-  - **HAPROXY_NODEPORT.md**: Complete guide for HAProxy NodePort load balancing
 - **helmfile/**: Helmfile configurations for Kubernetes deployments
   - **helmfile.yaml**: Main Helmfile configuration
   - **config/**: Configuration templates (gotmpl)
@@ -404,7 +386,7 @@ kubectl get pods -n monitoring
     - `prod/`: Production environment overrides
   - **README.md**: Helmfile management guide
   - **CLOUDFLARED_SETUP.md**: Cloudflared tunnel setup guide
-- **DNS_SETUP.md**: DNS configuration guide for Cloudflare and HAProxy
+- **DNS_SETUP.md**: DNS configuration guide for Cloudflare
 - **.github/workflows/**: GitHub Actions workflows for GitOps automation
   - **helmfile-diff.yaml**: Automatic diff on pull requests
   - **helmfile-apply.yaml**: Manual deployment workflow
@@ -549,15 +531,7 @@ This repository includes configurations for the following core services:
   - Horizontal pod autoscaling enabled
   - Prometheus metrics integration
   - Environment-specific configurations
-
-- **HAProxy TCP/UDP Load Balancer** (External): NodePort load balancing
-  - Deployed via Ansible on dedicated server(s)
-  - Balances traffic across Kubernetes worker nodes
-  - Supports both TCP and UDP protocols
-  - Advanced health checks with configurable intervals
-  - Statistics dashboard on port 8404
-  - Environment-specific templates (dev, staging, prod)
-  - Externalized backend configurations
+  - Deployed via Helmfile
 
 ### Secure Access
 - **Cloudflared**: Cloudflare tunnel for secure HTTP/HTTPS ingress (namespace: `cloudflare`)
@@ -634,63 +608,6 @@ k3s is installed via Ansible with Traefik disabled, allowing HAProxy to serve as
    ```
 
 The k3s cluster will be ready for HAProxy ingress controller deployment via Helmfile.
-
-## HAProxy TCP/UDP Load Balancer
-
-HAProxy is deployed as a standalone TCP/UDP load balancer for non-HTTP services using Ansible. This is separate from the HAProxy Ingress Controller used for Kubernetes HTTP traffic.
-
-### Supported Services
-
-- **TCP Services**: MySQL (3306), PostgreSQL (5432), Redis (6379), SSH, etc.
-- **UDP Services**: WireGuard VPN (51820), DNS (53), QUIC, game servers, etc.
-
-### Quick Start
-
-1. **Configure your inventory**:
-   ```bash
-   cd ansible
-   cp inventory.ini.example inventory.ini
-   # Edit inventory.ini with your HAProxy server details
-   ```
-
-2. **Customize backend services** (edit `ansible/roles/haproxy/defaults/main.yaml` or override in playbook):
-   ```yaml
-   haproxy_tcp_backends:
-     - name: mysql
-       port: 3306
-       mode: tcp
-       balance: roundrobin
-       servers:
-         - name: mysql-1
-           address: 192.168.1.10
-           port: 3306
-           check: true
-           check_interval: 2s
-   
-   haproxy_udp_backends:
-     - name: wireguard
-       port: 51820
-       mode: udp
-       balance: roundrobin
-       servers:
-         - name: wireguard-1
-           address: 192.168.1.20
-           port: 51820
-   ```
-
-3. **Deploy HAProxy**:
-   ```bash
-   cd ansible
-   ansible-playbook playbooks/deploy-haproxy.yaml
-   ```
-
-4. **Monitor HAProxy**:
-   - Statistics page: `http://<haproxy-server>:8404/stats`
-   - Check status: `systemctl status haproxy`
-
-### Configuration Details
-
-See [ansible/README.md](ansible/README.md) for detailed configuration options, examples, and troubleshooting.
 
 ## Cloudflared (Cloudflare Tunnel)
 

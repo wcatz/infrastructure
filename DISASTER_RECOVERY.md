@@ -573,12 +573,13 @@ kubectl get nodes
 #### Step 3: Deploy Core Services
 
 ```bash
-# Deploy HAProxy load balancer
-ansible-playbook playbooks/deploy-haproxy.yaml
-
 # Verify kubeconfig
 export KUBECONFIG=/path/to/kubeconfig
 kubectl cluster-info
+
+# Deploy HAProxy Ingress Controller and other services via Helmfile
+cd helmfile
+helmfile apply
 ```
 
 #### Step 4: Install Velero
