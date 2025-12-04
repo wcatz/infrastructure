@@ -74,22 +74,31 @@ This repository contains infrastructure management tools and GitOps workflows fo
 
 ### Monitoring & Observability
 - **Prometheus**: Metrics collection and alerting (namespace: `monitoring`)
-- **Grafana**: Visualization dashboards (accessible via Cloudflared tunnel)
+- **Grafana**: Visualization dashboards with pre-configured dashboards for HAProxy, k3s, and Cloudflared
+- **Alertmanager**: Alert routing and notification management
+- **Custom Dashboards**: HAProxy stats, Cloudflared tunnel metrics, k3s cluster health
 - **HAProxy Stats**: Built-in statistics page for load balancer monitoring
 - **Health Checks**: Automated health checking across all services
+- **Service Monitoring**: Prometheus ServiceMonitor for automatic metrics discovery
 
 ### Security & Secrets Management
+- **External Secrets Operator**: Sync secrets from AWS, Azure, GCP, Vault, and other providers
+- **SOPS Encryption**: Encrypt secrets in Git for secure GitOps workflows
 - **Kubernetes Secrets**: Native secret storage for sensitive data
 - **Cloudflared Credentials**: Stored as Kubernetes secrets in `cloudflare` namespace
-- **NetworkPolicy**: Network segmentation and pod-to-pod communication control
+- **NetworkPolicy**: Network segmentation and pod-to-pod communication control with example policies
 - **Zero Trust Access**: Cloudflare Access for authentication and authorization
 - **Secret Suppression**: GitHub Actions workflows configured with `--suppress-secrets`
+- **RBAC**: Fine-grained role-based access control
 
 ### Backup & Disaster Recovery
-- **Configuration Backup**: All configurations in Git (GitOps approach)
-- **Helm Release State**: Managed by Helmfile with declarative specifications
-- **Database Backups**: Integration-ready for external backup solutions
-- **Infrastructure as Code**: Complete reproducibility via Ansible and Helmfile
+- **Velero**: Automated backup of Kubernetes resources and persistent volumes to cloud storage
+- **GitOps Backup**: All configurations version-controlled in Git
+- **Scheduled Backups**: Daily cluster backups, hourly for critical namespaces
+- **MySQL Backups**: Automated database dumps with CronJobs
+- **Disaster Recovery Plan**: Comprehensive DR guide with RTO/RPO targets
+- **Restore Procedures**: Documented procedures for various failure scenarios
+- **Backup Monitoring**: Prometheus alerts for backup failures
 
 ### Multi-Environment Support
 - **Environments**: Development, Staging, and Production configurations
@@ -127,12 +136,18 @@ This repository contains infrastructure management tools and GitOps workflows fo
 - **[Cloudflared Setup Guide](helmfile/CLOUDFLARED_SETUP.md)**: Complete Cloudflared tunnel configuration and deployment
 - **[DNS Setup Guide](DNS_SETUP.md)**: DNS configuration for both Cloudflare and HAProxy services
 - **[Ansible Documentation](ansible/README.md)**: Ansible playbooks and role documentation
+- **[Secret Management Guide](SECRETS.md)**: Comprehensive guide for managing secrets with External Secrets Operator and SOPS
+- **[Disaster Recovery Guide](DISASTER_RECOVERY.md)**: DR procedures, RTO/RPO targets, and restore runbooks
+- **[Contributing Guide](CONTRIBUTING.md)**: Guidelines for contributing to the project
+- **[Changelog](CHANGELOG.md)**: Record of all notable changes
 
 ### Configuration Examples
 - **MySQL NodePort**: See [HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md#example-1-mysql-database-nodeport)
 - **WireGuard VPN**: See [HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md#example-2-wireguard-vpn-nodeport)
 - **HTTP/HTTPS Services**: See [CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md)
 - **Multi-Environment**: See [Helmfile README](helmfile/README.md#environment-management)
+- **Secret Management**: See [SECRETS.md](SECRETS.md) for External Secrets Operator and SOPS examples
+- **Backup and Restore**: See [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) for Velero configuration
 
 ### Testing and Validation
 - **[Testing Guide](TESTING.md)**: Comprehensive testing procedures for all components
@@ -267,25 +282,76 @@ helmfile -l name=cloudflared apply
 
 #### Phase 4: Monitoring & Security (Optional but Recommended)
 
-**9. Access Prometheus & Grafana**
+**9. Deploy Monitoring Stack (Grafana)**
+```bash
+cd helmfile
+# Grafana is enabled by default in config/enabled.yaml
+helmfile -l name=grafana apply
+
+# Verify deployment
+kubectl get pods -n monitoring
+```
+- ⏱️ Time: 5-10 minutes
+- 📚 Details: Grafana comes with pre-configured dashboards for HAProxy, k3s, and Cloudflared
+
+**10. Access Prometheus & Grafana**
 ```bash
 # Access Prometheus
 kubectl port-forward -n monitoring svc/prometheus-server 9090:80
+# Open browser: http://localhost:9090
 
-# If Grafana is deployed, access via Cloudflared tunnel
-# Add ingress rule in cloudflared-values.yaml:
+# Access Grafana
+kubectl port-forward -n monitoring svc/grafana 3000:80
+# Open browser: http://localhost:3000
+# Default credentials: admin/admin (change on first login)
+
+# For external access via Cloudflared tunnel
+# Add ingress rules in cloudflared-values.yaml:
 # - hostname: grafana.example.com
 #   service: http://grafana.monitoring.svc.cluster.local:80
+# - hostname: prometheus.example.com
+#   service: http://prometheus-server.monitoring.svc.cluster.local:80
+
+# Then update DNS and redeploy cloudflared
+cloudflared tunnel route dns infrastructure-tunnel grafana.example.com
+helmfile -l name=cloudflared apply
 ```
 - ⏱️ Time: 5 minutes
-- 📚 Note: Grafana deployment optional, can be added to helmfile
+- 📚 Details: See [SECRETS.md](SECRETS.md) for securing admin credentials
 
-**10. Configure NetworkPolicy (Optional)**
+**11. Configure NetworkPolicy**
 ```bash
-# Create NetworkPolicy resources for pod-to-pod communication control
-# Example policies should be added to namespace-specific configurations
+# Apply pre-configured network policies
+kubectl apply -f helmfile/manifests/network-policies.yaml
+
+# Verify policies
+kubectl get networkpolicies -A
+
+# Customize for your namespaces
+# Edit helmfile/manifests/network-policies.yaml
 ```
-- ⏱️ Time: Variable, depends on security requirements
+- ⏱️ Time: 10-15 minutes
+- 📚 Details: Policies for production, databases, monitoring, and cloudflare namespaces
+
+**12. Setup Backup with Velero (Recommended for Production)**
+```bash
+# Configure cloud storage backend (S3, Azure, or GCS)
+# See DISASTER_RECOVERY.md for detailed setup
+
+# Enable Velero in config/enabled.yaml
+# Configure values in helmfile/values/velero-values.yaml
+
+cd helmfile
+helmfile -l name=velero apply
+
+# Verify Velero is running
+kubectl get pods -n velero
+
+# Create on-demand backup
+velero backup create initial-backup --wait
+```
+- ⏱️ Time: 20-30 minutes
+- 📚 Details: See [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md)
 
 ### Post-Setup Validation
 
@@ -462,11 +528,18 @@ This repository includes configurations for the following core services:
   - Alerting rules can be customized in values files
   - Accessible via port-forward or Cloudflared tunnel
   
-- **Grafana** (Optional): Visualization dashboards
-  - Can be added to helmfile by creating values/grafana-values.yaml
+- **Grafana**: Visualization dashboards (namespace: `monitoring`)
+  - Enabled by default in Helmfile configuration
   - Integrates with Prometheus for metrics visualization
-  - Access via Cloudflared tunnel for secure remote access
-  - Pre-built dashboards for k8s, HAProxy, and system metrics
+  - Pre-configured dashboards for HAProxy, k3s, and Cloudflared
+  - Access via port-forward or Cloudflared tunnel for secure remote access
+  - Community dashboards for Kubernetes cluster monitoring
+  - Dashboard auto-loading via sidecar
+
+- **Alertmanager**: Alert routing and notification
+  - Integrated with Prometheus
+  - Configurable notification channels (email, Slack, PagerDuty, etc.)
+  - Alert grouping and silencing
 
 ### Ingress & Load Balancing
 - **HAProxy Ingress Controller**: Kubernetes HTTP/HTTPS ingress (namespace: `haproxy-ingress`)
@@ -475,13 +548,16 @@ This repository includes configurations for the following core services:
   - Advanced routing rules
   - Horizontal pod autoscaling enabled
   - Prometheus metrics integration
+  - Environment-specific configurations
 
 - **HAProxy TCP/UDP Load Balancer** (External): NodePort load balancing
   - Deployed via Ansible on dedicated server(s)
   - Balances traffic across Kubernetes worker nodes
   - Supports both TCP and UDP protocols
-  - Health checks and automatic failover
+  - Advanced health checks with configurable intervals
   - Statistics dashboard on port 8404
+  - Environment-specific templates (dev, staging, prod)
+  - Externalized backend configurations
 
 ### Secure Access
 - **Cloudflared**: Cloudflare tunnel for secure HTTP/HTTPS ingress (namespace: `cloudflare`)
@@ -491,25 +567,43 @@ This repository includes configurations for the following core services:
   - Multi-environment support (dev/staging/prod tunnels)
   - Tunnel credentials stored in Kubernetes secrets
 
+### Security & Secrets
+- **External Secrets Operator**: Secret synchronization (namespace: `external-secrets-system`)
+  - Sync secrets from AWS Secrets Manager, Azure Key Vault, GCP Secret Manager, Vault
+  - Automatic secret rotation and updates
+  - Support for multiple secret backends
+  - Metrics and monitoring via Prometheus
+
+- **NetworkPolicies**: Network segmentation
+  - Pre-configured policies for production, databases, and monitoring namespaces
+  - Default-deny policies for sensitive workloads
+  - Allow-list approach for pod-to-pod communication
+  - Examples in `helmfile/manifests/network-policies.yaml`
+
+### Backup & Disaster Recovery
+- **Velero**: Kubernetes backup and restore (namespace: `velero`)
+  - Disabled by default, enable after configuring cloud storage
+  - Automated backup schedules (daily full, hourly critical)
+  - Persistent volume snapshots
+  - Support for AWS S3, Azure Blob, GCP Storage, MinIO
+  - Database backup integration
+  - Comprehensive DR documentation with RTO/RPO targets
+
 ### GitOps & Automation
 - **GitHub Actions Workflows**:
   - `helmfile-diff`: Automatic PR validation and diff preview
   - `helmfile-apply`: Manual deployment to cluster
   - YAML linting and validation
-  - Secret suppression for security
+  - Helm chart linting
+  - Security scanning with Trivy
+  - Secret detection
+  - NetworkPolicy validation
 
-### Security Features
-- **Kubernetes Secrets**: Secure storage for sensitive data
-- **NetworkPolicy**: Network segmentation (add as needed per namespace)
-- **Cloudflare Access**: Authentication layer for Cloudflared tunnels
+### Additional Features
 - **RBAC**: Kubernetes role-based access control
 - **TLS/SSL**: Automated certificate management via ingress
-
-### Backup & Disaster Recovery
-- **GitOps Approach**: All configurations version-controlled in Git
-- **Helmfile State**: Declarative release management
-- **Database Backups**: Ready for integration with backup solutions like Velero
-- **Documentation**: Comprehensive setup and recovery procedures
+- **Multi-Environment Support**: Dedicated configs for dev, staging, prod
+- **Documentation**: Comprehensive guides for all components
 
 ## k3s Installation
 

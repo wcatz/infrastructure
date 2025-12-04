@@ -661,9 +661,149 @@ K8s Cluster US   K8s Cluster EU
 3. Keep runbooks for disaster recovery scenarios
 4. Test recovery procedures
 
+## Environment-Specific Configurations
+
+The HAProxy role now supports environment-specific configurations for dev, staging, and production environments.
+
+### Using Environment Variables
+
+Set the `haproxy_environment` variable to load environment-specific configurations:
+
+```yaml
+# In your playbook or inventory
+haproxy_environment: dev  # or staging, or prod
+```
+
+### Environment Configuration Files
+
+Environment-specific configurations are stored in `roles/haproxy/vars/`:
+
+- **dev.yaml**: Development environment with relaxed timeouts and verbose logging
+- **staging.yaml**: Production-like configuration for staging
+- **prod.yaml**: Production optimized with strict health checks
+
+### Example: Development Environment
+
+```yaml
+# roles/haproxy/vars/dev.yaml
+haproxy_environment: "dev"
+
+haproxy_global:
+  maxconn: 1024
+  log_level: debug  # Verbose logging
+
+haproxy_defaults:
+  timeout_connect: 10s  # Longer timeouts
+  timeout_client: 120s
+  timeout_server: 120s
+```
+
+### Example: Production Environment
+
+```yaml
+# roles/haproxy/vars/prod.yaml
+haproxy_environment: "prod"
+
+haproxy_global:
+  maxconn: 4096
+  log_level: info
+
+haproxy_defaults:
+  timeout_connect: 5s
+  timeout_client: 50s
+  timeout_server: 50s
+  retries: 3
+```
+
+## Advanced Health Check Features
+
+The enhanced HAProxy template now supports advanced health check options:
+
+### TCP Health Checks with Custom Commands
+
+```yaml
+haproxy_tcp_backends:
+  - name: mysql
+    port: 3306
+    mode: tcp
+    balance: roundrobin
+    tcp_check_connect: true
+    tcp_check_send: "SELECT 1"
+    tcp_check_expect: "string 1"
+    servers:
+      - name: k8s-worker-1
+        address: 192.168.1.11
+        port: 30306
+        check: true
+        check_interval: 2s
+        rise: 2
+        fall: 3
+```
+
+### HTTP Health Checks for TCP Services
+
+```yaml
+haproxy_tcp_backends:
+  - name: api-server
+    port: 6443
+    mode: tcp
+    balance: roundrobin
+    option_httpchk: "GET /healthz"
+    servers:
+      - name: server-1
+        address: 192.168.1.11
+        port: 30443
+        check: true
+        check_interval: 5s
+```
+
+### Server Weights and Backup Servers
+
+```yaml
+haproxy_tcp_backends:
+  - name: mysql
+    port: 3306
+    mode: tcp
+    balance: roundrobin
+    servers:
+      - name: primary-1
+        address: 192.168.1.11
+        port: 30306
+        check: true
+        weight: 100  # Higher weight = more traffic
+      - name: primary-2
+        address: 192.168.1.12
+        port: 30306
+        check: true
+        weight: 100
+      - name: backup-1
+        address: 192.168.1.13
+        port: 30306
+        check: true
+        backup: true  # Only used if primaries fail
+```
+
+### Per-Backend Timeouts
+
+```yaml
+haproxy_tcp_backends:
+  - name: long-running-service
+    port: 8080
+    mode: tcp
+    balance: roundrobin
+    timeout_connect: 10s
+    timeout_server: 300s  # 5 minutes for long operations
+    servers:
+      - name: worker-1
+        address: 192.168.1.11
+        port: 30080
+        check: true
+```
+
 ## References
 
 - [HAProxy Documentation](https://www.haproxy.org/documentation.html)
 - [Kubernetes NodePort Services](https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport)
 - [HAProxy Best Practices](https://www.haproxy.com/documentation/hapee/latest/traffic-management/health-checks/)
 - [Load Balancing Algorithms](https://www.haproxy.com/documentation/hapee/latest/load-balancing/layer7/algorithms/)
+- [HAProxy Health Checks](https://www.haproxy.com/documentation/hapee/latest/onepage/#4.2-option%20httpchk)
