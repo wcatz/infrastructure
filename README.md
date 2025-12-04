@@ -874,7 +874,7 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
-          name: haproxy-ingress
+          kubernetes.io/metadata.name: haproxy-ingress
 ```
 
 **NetworkPolicy Best Practices:**
@@ -883,6 +883,7 @@ spec:
 - Use namespace selectors for cross-namespace communication
 - Test policies in dev/staging before production deployment
 - Document network flow requirements
+- Note: The namespace selector uses the standard Kubernetes label `kubernetes.io/metadata.name` (available in K8s 1.22+)
 
 ### Access Control
 
