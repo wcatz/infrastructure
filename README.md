@@ -5,46 +5,42 @@ This repository contains infrastructure management tools and GitOps workflows fo
 ## Traffic Flow Architecture
 
 ```
-                    Internet Users
-                         │
-          ┌──────────────┴───────────────┬────────────┐
-          │                              │            │
-     ┌────▼─────┐                   ┌────▼─────┐ ┌───▼────┐
-     │ HTTP/S   │                   │ HTTP/S   │ │TCP/UDP │
-     │ Traffic  │                   │ Traffic  │ │Traffic │
-     │(via CDN) │                   │ (Direct) │ │(Direct)│
-     └──────────┘                   └──────────┘ └────────┘
-          │                              │            │
-          │                              │            │
-┌─────────▼──────────────┬────────▼────────┬──────────▼─────────┐
-│                        │                 │                    │
-│  ┌──────────────┐      │                 │    ┌──────────────┐│
-│  │ Cloudflared  │      │                 │    │   HAProxy    ││
-│  │   Tunnel     │──────┘                 │    │  TCP/UDP LB  ││
-│  │  (HTTP/S)    │                        │    │  (NodePort)  ││
-│  └──────────────┘                        │    └──────────────┘│
-│         │                                │            │       │
-└─────────┼────────────────────────────────┼────────────┼───────┘
-          │                                │            │
-          │                                │            │
-┌─────────▼────────────────────────────────▼────────────▼───────────────────┐
-│                       Kubernetes Cluster (k3s)                             │
-│  ┌──────────────────────────────────────────────────────────────────────┐ │
-│  │ Monitoring Stack:  Prometheus + Grafana                              │ │
-│  │ Security:          NetworkPolicy + Secrets                           │ │
-│  │ Backup:            Integrated backup solutions                       │ │
-│  └──────────────────────────────────────────────────────────────────────┘ │
-│                                                                            │
-│         ┌────────────────────────┬────────────────────────┐               │
-│         │                        │                        │               │
-│         ▼                        ▼                        ▼               │
-│  ┌──────────┐            ┌──────────┐            ┌──────────┐            │
-│  │ HAProxy  │            │   Web    │            │  MySQL   │            │
-│  │ Ingress  │            │Services  │            │ :30306   │            │
-│  │Controller│            │          │            │(NodePort)│            │
-│  └──────────┘            └──────────┘            └──────────┘            │
-│                                                                            │
-└────────────────────────────────────┬───────────────────────────────────────┘
+                         Internet Users
+                                │
+                                ▼
+                              DNS
+                                │
+                ┌───────────────┴───────────────┐
+                │                               │
+                ▼                               ▼
+        ┌───────────────┐              ┌───────────────┐
+        │  Cloudflare   │              │    HAProxy    │
+        │    Tunnel     │              │ Load Balancer │
+        │   (HTTP/S)    │              │  (TCP/UDP)    │
+        └───────────────┘              └───────────────┘
+                │                               │
+                │                               │
+                └───────────────┬───────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       Kubernetes Cluster (k3s)                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │ Monitoring Stack:  Prometheus + Grafana                                │ │
+│  │ Security:          NetworkPolicy + Secrets                             │ │
+│  │ Backup:            Integrated backup solutions                         │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│         ┌────────────────────────┬────────────────────────┐                 │
+│         │                        │                        │                 │
+│         ▼                        ▼                        ▼                 │
+│  ┌──────────┐            ┌──────────┐            ┌──────────┐              │
+│  │ HAProxy  │            │   Web    │            │  MySQL   │              │
+│  │ Ingress  │            │Services  │            │ :30306   │              │
+│  │Controller│            │          │            │(NodePort)│              │
+│  └──────────┘            └──────────┘            └──────────┘              │
+│                                                                              │
+└────────────────────────────────────┬────────────────────────────────────────┘
                                      │ Managed by
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -59,22 +55,17 @@ This repository contains infrastructure management tools and GitOps workflows fo
 ### Traffic Routing Strategy
 
 - **HTTP/HTTPS Traffic via Cloudflared**: 
-  - Flow: Internet → Cloudflared Tunnel → HAProxy Ingress Controller → Kubernetes Services
+  - Flow: Internet → DNS → Cloudflare Tunnel → HAProxy Ingress Controller → Kubernetes Services
   - Benefits: DDoS protection, global CDN, SSL/TLS termination, Zero Trust security, no exposed ports
   - Use cases: Web applications, APIs, dashboards (Grafana), admin interfaces
   - Configuration: Managed via Helmfile, credentials stored in Kubernetes secrets
 
 - **TCP/UDP Traffic via HAProxy Load Balancer**: 
-  - Flow: Internet → HAProxy Load Balancer → Kubernetes Worker NodePorts → Pod Services
+  - Flow: Internet → DNS → HAProxy Load Balancer → Kubernetes Worker NodePorts → Pod Services
   - Benefits: High performance, health checking, protocol flexibility, automatic failover, standard ports
   - Use cases: MySQL databases (3306), WireGuard VPN (51820), DNS servers (53), Redis, PostgreSQL
   - Configuration: Deployed via Ansible, balances across multiple worker nodes
   - See [ansible/HAPROXY_NODEPORT.md](ansible/HAPROXY_NODEPORT.md) for detailed configuration
-
-- **Alternative HTTP/HTTPS Direct Access**: 
-  - Flow: Internet → HAProxy Load Balancer → Kubernetes Worker NodePorts → HAProxy Ingress Controller → Services
-  - Use cases: When Cloudflared is not available or direct access is preferred
-  - Note: Requires managing SSL/TLS certificates and exposing ports directly
 
 ## Infrastructure Stack Components
 
