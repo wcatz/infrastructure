@@ -1,0 +1,49 @@
+---
+# Development environment HAProxy configuration
+# Smaller limits and relaxed timeouts for dev environment
+
+haproxy_environment: "dev"
+
+# Global settings for dev
+haproxy_global:
+  maxconn: 1024
+  log_socket: /dev/log
+  log_level: debug  # More verbose logging for dev
+  stats_socket: /var/run/haproxy.sock
+  stats_level: admin
+
+# Default settings for dev
+haproxy_defaults:
+  mode: tcp
+  log: global
+  option_tcplog: true
+  timeout_connect: 10s  # Longer timeouts for dev
+  timeout_client: 120s
+  timeout_server: 120s
+  retries: 2  # Fewer retries
+
+# Example TCP backends for dev
+haproxy_tcp_backends:
+  - name: mysql-dev
+    port: 3306
+    mode: tcp
+    balance: roundrobin
+    servers:
+      - name: dev-worker-1
+        address: 192.168.1.101
+        port: 30306
+        check: true
+        check_interval: 5s  # Less frequent checks
+        rise: 2
+        fall: 2
+
+# Example UDP backends for dev
+haproxy_udp_backends:
+  - name: wireguard-dev
+    port: 51820
+    mode: udp
+    balance: roundrobin
+    servers:
+      - name: dev-worker-1
+        address: 192.168.1.101
+        port: 31820

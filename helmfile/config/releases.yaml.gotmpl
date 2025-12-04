@@ -28,6 +28,24 @@ releases:
       # {{- end }}
 {{- end }}
 
+{{- if $enabled.grafana | default false }}
+  - name: grafana
+    namespace: monitoring
+    createNamespace: true
+    chart: grafana/grafana
+    version: 7.0.8
+    values:
+      - values/grafana-values.yaml
+      # Environment-specific overrides
+      {{- if eq $env "dev" }}
+      - environments/dev/grafana-values.yaml
+      {{- else if eq $env "staging" }}
+      - environments/staging/grafana-values.yaml
+      {{- else if eq $env "prod" }}
+      - environments/prod/grafana-values.yaml
+      {{- end }}
+{{- end }}
+
 {{- if $enabled.haproxyIngress | default true }}
   - name: haproxy-ingress
     namespace: haproxy-ingress
@@ -61,5 +79,33 @@ releases:
       - environments/staging/cloudflared-values.yaml
       {{- else if eq $env "prod" }}
       - environments/prod/cloudflared-values.yaml
+      {{- end }}
+{{- end }}
+
+{{- if $enabled.externalSecrets | default false }}
+  - name: external-secrets
+    namespace: external-secrets-system
+    createNamespace: true
+    chart: external-secrets/external-secrets
+    version: 0.9.11
+    values:
+      - values/external-secrets-values.yaml
+{{- end }}
+
+{{- if $enabled.velero | default false }}
+  - name: velero
+    namespace: velero
+    createNamespace: true
+    chart: vmware-tanzu/velero
+    version: 5.2.0
+    values:
+      - values/velero-values.yaml
+      # Environment-specific overrides
+      {{- if eq $env "dev" }}
+      - environments/dev/velero-values.yaml
+      {{- else if eq $env "staging" }}
+      - environments/staging/velero-values.yaml
+      {{- else if eq $env "prod" }}
+      - environments/prod/velero-values.yaml
       {{- end }}
 {{- end }}
