@@ -23,11 +23,10 @@ This repository contains infrastructure management tools and GitOps workflows fo
                 └───────────────┬───────────────┘
                                 │
                                 ▼
-                        ┌───────────────┐
-                        │    HAProxy    │
-                        │    Ingress    │
-                        │  Controller   │
-                        └───────────────┘
+                    ┌───────────────────────┐
+                    │      HAProxy LB       │
+                    │ Ingress Controller    │
+                    └───────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -37,9 +36,9 @@ This repository contains infrastructure management tools and GitOps workflows fo
 │         │                        │                        │                 │
 │         ▼                        ▼                        ▼                 │
 │  ┌──────────┐            ┌──────────┐            ┌──────────┐              │
-│  │ HAProxy  │            │   Web    │            │  MySQL   │              │
-│  │    LB    │            │Services  │            │ :30306   │              │
-│  │(Internal)│            │          │            │(NodePort)│              │
+│  │   Web    │            │  MySQL   │            │WireGuard │              │
+│  │   Pods   │            │   Pod    │            │   Pod    │              │
+│  │          │            │ :30306   │            │ :51820   │              │
 │  └──────────┘            └──────────┘            └──────────┘              │
 │                                                                              │
 └────────────────────────────────────┬────────────────────────────────────────┘
