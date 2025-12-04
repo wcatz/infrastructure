@@ -14,8 +14,8 @@ This repository contains infrastructure management tools and GitOps workflows fo
                 │                               │
                 ▼                               ▼
         ┌───────────────┐              ┌───────────────┐
-        │  Cloudflare   │              │    HAProxy    │
-        │    Tunnel     │              │ Load Balancer │
+        │  Cloudflare   │              │    Public     │
+        │    Tunnel     │              │   Internet    │
         │   (HTTP/S)    │              │  (TCP/UDP)    │
         └───────────────┘              └───────────────┘
                 │                               │
