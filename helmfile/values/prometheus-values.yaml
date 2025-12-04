@@ -86,13 +86,13 @@ serverFiles:
               description: "Node {{ $labels.instance }} has been down for more than 5 minutes"
           
           - alert: PodCrashLooping
-            expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+            expr: rate(kube_pod_container_status_restarts_total[15m]) > 0.1
             for: 5m
             labels:
               severity: warning
             annotations:
               summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
-              description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
+              description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently ({{ $value }} restarts/sec in last 15 minutes)"
           
           # Resource alerts
           - alert: HighCPUUsage

@@ -2,9 +2,16 @@
 # Integrates with Prometheus for metrics visualization
 
 # Admin credentials - CHANGE IN PRODUCTION
-# Use kubectl create secret for production deployments
+# SECURITY: Use a custom admin username and store credentials in a Kubernetes secret
+# Create secret: kubectl create secret generic grafana-admin --from-literal=admin-user=myadmin --from-literal=admin-password=secure123 -n monitoring
+# Then reference the secret below instead of hardcoding values
 adminUser: admin
 # adminPassword: should be set via secret, not here
+# To use a secret, uncomment and configure:
+# admin:
+#   existingSecret: grafana-admin
+#   userKey: admin-user
+#   passwordKey: admin-password
 
 # Persistence for dashboards and configuration
 persistence:
