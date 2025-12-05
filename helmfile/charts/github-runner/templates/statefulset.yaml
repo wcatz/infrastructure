@@ -219,16 +219,10 @@ spec:
             - name: tailscale-sock
               mountPath: /var/run/tailscale
             {{- end }}
-            {{- if .Values.clusterAccess.enabled }}
-            {{- if .Values.clusterAccess.useServiceAccount }}
-            - name: kube-api-access
-              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-              readOnly: true
-            {{- else if .Values.clusterAccess.kubeconfigSecret }}
+            {{- if and .Values.clusterAccess.enabled .Values.clusterAccess.kubeconfigSecret }}
             - name: kubeconfig
               mountPath: /home/runner/.kube
               readOnly: true
-            {{- end }}
             {{- end }}
           securityContext:
             {{- toYaml .Values.kubernetes.securityContext | nindent 12 }}
