@@ -61,7 +61,7 @@ jobs:
           tailscale status
 
           CONTROL_IP=$(tailscale status --json | \
-            jq -r '.Peer[] | select(.HostName | contains("control")) |
+            jq -r '.Peer[] | select(.HostName | contains("control")) | \
             .TailscaleIPs[0]' | head -1)
           echo "Control plane Tailscale IP: $CONTROL_IP"
 

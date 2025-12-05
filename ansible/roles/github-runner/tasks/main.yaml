@@ -141,6 +141,15 @@
   become: true
   when: github_runner_enable_service
 
+- name: Create .kube directory for runner user
+  ansible.builtin.file:
+    path: "/home/{{ github_runner_user }}/.kube"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0755'
+  become: true
+
 - name: Copy kubeconfig for runner user
   ansible.builtin.copy:
     src: /etc/rancher/k3s/k3s.yaml
@@ -149,16 +158,6 @@
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_user }}"
     mode: '0600'
-  become: true
-  when: runner_configured.stat.exists or not runner_configured.stat.exists
-
-- name: Create .kube directory for runner user
-  ansible.builtin.file:
-    path: "/home/{{ github_runner_user }}/.kube"
-    state: directory
-    owner: "{{ github_runner_user }}"
-    group: "{{ github_runner_user }}"
-    mode: '0755'
   become: true
 
 - name: Update kubeconfig server URL to use Tailscale IP

@@ -45,7 +45,7 @@ jobs:
 
           # Get control plane Tailscale IP
           CONTROL_IP=$(tailscale status --json | \
-            jq -r '.Peer[] | select(.HostName | contains("control")) |
+            jq -r '.Peer[] | select(.HostName | contains("control")) | \
             .TailscaleIPs[0]' | head -1)
 
           if [ -z "$CONTROL_IP" ]; then
