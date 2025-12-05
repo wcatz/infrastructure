@@ -81,7 +81,7 @@ echo "Validating Ansible playbooks..."
 if command -v ansible-playbook &> /dev/null; then
     # Create temporary vault password file for syntax checking
     echo "dummy-password" > ansible/.vault_pass.tmp
-    chmod 600 ansible/.vault_pass.tmp
+    chmod 400 ansible/.vault_pass.tmp
 
     PLAYBOOKS=(
         "ansible/playbooks/deploy-k3s.yaml"
