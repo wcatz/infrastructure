@@ -62,7 +62,10 @@ backend {{ service.name }}_backend
     balance {{ service.balance | default('roundrobin') }}
     option tcp-check
 {% for worker in k3s_workers %}
-    server {{ worker.name }} {{ worker.host }}:{{ service.backend_port }} check inter {{ service.check_interval | default('2s') }} fall 3 rise 2{% if service.check_timeout is defined %} timeout {{ service.check_timeout }}{% endif %}
+    server {{ worker.name }} {{ worker.host }}:{{ service.backend_port }} \
+        check inter {{ service.check_interval | default('2s') }} \
+        fall 3 rise 2{% if service.check_timeout is defined %} \
+        timeout {{ service.check_timeout }}{% endif %}
 
 {% endfor %}
 
