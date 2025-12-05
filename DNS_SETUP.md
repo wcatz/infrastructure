@@ -30,7 +30,7 @@ This guide explains how to configure DNS for services exposed through Cloudflare
               |                                 v
               v                     ┌──────────────────┐
     ┌──────────────────┐            | Worker Public IP |
-    |   Cloudflared    |            | 123.45.67.89:30001|
+    |   Cloudflared    |            | YOUR_WORKER_PUBLIC_IP:30001|
     |  (in cluster)    |            └──────────────────┘
     └──────────────────┘                       |
               |                                 v
@@ -157,15 +157,15 @@ TCP services (like Cardano node P2P) are exposed via NodePort on worker nodes wi
 5. Configure:
    - **Type**: A
    - **Name**: subdomain (e.g., `cardano`, `node`)
-   - **IPv4 address**: Worker node public IP (e.g., `123.45.67.89`)
+   - **IPv4 address**: Worker node public IP (e.g., `YOUR_WORKER_PUBLIC_IP`)
    - **Proxy status**: DNS only (grey cloud) - **Important!**
    - **TTL**: 300 (5 minutes) or Auto
 
 Example records:
 ```
 Type    Name      Target          Proxy  TTL
-A       cardano   123.45.67.89    ✗      300
-A       node      123.45.67.89    ✗      300
+A       cardano   YOUR_WORKER_PUBLIC_IP    ✗      300
+A       node      YOUR_WORKER_PUBLIC_IP    ✗      300
 ```
 
 **Important**: TCP/UDP services MUST have proxy disabled (grey cloud) as Cloudflare's proxy only supports HTTP/HTTPS traffic.
@@ -219,13 +219,13 @@ resource "cloudflare_record" "redis" {
 
 ZONE_ID="your-zone-id"
 API_TOKEN="your-api-token"
-WORKER_IP="123.45.67.89"
+WORKER_IP="YOUR_WORKER_PUBLIC_IP"
 
 # Function to create DNS record
 create_record() {
   local name=$1
   local ip=$2
-  
+
   curl -X POST "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
     -H "Authorization: Bearer ${API_TOKEN}" \
     -H "Content-Type: application/json" \
@@ -261,10 +261,10 @@ create_record "node" "${WORKER_IP}"
 | 1 | CNAME | `app` | `abc123.cfargotunnel.com` | ✓ | Web application |
 | 2 | CNAME | `api` | `abc123.cfargotunnel.com` | ✓ | REST API |
 | 3 | CNAME | `monitoring` | `abc123.cfargotunnel.com` | ✓ | Grafana dashboard |
-| 4 | A | `cardano` | `123.45.67.89` | ✗ | Cardano P2P node |
-| 5 | A | `node` | `123.45.67.89` | ✗ | Worker node access |
+| 4 | A | `cardano` | `YOUR_WORKER_PUBLIC_IP` | ✗ | Cardano P2P node |
+| 5 | A | `node` | `YOUR_WORKER_PUBLIC_IP` | ✗ | Worker node access |
 
-**Note**: `123.45.67.89` is the Netcup worker node's public IP.
+**Note**: `YOUR_WORKER_PUBLIC_IP` is the Netcup worker node's public IP.
 
 ### Step 2: Cloudflared Configuration
 
@@ -275,15 +275,15 @@ ingress:
   # Web application
   - hostname: app.example.com
     service: http://app-service.default.svc.cluster.local:80
-  
+
   # REST API
   - hostname: api.example.com
     service: http://api-service.default.svc.cluster.local:8080
-  
+
   # Monitoring dashboard
   - hostname: monitoring.example.com
     service: http://grafana.monitoring.svc.cluster.local:80
-  
+
   # Catch-all
   - service: http_status:404
 ```
@@ -321,7 +321,7 @@ curl https://monitoring.example.com
 telnet cardano.example.com 30001
 
 # Or using worker IP directly
-telnet 123.45.67.89 30001
+telnet YOUR_WORKER_PUBLIC_IP 30001
 
 # Check if NodePort is accessible
 nc -zv cardano.example.com 30001
@@ -413,10 +413,10 @@ dig db.example.com
    ```bash
    # Linux
    sudo systemd-resolve --flush-caches
-   
+
    # macOS
    sudo dscacheutil -flushcache
-   
+
    # Windows
    ipconfig /flushdns
    ```
