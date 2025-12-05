@@ -39,7 +39,7 @@ k3s_node_label: "node-role=worker"  # Custom labels
 - `kubernetes-examples/README.md` - Comprehensive usage guide
 - `kubernetes-examples/deployment.yaml` - Production-ready deployment template
 - `kubernetes-examples/service.yaml` - Multiple service type examples
-- `kubernetes-examples/ingress.yaml` - HAProxy Ingress configurations
+- `kubernetes-examples/ingress.yaml` - Standard Ingress configurations (optional with Cloudflared)
 - `kubernetes-examples/configmap.yaml` - ConfigMap examples and usage
 - `kubernetes-examples/secret.yaml` - Secret management with SOPS integration
 
@@ -131,8 +131,7 @@ Home/CGNAT Environment
 Public IP (Netcup VPS)
 ├── K3s Agent
 ├── Tailscale (cluster networking)
-├── HAProxy Ingress (NodePort 30080/30443)
-├── Cloudflared (HTTP/HTTPS tunnel)
+├── Cloudflared (HTTP/HTTPS tunnel, routes directly to services)
 └── Application Workloads
 ```
 
@@ -144,9 +143,7 @@ Cloudflare Edge
   ↓
 Cloudflared Tunnel (Worker)
   ↓
-HAProxy Ingress (Worker)
-  ↓
-Kubernetes Services
+Kubernetes Services (Direct routing)
   ↓
 Application Pods (Worker)
 
@@ -160,8 +157,8 @@ Control Plane ←→ Tailscale VPN ←→ Workers
 3. **Configure Inventory** - Set Tailscale IP for control plane
 4. **Deploy K3s** - Control plane + workers
 5. **Verify Cluster** - Check nodes and taints
-6. **Deploy Services** - HAProxy, Prometheus, Grafana
-7. **Configure Cloudflared** - Setup tunnel and DNS
+6. **Deploy Services** - Prometheus, Grafana (monitoring)
+7. **Configure Cloudflared** - Setup tunnel and DNS for direct service routing
 8. **Deploy Workloads** - Use Kubernetes examples
 
 ## Key Benefits

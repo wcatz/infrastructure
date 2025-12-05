@@ -1,17 +1,20 @@
 ---
-# Example Ingress Configuration for HAProxy
+# Example Ingress Configuration
 #
 # This Ingress routes external HTTP/HTTPS traffic to your services.
-# In the hybrid cluster, ingress traffic flows through Cloudflared on worker nodes.
+# In the hybrid cluster, configure Cloudflared to route traffic directly to services.
 #
 # Traffic flow:
-#   Internet → Cloudflare → Cloudflared (worker) → HAProxy Ingress → Service → Pods
+#   Internet → Cloudflare → Cloudflared (worker) → Kubernetes Service → Pods
 #
 # Usage:
 #   1. Deploy your application and service
-#   2. Create this Ingress resource
-#   3. Configure Cloudflared to route the hostname to HAProxy
+#   2. Configure Cloudflared to route the hostname to your service
+#
+# Note: Standard Kubernetes Ingress resources are optional with Cloudflared.
+# You can route directly to services via Cloudflared tunnel configuration.
 
+# Example: Using standard Kubernetes Ingress (if needed)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -19,35 +22,7 @@ metadata:
   namespace: default
   labels:
     app: example-app
-  annotations:
-    # HAProxy Ingress specific annotations
-    haproxy.org/ssl-redirect: "true"
-    haproxy.org/rate-limit: "100"
-
-    # Optional: Request size limit
-    # haproxy.org/request-capture: "len 128"
-
-    # Optional: Timeout configuration
-    # haproxy.org/timeout-client: "50s"
-    # haproxy.org/timeout-server: "50s"
-
-    # Optional: CORS headers
-    # haproxy.org/cors-enable: "true"
-    # haproxy.org/cors-allow-origin: "*"
-    # haproxy.org/cors-allow-methods: "GET, POST, PUT, DELETE"
-
-    # Optional: Custom backend config
-    # haproxy.org/backend-config-snippet: |
-    #   http-request set-header X-Forwarded-Proto https
 spec:
-  ingressClassName: haproxy
-
-  # TLS configuration (optional - Cloudflare handles TLS termination)
-  # tls:
-  #   - hosts:
-  #       - app.example.com
-  #     secretName: example-app-tls
-
   rules:
     - host: app.example.com
       http:
@@ -60,18 +35,6 @@ spec:
                 port:
                   number: 80
 
-    # Multiple hosts example
-    # - host: api.example.com
-    #   http:
-    #     paths:
-    #       - path: /
-    #         pathType: Prefix
-    #         backend:
-    #           service:
-    #             name: api-service
-    #             port:
-    #               number: 8080
-
 ---
 # Alternative: Path-based routing on same host
 apiVersion: networking.k8s.io/v1
@@ -79,11 +42,7 @@ kind: Ingress
 metadata:
   name: example-app-paths
   namespace: default
-  annotations:
-    haproxy.org/ssl-redirect: "true"
-    haproxy.org/rewrite-target: /
 spec:
-  ingressClassName: haproxy
   rules:
     - host: app.example.com
       http:

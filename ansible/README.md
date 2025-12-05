@@ -97,7 +97,7 @@ ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass ansible-playbook playbooks/deploy-k3s.ya
 - **k3s**: Deploys k3s with hybrid cluster support
   - Server mode: Installs control plane with optional NoSchedule taint
   - Agent mode: Installs worker node, connects via Tailscale
-  - Traefik disabled (using HAProxy instead)
+  - Traefik disabled
 - **tailscale**: Installs Tailscale VPN on all nodes (required for hybrid setup)
 - **hostname**: Configures system hostnames
 
@@ -136,7 +136,7 @@ After Ansible deployment:
 3. **Deploy services via Helmfile**:
    ```bash
    cd ../helmfile
-   helmfile apply  # Deploys HAProxy, Prometheus, Grafana
+   helmfile apply  # Deploys Prometheus, Grafana
    ```
 
 4. **Configure Cloudflared for ingress** (on worker nodes):

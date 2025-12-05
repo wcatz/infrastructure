@@ -34,11 +34,6 @@ This guide walks through deploying a production-ready hybrid Kubernetes cluster 
             │  (Worker Node)          │
             └────────────┬────────────┘
                          │
-            ┌────────────▼────────────┐
-            │   HAProxy Ingress       │
-            │   (Worker Node)         │
-            └────────────┬────────────┘
-                         │
          ┌───────────────▼──────────────┐
          │    Kubernetes Services       │
          │         (Pods)               │
@@ -53,6 +48,7 @@ Control Plane ←──→ Tailscale VPN ←──→ Worker Nodes
 - **Control Plane**: Behind CGNAT/NAT, no public exposure required
 - **Worker Nodes**: Public IP for ingress, Tailscale for cluster networking
 - **No Port Forwarding**: Cloudflared handles all HTTP/HTTPS ingress
+- **Direct Service Routing**: Cloudflared routes directly to Kubernetes services
 - **Secure Communication**: Tailscale encrypts all cluster traffic
 - **Workload Isolation**: Control plane runs only K3s, workers run workloads
 
@@ -300,21 +296,18 @@ brew install helmfile  # macOS
 ```bash
 cd ../helmfile
 
-# Deploy HAProxy Ingress, Prometheus, and Grafana
+# Deploy Prometheus and Grafana for monitoring
 helmfile apply
 ```
 
 This deploys:
-- **HAProxy Ingress**: HTTP/HTTPS routing (NodePort 30080/30443)
 - **Prometheus**: Metrics collection
 - **Grafana**: Metrics visualization
 
 ### 6.3. Verify Deployments
 
 ```bash
-kubectl get pods -n haproxy-ingress
 kubectl get pods -n monitoring
-kubectl get svc -n haproxy-ingress
 ```
 
 ## Step 7: Configure Cloudflared Ingress
@@ -376,11 +369,13 @@ cloudflare:
   tunnelId: "<TUNNEL-ID>"
 
 ingress:
-  # Route to HAProxy Ingress
+  # Route directly to your Kubernetes services
+  # Example: Route to a web application service
   - hostname: app.example.com
-    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+    service: http://my-web-app.default.svc.cluster.local:80
+  # Example: Route to an API service
   - hostname: api.example.com
-    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+    service: http://my-api.default.svc.cluster.local:8080
   # Catch-all
   - service: http_status:404
 ```
@@ -458,38 +453,23 @@ spec:
   ports:
   - port: 80
     targetPort: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: hello-world
-  namespace: default
-  annotations:
-    haproxy.org/ssl-redirect: "true"
-spec:
-  ingressClassName: haproxy
-  rules:
-  - host: app.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: hello-world
-            port:
-              number: 80
 EOF
+```
+
+Then configure Cloudflared to route to this service:
+```yaml
+# In helmfile/values/cloudflared-values.yaml
+ingress:
+  - hostname: app.example.com
+    service: http://hello-world.default.svc.cluster.local:80
+  - service: http_status:404
 ```
 
 ### 8.3. Test Access
 
 ```bash
-# Via Cloudflared
+# Via Cloudflared tunnel
 curl https://app.example.com
-
-# Or directly via NodePort (for debugging)
-curl http://<worker-public-ip>:30080 -H "Host: app.example.com"
 ```
 
 ## Troubleshooting
@@ -559,21 +539,21 @@ dig app.example.com
 
 ### Ingress Not Working
 
-**Problem**: Cannot access services via ingress
+**Problem**: Cannot access services via Cloudflared tunnel
 
 ```bash
-# Check HAProxy pods
-kubectl get pods -n haproxy-ingress
+# Check Cloudflared pods
+kubectl get pods -n cloudflare
 
-# Check ingress resources
-kubectl get ingress -A
+# Check Cloudflared logs
+kubectl logs -n cloudflare -l app.kubernetes.io/name=cloudflared
 
 # Check service endpoints
 kubectl get endpoints
 
-# Test internal connectivity
+# Test internal connectivity to your service
 kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
-  curl -v http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  curl -v http://my-service.default.svc.cluster.local:80
 ```
 
 ## Next Steps
@@ -589,4 +569,3 @@ kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
 - [K3s Documentation](https://docs.k3s.io/)
 - [Tailscale Documentation](https://tailscale.com/kb/)
 - [Cloudflare Tunnel Documentation](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/)
-- [HAProxy Ingress Documentation](https://haproxy-ingress.github.io/)

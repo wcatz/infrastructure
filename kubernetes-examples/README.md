@@ -24,10 +24,9 @@ This directory contains modular YAML templates for deploying applications to the
 - LoadBalancer example (commented out - not typically used in this setup)
 
 ### 3. Ingress (`ingress.yaml`)
-- HAProxy Ingress configuration
-- Routes external traffic from Cloudflared to services
-- Examples of host-based and path-based routing
-- HAProxy-specific annotations for customization
+- Standard Kubernetes Ingress examples (optional)
+- Cloudflared can route directly to services without Ingress resources
+- Examples of host-based and path-based routing if using Ingress
 
 ### 4. ConfigMap (`configmap.yaml`)
 - Non-sensitive configuration data
@@ -92,24 +91,27 @@ See [SECRETS.md](../SECRETS.md) for detailed secret management instructions.
 kubectl apply -f service.yaml
 ```
 
-#### External Access (NodePort + Cloudflared)
+#### External Access via Cloudflared
 ```bash
-# 1. Create NodePort service or use Ingress
+# 1. Deploy your application and service
+kubectl apply -f deployment.yaml
 kubectl apply -f service.yaml
 
-# 2. Create Ingress resource
-kubectl apply -f ingress.yaml
-
-# 3. Configure Cloudflared to route traffic
+# 2. Configure Cloudflared to route directly to your service
 # Edit helmfile/values/cloudflared-values.yaml:
 #   ingress:
 #     - hostname: app.example.com
-#       service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+#       service: http://my-app.default.svc.cluster.local:80
 
-# 4. Apply Helmfile changes
+# 3. Apply Helmfile changes
 cd helmfile
 helmfile apply
+
+# 4. Access via Cloudflare tunnel
+curl https://app.example.com
 ```
+
+**Note**: Cloudflared routes directly to Kubernetes services. You don't need Ingress resources unless you want path-based routing or other advanced features.
 
 ## Best Practices
 
@@ -182,7 +184,7 @@ annotations:
 ## Further Reading
 
 - [Kubernetes Documentation](https://kubernetes.io/docs/)
-- [HAProxy Ingress Documentation](https://haproxy-ingress.github.io/)
 - [Cloudflared Setup](../helmfile/CLOUDFLARED_SETUP.md)
 - [Secrets Management](../SECRETS.md)
 - [Testing Guide](../TESTING.md)
+- [Hybrid Cluster Setup](../HYBRID_CLUSTER_SETUP.md)

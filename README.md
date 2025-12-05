@@ -1,6 +1,6 @@
 # Infrastructure Management
 
-GitOps-based infrastructure for hybrid k3s clusters with Tailscale networking, Cloudflared tunnels, and HAProxy ingress.
+GitOps-based infrastructure for hybrid k3s clusters with Tailscale networking and Cloudflared tunnels.
 
 ## Architecture
 
@@ -14,18 +14,16 @@ This repository provides a **minimalist, modular framework** for deploying a hyb
 
 - **Worker Node(s)** (Netcup VPS/Public IP):
   - Runs all application workloads
-  - Cloudflared for HTTP/HTTPS ingress via Cloudflare
-  - HAProxy Ingress controller for routing
+  - Cloudflared for HTTP/HTTPS ingress via Cloudflare (routes directly to services)
   - Tailscale for secure control plane communication
   - Supports NodePort services and `hostNetwork` when needed
 
 ## Stack
 
 - **k3s**: Lightweight Kubernetes (Traefik disabled)
-- **HAProxy Ingress**: HTTP/HTTPS routing via NodePort
-- **Cloudflared**: Secure tunnel to Cloudflare edge
+- **Cloudflared**: Secure tunnel to Cloudflare edge, routes directly to Kubernetes services
 - **Tailscale**: VPN for secure inter-node communication
-- **Prometheus/Grafana**: Monitoring stack
+- **Prometheus/Grafana**: Monitoring stack (optional)
 - **SOPS/age**: Secret encryption
 - **Ansible Vault**: Infrastructure secret management
 
@@ -68,7 +66,7 @@ sed -i 's/127.0.0.1/100.64.x.x/' ~/.kube/config
 ```bash
 cd helmfile
 
-# Deploy HAProxy Ingress and monitoring
+# Deploy monitoring stack (Prometheus and Grafana)
 helmfile apply
 
 # Enable Cloudflared for worker node ingress
@@ -83,6 +81,7 @@ kubectl create secret generic cloudflared-credentials \
 vim config/enabled.yaml  # Set cloudflared: true
 
 # 4. Configure ingress routes in values/cloudflared-values.yaml
+# Route directly to your Kubernetes services
 # 5. Apply changes
 helmfile apply
 ```
@@ -117,7 +116,6 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 - Ansible Vault for encrypted secrets (K3s token, Tailscale key)
 
 ### Helmfile
-- HAProxy Ingress (NodePort on workers: 30080/30443)
 - Cloudflared tunnels (disabled by default - enable when configured)
 - Tailscale Kubernetes Operator (optional)
 - Prometheus & Grafana monitoring
@@ -126,13 +124,14 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 ### Kubernetes Examples
 - Modular deployment templates
 - Service definitions (ClusterIP, NodePort, Headless)
-- Ingress configurations for HAProxy
+- Ingress configurations for direct service routing via Cloudflared
 - ConfigMaps and Secrets with SOPS encryption
 - See `kubernetes-examples/` directory
 
 ### GitHub Actions
 - `helmfile-diff.yaml`: Preview changes on PRs
 - `helmfile-apply.yaml`: Manual deployment to environments
+- `cloudflared-setup.yaml`: Cloudflared tunnel setup automation
 - SOPS integration for secret decryption
 
 ## Environment Management
@@ -158,7 +157,7 @@ helmfile -e prod apply
 
 ### HTTP/HTTPS Traffic
 ```
-Internet → Cloudflare → Cloudflared (worker) → HAProxy Ingress → Services → Pods
+Internet → Cloudflare → Cloudflared (worker) → Kubernetes Services → Pods
 ```
 
 ### Cluster Communication
@@ -168,6 +167,7 @@ Control Plane (CGNAT) ←→ Tailscale VPN ←→ Worker Nodes (Public IP)
 
 ### Key Features
 - **No port forwarding required**: Cloudflared handles ingress
+- **Direct service routing**: Cloudflared routes to services without intermediate load balancers
 - **Secure cluster networking**: Tailscale VPN for inter-node communication
 - **Workload isolation**: Control plane tainted to run only K3s components
 - **Scalable architecture**: Add workers as needed without infrastructure changes

@@ -49,9 +49,8 @@ spec:
   externalTrafficPolicy: Local
 
 ---
-# LoadBalancer Service (Requires external LB or MetalLB)
-# Not typically used in this hybrid setup
-# Use NodePort + Cloudflared or HAProxy instead
+# LoadBalancer Service (Not typically used in this setup)
+# Cloudflared provides ingress directly to services
 # apiVersion: v1
 # kind: Service
 # metadata:
