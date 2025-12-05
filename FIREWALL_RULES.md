@@ -83,7 +83,8 @@ Control plane nodes run only the K3s server and are typically behind CGNAT/NAT w
 ### Example UFW Rules for Control Plane
 
 ```bash
-# Reset firewall (careful!)
+# Reset firewall (⚠️ WARNING: This will clear ALL existing rules!)
+# Ensure you have console/physical access before running this in case of lockout
 sudo ufw --force reset
 
 # Default policies
@@ -123,7 +124,7 @@ Worker nodes have public IPs and run all application workloads. They expose serv
 
 | Source | Port/Protocol | Purpose | Required |
 |--------|--------------|---------|----------|
-| Tailscale network (100.64.0.0/10) | 6443/tcp | Kubernetes API (if querying) | ⚠️ If using API |
+| Tailscale network (100.64.0.0/10) | 6443/tcp | Kubernetes API (service discovery, pod lifecycle) | ✅ Yes |
 | Tailscale network (100.64.0.0/10) | 10250/tcp | Kubelet API | ✅ Yes |
 | Tailscale network (100.64.0.0/10) | 41641/udp | Tailscale WireGuard | ✅ Yes |
 | 0.0.0.0/0 (Public) | 30000-32767/tcp | NodePort services | ⚠️ As needed per service |
@@ -151,7 +152,8 @@ Worker nodes have public IPs and run all application workloads. They expose serv
 ### Example UFW Rules for Worker Nodes
 
 ```bash
-# Reset firewall (careful!)
+# Reset firewall (⚠️ WARNING: This will clear ALL existing rules!)
+# Ensure you have console/physical access before running this in case of lockout
 sudo ufw --force reset
 
 # Default policies
@@ -297,6 +299,14 @@ set -e
 
 echo "Configuring firewall for K3s control plane..."
 
+# ⚠️ WARNING: This script will reset all firewall rules!
+# Ensure you have console/physical access before running this.
+read -p "This will reset ALL firewall rules. Continue? (yes/no): " confirm
+if [ "$confirm" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+fi
+
 # Reset UFW (WARNING: This will clear all existing rules)
 sudo ufw --force reset
 
@@ -350,6 +360,14 @@ echo "✅ Control plane firewall configured successfully"
 set -e
 
 echo "Configuring firewall for K3s worker node..."
+
+# ⚠️ WARNING: This script will reset all firewall rules!
+# Ensure you have console/physical access before running this.
+read -p "This will reset ALL firewall rules. Continue? (yes/no): " confirm
+if [ "$confirm" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+fi
 
 # Reset UFW (WARNING: This will clear all existing rules)
 sudo ufw --force reset
@@ -443,6 +461,18 @@ set -e
 
 echo "Configuring iptables for K3s control plane..."
 
+# ⚠️ WARNING: This script will flush all iptables rules!
+# Ensure you have console/physical access before running this.
+read -p "This will flush ALL iptables rules. Continue? (yes/no): " confirm
+if [ "$confirm" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+fi
+
+# Backup existing rules
+echo "Backing up existing iptables rules to /tmp/iptables-backup-$(date +%s).rules"
+iptables-save > /tmp/iptables-backup-$(date +%s).rules
+
 # Flush existing rules
 iptables -F
 iptables -X
@@ -494,7 +524,11 @@ if command -v netfilter-persistent &> /dev/null; then
 elif [ -f /etc/redhat-release ]; then
     service iptables save
 else
+    # Create directory if it doesn't exist
+    mkdir -p /etc/iptables
     iptables-save > /etc/iptables/rules.v4
+    echo "⚠️  Rules saved to /etc/iptables/rules.v4"
+    echo "⚠️  To restore on boot, install iptables-persistent: apt install iptables-persistent"
 fi
 
 echo "✅ Control plane iptables configured successfully"
@@ -509,6 +543,18 @@ echo "✅ Control plane iptables configured successfully"
 set -e
 
 echo "Configuring iptables for K3s worker node..."
+
+# ⚠️ WARNING: This script will flush all iptables rules!
+# Ensure you have console/physical access before running this.
+read -p "This will flush ALL iptables rules. Continue? (yes/no): " confirm
+if [ "$confirm" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+fi
+
+# Backup existing rules
+echo "Backing up existing iptables rules to /tmp/iptables-backup-$(date +%s).rules"
+iptables-save > /tmp/iptables-backup-$(date +%s).rules
 
 # Flush existing rules
 iptables -F
@@ -698,10 +744,18 @@ curl -k https://$(tailscale ip -4 control-node):6443/livez
 sudo ufw status verbose
 sudo iptables -L -n -v | grep <port>
 
-# Temporarily disable firewall for testing (DON'T FORGET TO RE-ENABLE)
-sudo ufw disable
+# Check if specific traffic is being blocked
+sudo tcpdump -i any port 6443 -n
+
+# Temporarily allow specific traffic for testing (safer than disabling firewall)
+sudo ufw allow from <specific-ip> to any port 6443 proto tcp
 # Test connection
-sudo ufw enable
+# Then remove the temporary rule:
+sudo ufw delete allow from <specific-ip> to any port 6443 proto tcp
+
+# AVOID: Disabling firewall entirely creates security risks
+# Only disable as last resort with console access:
+# sudo ufw disable  # Test immediately, then: sudo ufw enable
 ```
 
 ### Debugging Firewall Rules
