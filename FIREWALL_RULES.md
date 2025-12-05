@@ -469,8 +469,9 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 # Backup existing rules
-echo "Backing up existing iptables rules to /tmp/iptables-backup-$(date +%s).rules"
-iptables-save > /tmp/iptables-backup-$(date +%s).rules
+BACKUP_FILE="/tmp/iptables-backup-$(date +%s).rules"
+echo "Backing up existing iptables rules to $BACKUP_FILE"
+iptables-save > "$BACKUP_FILE"
 
 # Flush existing rules
 iptables -F
@@ -556,8 +557,9 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 # Backup existing rules
-echo "Backing up existing iptables rules to /tmp/iptables-backup-$(date +%s).rules"
-iptables-save > /tmp/iptables-backup-$(date +%s).rules
+BACKUP_FILE="/tmp/iptables-backup-$(date +%s).rules"
+echo "Backing up existing iptables rules to $BACKUP_FILE"
+iptables-save > "$BACKUP_FILE"
 
 # Flush existing rules
 iptables -F
@@ -592,7 +594,7 @@ iptables -A INPUT -p udp --dport 41641 -j ACCEPT
 # iptables -A INPUT -p udp --dport 30303 -j ACCEPT
 
 # Rate limiting for public NodePorts (example)
-# iptables -A INPUT -p tcp --dport 30080 -m limit --limit 25/min --limit-burst 100 -j ACCEPT
+# iptables -A INPUT -p tcp --dport 30080 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
 
 # Save rules
 if command -v netfilter-persistent &> /dev/null; then
