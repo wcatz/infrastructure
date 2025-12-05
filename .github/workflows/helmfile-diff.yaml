@@ -131,7 +131,7 @@ jobs:
           sops --version
 
       - name: Configure SOPS Age Key
-        if: env.SOPS_AGE_KEY != ''
+        if: secrets.SOPS_AGE_KEY != ''
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: |
