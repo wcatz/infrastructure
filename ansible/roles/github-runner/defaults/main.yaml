@@ -1,0 +1,51 @@
+---
+# Default variables for GitHub Actions runner role
+
+# GitHub repository URL (e.g., https://github.com/owner/repo)
+github_runner_repository_url: ""
+
+# GitHub runner token (from repository settings or API)
+# This should be provided via vault or command line
+github_runner_token: ""
+
+# Runner name (defaults to hostname if not set)
+github_runner_name: "{{ ansible_hostname }}"
+
+# Runner labels (comma-separated)
+github_runner_labels: "self-hosted,tailscale,kubernetes"
+
+# Runner group (empty for default group)
+github_runner_group: ""
+
+# Runner work directory
+github_runner_work_dir: "/home/{{ github_runner_user }}/actions-runner/_work"
+
+# Runner user
+github_runner_user: "github-runner"
+
+# Runner version (use 'latest' for automatic detection)
+github_runner_version: "latest"
+
+# Runner download URL pattern
+github_runner_download_url: "https://github.com/actions/runner/releases/download/v{{ github_runner_detected_version }}/actions-runner-linux-x64-{{ github_runner_detected_version }}.tar.gz"
+
+# Runner installation directory
+github_runner_install_dir: "/home/{{ github_runner_user }}/actions-runner"
+
+# Enable runner to start on boot
+github_runner_enable_service: true
+
+# Additional runner options
+github_runner_extra_args: ""
+
+# Unattended installation (no prompt)
+github_runner_unattended: true
+
+# Replace existing runner with same name
+github_runner_replace: true
+
+# Enable ephemeral mode (one job then exit)
+github_runner_ephemeral: false
+
+# Disable automatic updates
+github_runner_disable_update: false

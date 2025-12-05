@@ -1,0 +1,113 @@
+---
+# Playbook to setup GitHub Actions self-hosted runner
+# This runner will have Tailscale access to the cluster control plane
+
+- name: Setup GitHub Actions Self-Hosted Runner
+  hosts: k3s_agents  # Deploy on worker nodes with public IP
+  become: true
+  gather_facts: true
+
+  vars:
+    # Repository URL should be provided via command line or inventory
+    # Example: -e "github_runner_repository_url=https://github.com/owner/repo"
+    # github_runner_repository_url: ""
+    
+    # Runner token should be provided via command line or vault
+    # Get token from: https://github.com/OWNER/REPO/settings/actions/runners/new
+    # Or generate via GitHub API
+    # Example: -e "github_runner_token=YOUR_TOKEN"
+    # github_runner_token: ""
+    
+    # Runner configuration
+    github_runner_name: "{{ ansible_hostname }}-tailscale-runner"
+    github_runner_labels: "self-hosted,linux,x64,tailscale,kubernetes,k3s"
+    github_runner_user: "github-runner"
+
+  pre_tasks:
+    - name: Verify Tailscale is installed and running
+      ansible.builtin.systemd:
+        name: tailscaled
+        state: started
+      register: tailscale_service
+
+    - name: Fail if Tailscale is not running
+      ansible.builtin.fail:
+        msg: "Tailscale must be installed and running. Run setup-tailscale.yaml first."
+      when: tailscale_service.status.ActiveState != "active"
+
+    - name: Verify k3s is installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Fail if k3s is not installed
+      ansible.builtin.fail:
+        msg: "k3s must be installed. Run deploy-k3s.yaml first."
+      when: not k3s_binary.stat.exists
+
+    - name: Check if kubeconfig exists
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/k3s.yaml
+      register: kubeconfig_exists
+
+    - name: Display prerequisites status
+      ansible.builtin.debug:
+        msg:
+          - "✓ Tailscale is running"
+          - "✓ k3s is installed"
+          - "✓ kubeconfig exists: {{ kubeconfig_exists.stat.exists }}"
+
+  roles:
+    - github-runner
+
+  post_tasks:
+    - name: Get Tailscale status
+      ansible.builtin.command: tailscale status --json
+      register: tailscale_status_json
+      changed_when: false
+
+    - name: Parse Tailscale control plane IP
+      ansible.builtin.set_fact:
+        control_plane_tailscale_ip: "{{ tailscale_status_json.stdout | from_json | json_query('Peer[?contains(HostName, `control`)] | [0].TailscaleIPs[0]') }}"
+      when: tailscale_status_json.stdout | length > 0
+
+    - name: Test connectivity to control plane via Tailscale
+      ansible.builtin.wait_for:
+        host: "{{ control_plane_tailscale_ip }}"
+        port: 6443
+        timeout: 10
+      when: control_plane_tailscale_ip is defined
+
+    - name: Test kubectl access
+      ansible.builtin.command: kubectl get nodes
+      become: true
+      become_user: "{{ github_runner_user }}"
+      register: kubectl_test
+      changed_when: false
+      environment:
+        KUBECONFIG: "/home/{{ github_runner_user }}/.kube/config"
+
+    - name: Display kubectl test results
+      ansible.builtin.debug:
+        var: kubectl_test.stdout_lines
+
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "========================================="
+          - "GitHub Actions Runner Setup Complete"
+          - "========================================="
+          - ""
+          - "Runner Name: {{ github_runner_name }}"
+          - "Runner Labels: {{ github_runner_labels }}"
+          - "Control Plane IP (Tailscale): {{ control_plane_tailscale_ip | default('unknown') }}"
+          - ""
+          - "The runner is now registered and ready to execute workflows."
+          - "It has access to the Kubernetes cluster via Tailscale."
+          - ""
+          - "To use this runner in workflows, add to your workflow YAML:"
+          - "  runs-on: [self-hosted, tailscale]"
+          - ""
+          - "Verify the runner status at:"
+          - "  https://github.com/{{ github_runner_repository_url.split('/')[-2] }}/{{ github_runner_repository_url.split('/')[-1] }}/settings/actions/runners"
+          - "========================================="

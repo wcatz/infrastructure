@@ -118,7 +118,10 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 ### GitHub Actions
 - `helmfile-diff.yaml`: Preview changes on PRs
 - `helmfile-apply.yaml`: Manual Helmfile deployment with SOPS/age integration
+- `helmfile-apply-self-hosted.yaml`: Deployment using self-hosted runner with Tailscale
+- `test-self-hosted-runner.yaml`: Test and validate self-hosted runner connectivity
 - `cloudflared-setup.yaml`: Cloudflared tunnel configuration
+- **Self-Hosted Runner**: GitHub Actions runner with Tailscale access to control plane behind CGNAT
 
 ## Environment Management
 
@@ -136,6 +139,7 @@ helmfile -e prod apply
 - [Helmfile README](helmfile/README.md)
 - [Tailscale Setup](TAILSCALE_SETUP.md)
 - [Hybrid Cluster Setup](HYBRID_CLUSTER_SETUP.md)
+- [GitHub Actions Runner Setup](GITHUB_RUNNER_SETUP.md)
 - [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md)
 - [Secrets Management](SECRETS.md)
 - [Testing Guide](TESTING.md)

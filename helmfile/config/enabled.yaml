@@ -11,6 +11,7 @@ enabled:
   grafana: true
   externalSecrets: true
   tailscaleOperator: true  # Tailscale mesh networking
+  githubRunner: false  # GitHub Actions self-hosted runner with Tailscale (disabled by default)
 
   # LEGACY/OPTIONAL: HAProxy Ingress Controller
   # Disabled by default - current architecture uses Cloudflared for HTTP/S ingress

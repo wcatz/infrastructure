@@ -138,3 +138,20 @@ releases:
           - "-f"
           - "https://github.com/cert-manager/cert-manager/releases/download/v1.13.3/cert-manager.crds.yaml"
 {{- end }}
+
+{{- if $enabled.githubRunner | default false }}
+  - name: github-runner
+    namespace: github-runner
+    createNamespace: true
+    chart: ./charts/github-runner
+    values:
+      - values/github-runner-values.yaml
+      # Environment-specific overrides
+      {{- if eq $env "dev" }}
+      - environments/dev/github-runner-values.yaml
+      {{- else if eq $env "staging" }}
+      - environments/staging/github-runner-values.yaml
+      {{- else if eq $env "prod" }}
+      - environments/prod/github-runner-values.yaml
+      {{- end }}
+{{- end }}
