@@ -46,24 +46,6 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.haproxyIngress | default true }}
-  - name: haproxy-ingress
-    namespace: haproxy-ingress
-    createNamespace: true
-    chart: haproxy-ingress/haproxy-ingress
-    version: 0.14.6
-    values:
-      - values/haproxy-ingress.yaml
-      # Environment-specific overrides
-      {{- if eq $env "dev" }}
-      - environments/dev/haproxy-ingress.yaml
-      {{- else if eq $env "staging" }}
-      - environments/staging/haproxy-ingress.yaml
-      {{- else if eq $env "prod" }}
-      - environments/prod/haproxy-ingress.yaml
-      {{- end }}
-{{- end }}
-
 {{- if $enabled.cloudflared | default false }}
   - name: cloudflared
     namespace: cloudflare
