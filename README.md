@@ -108,6 +108,31 @@ wget https://github.com/FiloSottile/age/releases/latest/download/age-latest-linu
 tar xzf age-latest-linux-amd64.tar.gz && sudo mv age/age* /usr/local/bin/
 ```
 
+### Validate Prerequisites
+
+After installing the required tools, validate your environment before proceeding:
+
+```bash
+# Run the prerequisite validation script
+./scripts/validate-prereqs.sh
+```
+
+The validation script checks:
+- **Required Tools**: Verifies installation of ansible, kubectl, helm, helmfile, sops, age, and other dependencies
+- **Credentials**: Checks for Ansible vault files, SOPS age keys, Cloudflare tokens, and Tailscale authentication
+- **Connectivity**: Tests access to Kubernetes cluster, Tailscale network, container registries, and external services
+
+**Expected Output**:
+- ✅ Green checkmarks indicate successful checks
+- ⚠️  Yellow warnings indicate optional components or recommended configurations
+- ❌ Red errors indicate missing required components that must be resolved
+
+If validation fails, follow the instructions in the output and refer to:
+- [DEPLOYMENT_AUDIT.md](DEPLOYMENT_AUDIT.md) - Tool installation steps
+- [SECRETS.md](SECRETS.md) - Credential and secret management
+- [TAILSCALE_SETUP.md](TAILSCALE_SETUP.md) - Tailscale configuration
+- [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md) - Cloudflare tunnel setup
+
 ## Quick Setup
 
 ### 1. Deploy k3s Cluster
