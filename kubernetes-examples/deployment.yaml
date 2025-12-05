@@ -1,0 +1,135 @@
+---
+# Example Kubernetes Deployment
+#
+# This is a modular template for deploying applications to the hybrid K8s cluster.
+# Workloads will be scheduled on worker nodes only (control plane is tainted).
+#
+# Usage:
+#   1. Copy this file and customize for your application
+#   2. Update image, replicas, resources, and environment variables
+#   3. Apply: kubectl apply -f your-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-app
+  namespace: default
+  labels:
+    app: example-app
+    environment: production
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: example-app
+  template:
+    metadata:
+      labels:
+        app: example-app
+        environment: production
+    spec:
+      # Pod will be scheduled on worker nodes only (control plane is tainted)
+      # No explicit nodeSelector needed - taint prevents scheduling on control plane
+
+      # Optional: Specify node selector for specific worker nodes
+      # nodeSelector:
+      #   node-role: worker
+
+      # Optional: Pod anti-affinity for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - example-app
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: app
+          image: nginx:1.25-alpine
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+
+          # Resource requests and limits
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+          # Environment variables
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: LOG_LEVEL
+              value: "info"
+
+          # Optional: Secrets from Kubernetes secrets
+          # envFrom:
+          #   - secretRef:
+          #       name: app-secrets
+
+          # Liveness probe
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness probe
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          # Security context
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+
+          # Volume mounts
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+            - name: run
+              mountPath: /var/run
+
+      # Volumes
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+
+      # Security context for the pod
+      securityContext:
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault

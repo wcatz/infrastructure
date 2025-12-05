@@ -58,6 +58,34 @@
   when: k3s_agent_enabled
   notify: Restart k3s
 
+- name: Wait for node to be ready
+  ansible.builtin.shell: |
+    kubectl wait --for=condition=Ready node/$(hostname) --timeout=300s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: k3s_server_enabled or k3s_agent_enabled
+  register: node_ready
+  until: node_ready.rc == 0
+  retries: 5
+  delay: 10
+  changed_when: false
+
+- name: Apply control plane taint (no workloads on control plane)
+  ansible.builtin.shell: |
+    kubectl taint nodes $(hostname) node-role.kubernetes.io/control-plane=:NoSchedule --overwrite
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: k3s_server_enabled and (k3s_node_taint | default(false))
+  changed_when: true
+
+- name: Label worker nodes
+  ansible.builtin.shell: |
+    kubectl label nodes $(hostname) {{ k3s_node_label }} --overwrite
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: k3s_agent_enabled and k3s_node_label is defined
+  changed_when: true
+
 - name: Verify k3s installation
   ansible.builtin.command: k3s --version
   register: k3s_version_output

@@ -1,0 +1,311 @@
+name: Setup Cloudflared Tunnel
+
+'on':
+  workflow_dispatch:
+    inputs:
+      tunnel_name:
+        description: 'Tunnel name (e.g., mycompany-prod-tunnel)'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      hostnames:
+        description: 'Comma-separated hostnames to route (e.g., app.example.com,api.example.com)'
+        required: true
+        type: string
+
+jobs:
+  setup-tunnel:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate inputs
+        run: |
+          echo "Setting up Cloudflared tunnel"
+          echo "Tunnel name: ${{ github.event.inputs.tunnel_name }}"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Hostnames: ${{ github.event.inputs.hostnames }}"
+
+          # Validate tunnel name format
+          if [[ ! "${{ github.event.inputs.tunnel_name }}" =~ ^[a-z0-9-]+$ ]]; then
+            echo "❌ Error: Tunnel name must contain only lowercase letters, numbers, and hyphens"
+            exit 1
+          fi
+
+          # Validate hostnames
+          IFS=',' read -ra HOSTS <<< "${{ github.event.inputs.hostnames }}"
+          for host in "${HOSTS[@]}"; do
+            if [[ ! "$host" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+              echo "❌ Error: Invalid hostname format: $host"
+              exit 1
+            fi
+          done
+
+          echo "✅ Input validation passed"
+
+      - name: Install Cloudflared
+        run: |
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared-linux-amd64
+          sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
+          cloudflared --version
+
+      - name: Authenticate with Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "❌ Error: CLOUDFLARE_API_TOKEN secret not set"
+            echo "Please create an API token at: https://dash.cloudflare.com/profile/api-tokens"
+            echo "Required permissions: Zone.DNS (Edit), Account.Cloudflare Tunnel (Edit)"
+            exit 1
+          fi
+
+          echo "✅ Cloudflare credentials configured"
+
+      - name: Create Cloudflare Tunnel
+        id: create-tunnel
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "Creating tunnel: ${{ github.event.inputs.tunnel_name }}"
+
+          # This is a placeholder - actual tunnel creation requires cloudflared login
+          # In production, tunnels should be created manually or via Terraform
+          echo "⚠️  Note: Tunnel creation must be done manually or via Terraform"
+          echo ""
+          echo "To create the tunnel manually:"
+          echo "1. Run: cloudflared tunnel login"
+          echo "2. Run: cloudflared tunnel create ${{ github.event.inputs.tunnel_name }}"
+          echo "3. Save the credentials file: ~/.cloudflared/<TUNNEL-ID>.json"
+          echo "4. Store credentials in Kubernetes secret (see next steps)"
+
+          # For demo purposes, we'll simulate having a tunnel
+          TUNNEL_ID="demo-tunnel-id-$(date +%s)"
+          echo "tunnel_id=$TUNNEL_ID" >> $GITHUB_OUTPUT
+          echo "tunnel_name=${{ github.event.inputs.tunnel_name }}" >> $GITHUB_OUTPUT
+
+      - name: Generate Configuration
+        id: generate-config
+        run: |
+          mkdir -p /tmp/cloudflared-config
+
+          # Generate Helmfile values configuration
+          cat > /tmp/cloudflared-config/values.yaml <<EOF
+          # Cloudflared Tunnel Configuration
+          # Generated for: ${{ github.event.inputs.tunnel_name }}
+          # Environment: ${{ github.event.inputs.environment }}
+
+          replicaCount: 2
+
+          cloudflare:
+            tunnelName: "${{ github.event.inputs.tunnel_name }}"
+            tunnelId: "${{ steps.create-tunnel.outputs.tunnel_id }}"
+
+          ingress:
+          EOF
+
+          # Add ingress rules for each hostname
+          IFS=',' read -ra HOSTS <<< "${{ github.event.inputs.hostnames }}"
+          for host in "${HOSTS[@]}"; do
+            cat >> /tmp/cloudflared-config/values.yaml <<EOF
+            - hostname: $host
+              service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+          EOF
+          done
+
+          # Add catch-all rule
+          cat >> /tmp/cloudflared-config/values.yaml <<EOF
+            - service: http_status:404
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+          autoscaling:
+            enabled: true
+            minReplicas: 2
+            maxReplicas: 10
+            targetCPUUtilizationPercentage: 80
+          EOF
+
+          echo "✅ Generated Cloudflared values configuration"
+          cat /tmp/cloudflared-config/values.yaml
+
+      - name: Generate DNS Configuration
+        run: |
+          mkdir -p /tmp/cloudflared-config
+
+          cat > /tmp/cloudflared-config/dns-setup.sh <<'EOF'
+          #!/bin/bash
+          # DNS Setup Script for Cloudflared Tunnel
+          # Run this script to create DNS records for your tunnel
+
+          set -e
+
+          TUNNEL_ID="${{ steps.create-tunnel.outputs.tunnel_id }}"
+          TUNNEL_NAME="${{ github.event.inputs.tunnel_name }}"
+
+          echo "Setting up DNS records for tunnel: $TUNNEL_NAME"
+          echo "Tunnel ID: $TUNNEL_ID"
+          echo ""
+
+          # Parse hostnames
+          IFS=',' read -ra HOSTS <<< "${{ github.event.inputs.hostnames }}"
+
+          for host in "${HOSTS[@]}"; do
+            echo "Creating DNS record for: $host"
+            echo "  Command: cloudflared tunnel route dns $TUNNEL_NAME $host"
+            # Uncomment to actually create DNS records:
+            # cloudflared tunnel route dns "$TUNNEL_NAME" "$host"
+          done
+
+          echo ""
+          echo "✅ DNS setup commands generated"
+          echo "Uncomment the cloudflared commands in this script to execute them"
+          EOF
+
+          chmod +x /tmp/cloudflared-config/dns-setup.sh
+
+          echo "✅ Generated DNS setup script"
+          cat /tmp/cloudflared-config/dns-setup.sh
+
+      - name: Generate Kubernetes Secret Command
+        run: |
+          cat > /tmp/cloudflared-config/create-secret.sh <<'EOF'
+          #!/bin/bash
+          # Create Kubernetes Secret for Cloudflared Tunnel Credentials
+
+          set -e
+
+          TUNNEL_ID="${{ steps.create-tunnel.outputs.tunnel_id }}"
+          CREDENTIALS_FILE="$HOME/.cloudflared/${TUNNEL_ID}.json"
+
+          echo "Creating Kubernetes secret for Cloudflared tunnel credentials"
+          echo ""
+
+          # Check if credentials file exists
+          if [ ! -f "$CREDENTIALS_FILE" ]; then
+            echo "❌ Error: Credentials file not found: $CREDENTIALS_FILE"
+            echo ""
+            echo "Please create the tunnel first:"
+            echo "  cloudflared tunnel login"
+            echo "  cloudflared tunnel create ${{ github.event.inputs.tunnel_name }}"
+            exit 1
+          fi
+
+          # Create namespace if it doesn't exist
+          kubectl create namespace cloudflare --dry-run=client -o yaml | kubectl apply -f -
+
+          # Create secret
+          kubectl create secret generic cloudflared-credentials \
+            --from-file=credentials.json="$CREDENTIALS_FILE" \
+            -n cloudflare \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "✅ Secret created successfully"
+          echo ""
+          echo "Verify with: kubectl get secret cloudflared-credentials -n cloudflare"
+          EOF
+
+          chmod +x /tmp/cloudflared-config/create-secret.sh
+
+          echo "✅ Generated Kubernetes secret creation script"
+          cat /tmp/cloudflared-config/create-secret.sh
+
+      - name: Summary and Next Steps
+        run: |
+          echo "# Cloudflared Tunnel Setup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Configuration Generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tunnel Name**: \`${{ github.event.inputs.tunnel_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: \`${{ github.event.inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Hostnames**: \`${{ github.event.inputs.hostnames }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 1. Create the Tunnel" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "cloudflared tunnel login" >> $GITHUB_STEP_SUMMARY
+          echo "cloudflared tunnel create ${{ github.event.inputs.tunnel_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 2. Configure DNS Records" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          IFS=',' read -ra HOSTS <<< "${{ github.event.inputs.hostnames }}"
+          for host in "${HOSTS[@]}"; do
+            echo "cloudflared tunnel route dns ${{ github.event.inputs.tunnel_name }} $host" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 3. Create Kubernetes Secret" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl create namespace cloudflare" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl create secret generic cloudflared-credentials \\" >> $GITHUB_STEP_SUMMARY
+          echo "  --from-file=credentials.json=\$HOME/.cloudflared/<TUNNEL-ID>.json \\" >> $GITHUB_STEP_SUMMARY
+          echo "  -n cloudflare" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 4. Update Helmfile Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Update \`helmfile/values/cloudflared-values.yaml\`" \
+            >> $GITHUB_STEP_SUMMARY
+          echo "with the generated configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 5. Enable Cloudflared in Helmfile" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Edit \`helmfile/config/enabled.yaml\`:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`yaml" >> $GITHUB_STEP_SUMMARY
+          echo "enabled:" >> $GITHUB_STEP_SUMMARY
+          echo "  cloudflared: true" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 6. Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "cd helmfile" >> $GITHUB_STEP_SUMMARY
+          echo "helmfile apply" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Resources" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [Cloudflared Setup Guide](../helmfile/CLOUDFLARED_SETUP.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Hybrid Cluster Setup](../HYBRID_CLUSTER_SETUP.md)" >> $GITHUB_STEP_SUMMARY
+
+          # Also print to stdout
+          echo ""
+          echo "=================================================="
+          echo "Cloudflared Tunnel Setup Complete"
+          echo "=================================================="
+          echo ""
+          echo "✅ Configuration files generated"
+          echo "📝 Review the job summary for next steps"
+          echo ""
+          echo "Generated files (download from artifacts):"
+          echo "  - values.yaml: Helmfile configuration"
+          echo "  - dns-setup.sh: DNS configuration script"
+          echo "  - create-secret.sh: Kubernetes secret creation script"
+
+      - name: Upload Configuration Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflared-config-${{ github.event.inputs.tunnel_name }}
+          path: /tmp/cloudflared-config/
+          retention-days: 30
