@@ -1,55 +1,11 @@
 # Development Environment Inventory
-# Copy this file to inventory-dev.ini and customize for your dev environment
 
 [k3s_servers]
-k3s-dev-master-01 ansible_host=192.168.2.10 ansible_user=ubuntu hostname=k3s-dev-master-01
+k3s-dev-master ansible_host=192.168.2.10 ansible_user=ubuntu
 
 [k3s_agents]
-k3s-dev-worker-01 ansible_host=192.168.2.11 ansible_user=ubuntu hostname=k3s-dev-worker-01
-k3s-dev-worker-02 ansible_host=192.168.2.12 ansible_user=ubuntu hostname=k3s-dev-worker-02
-
-[haproxy_servers]
-haproxy-dev-01 ansible_host=192.168.2.5 ansible_user=ubuntu hostname=haproxy-dev-01
+k3s-dev-worker-01 ansible_host=192.168.2.11 ansible_user=ubuntu
+k3s-dev-worker-02 ansible_host=192.168.2.12 ansible_user=ubuntu
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3
-
-[k3s_servers:vars]
-domain=dev.k3s.example.com
-
-[k3s_agents:vars]
-domain=dev.k3s.example.com
-
-[haproxy_servers:vars]
-domain=lb.dev.example.com
-
-# HAProxy configuration for development
-# k3s worker nodes for backend pool
-k3s_workers:
-  - host: 192.168.2.11
-    name: dev-worker-01
-  - host: 192.168.2.12
-    name: dev-worker-02
-
-# Services to load balance (NodePort services)
-haproxy_services:
-  - name: mysql
-    frontend_port: 3306
-    backend_port: 30306
-    mode: tcp
-    balance: leastconn
-    check_interval: 2s
-    check_timeout: 1s
-  
-  - name: wireguard
-    frontend_port: 51820
-    backend_port: 30820
-    mode: tcp
-    balance: roundrobin
-    check_interval: 5s
-    check_timeout: 2s
-
-# Enable HAProxy stats interface
-haproxy_stats_enabled: true
-haproxy_stats_port: 8404
-haproxy_stats_uri: /stats

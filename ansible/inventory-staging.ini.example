@@ -1,69 +1,13 @@
 # Staging Environment Inventory
-# Copy this file to inventory-staging.ini and customize for your staging environment
 
 [k3s_servers]
-k3s-staging-master-01 ansible_host=192.168.3.10 ansible_user=ubuntu hostname=k3s-staging-master-01
-k3s-staging-master-02 ansible_host=192.168.3.11 ansible_user=ubuntu hostname=k3s-staging-master-02
-k3s-staging-master-03 ansible_host=192.168.3.12 ansible_user=ubuntu hostname=k3s-staging-master-03
+k3s-staging-master-01 ansible_host=192.168.3.10 ansible_user=ubuntu
+k3s-staging-master-02 ansible_host=192.168.3.11 ansible_user=ubuntu
 
 [k3s_agents]
-k3s-staging-worker-01 ansible_host=192.168.3.21 ansible_user=ubuntu hostname=k3s-staging-worker-01
-k3s-staging-worker-02 ansible_host=192.168.3.22 ansible_user=ubuntu hostname=k3s-staging-worker-02
-k3s-staging-worker-03 ansible_host=192.168.3.23 ansible_user=ubuntu hostname=k3s-staging-worker-03
-
-[haproxy_servers]
-haproxy-staging-01 ansible_host=192.168.3.5 ansible_user=ubuntu hostname=haproxy-staging-01
-haproxy-staging-02 ansible_host=192.168.3.6 ansible_user=ubuntu hostname=haproxy-staging-02
+k3s-staging-worker-01 ansible_host=192.168.3.21 ansible_user=ubuntu
+k3s-staging-worker-02 ansible_host=192.168.3.22 ansible_user=ubuntu
+k3s-staging-worker-03 ansible_host=192.168.3.23 ansible_user=ubuntu
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3
-
-[k3s_servers:vars]
-domain=staging.k3s.example.com
-
-[k3s_agents:vars]
-domain=staging.k3s.example.com
-
-[haproxy_servers:vars]
-domain=lb.staging.example.com
-
-# HAProxy configuration for staging
-# k3s worker nodes for backend pool
-k3s_workers:
-  - host: 192.168.3.21
-    name: staging-worker-01
-  - host: 192.168.3.22
-    name: staging-worker-02
-  - host: 192.168.3.23
-    name: staging-worker-03
-
-# Services to load balance (NodePort services)
-haproxy_services:
-  - name: mysql
-    frontend_port: 3306
-    backend_port: 30306
-    mode: tcp
-    balance: leastconn
-    check_interval: 2s
-    check_timeout: 1s
-  
-  - name: postgres
-    frontend_port: 5432
-    backend_port: 30432
-    mode: tcp
-    balance: leastconn
-    check_interval: 2s
-    check_timeout: 1s
-  
-  - name: wireguard
-    frontend_port: 51820
-    backend_port: 30820
-    mode: tcp
-    balance: roundrobin
-    check_interval: 5s
-    check_timeout: 2s
-
-# Enable HAProxy stats interface
-haproxy_stats_enabled: true
-haproxy_stats_port: 8404
-haproxy_stats_uri: /stats

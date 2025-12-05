@@ -1,89 +1,16 @@
 # Production Environment Inventory
-# Copy this file to inventory-prod.ini and customize for your production environment
 
 [k3s_servers]
-k3s-prod-master-01 ansible_host=192.168.1.10 ansible_user=ubuntu hostname=k3s-prod-master-01
-k3s-prod-master-02 ansible_host=192.168.1.11 ansible_user=ubuntu hostname=k3s-prod-master-02
-k3s-prod-master-03 ansible_host=192.168.1.12 ansible_user=ubuntu hostname=k3s-prod-master-03
+k3s-prod-master-01 ansible_host=192.168.1.10 ansible_user=ubuntu
+k3s-prod-master-02 ansible_host=192.168.1.11 ansible_user=ubuntu
+k3s-prod-master-03 ansible_host=192.168.1.12 ansible_user=ubuntu
 
 [k3s_agents]
-k3s-prod-worker-01 ansible_host=192.168.1.21 ansible_user=ubuntu hostname=k3s-prod-worker-01
-k3s-prod-worker-02 ansible_host=192.168.1.22 ansible_user=ubuntu hostname=k3s-prod-worker-02
-k3s-prod-worker-03 ansible_host=192.168.1.23 ansible_user=ubuntu hostname=k3s-prod-worker-03
-k3s-prod-worker-04 ansible_host=192.168.1.24 ansible_user=ubuntu hostname=k3s-prod-worker-04
-k3s-prod-worker-05 ansible_host=192.168.1.25 ansible_user=ubuntu hostname=k3s-prod-worker-05
-
-[haproxy_servers]
-haproxy-prod-01 ansible_host=192.168.1.5 ansible_user=ubuntu hostname=haproxy-prod-01
-haproxy-prod-02 ansible_host=192.168.1.6 ansible_user=ubuntu hostname=haproxy-prod-02
+k3s-prod-worker-01 ansible_host=192.168.1.21 ansible_user=ubuntu
+k3s-prod-worker-02 ansible_host=192.168.1.22 ansible_user=ubuntu
+k3s-prod-worker-03 ansible_host=192.168.1.23 ansible_user=ubuntu
+k3s-prod-worker-04 ansible_host=192.168.1.24 ansible_user=ubuntu
+k3s-prod-worker-05 ansible_host=192.168.1.25 ansible_user=ubuntu
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3
-
-[k3s_servers:vars]
-domain=k3s.example.com
-
-[k3s_agents:vars]
-domain=k3s.example.com
-
-[haproxy_servers:vars]
-domain=lb.example.com
-
-# HAProxy configuration for production
-# k3s worker nodes for backend pool
-k3s_workers:
-  - host: 192.168.1.21
-    name: prod-worker-01
-  - host: 192.168.1.22
-    name: prod-worker-02
-  - host: 192.168.1.23
-    name: prod-worker-03
-  - host: 192.168.1.24
-    name: prod-worker-04
-  - host: 192.168.1.25
-    name: prod-worker-05
-
-# Services to load balance (NodePort services)
-haproxy_services:
-  - name: mysql
-    frontend_port: 3306
-    backend_port: 30306
-    mode: tcp
-    balance: leastconn
-    check_interval: 2s
-    check_timeout: 1s
-  
-  - name: postgres
-    frontend_port: 5432
-    backend_port: 30432
-    mode: tcp
-    balance: leastconn
-    check_interval: 2s
-    check_timeout: 1s
-  
-  - name: redis
-    frontend_port: 6379
-    backend_port: 30379
-    mode: tcp
-    balance: leastconn
-    check_interval: 2s
-    check_timeout: 1s
-  
-  - name: wireguard
-    frontend_port: 51820
-    backend_port: 30820
-    mode: tcp
-    balance: roundrobin
-    check_interval: 5s
-    check_timeout: 2s
-
-# Enable HAProxy stats interface
-haproxy_stats_enabled: true
-haproxy_stats_port: 8404
-haproxy_stats_uri: /stats
-
-# Production-specific tuning
-haproxy_global_maxconn: 8192
-haproxy_defaults_timeout_connect: 10s
-haproxy_defaults_timeout_client: 60s
-haproxy_defaults_timeout_server: 60s

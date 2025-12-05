@@ -59,6 +59,21 @@ jobs:
         with:
           version: 'v1.28.0'
 
+      - name: Setup SOPS
+        run: |
+          # Install SOPS for secret decryption
+          wget -O /usr/local/bin/sops https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+          chmod +x /usr/local/bin/sops
+          sops --version
+
+      - name: Configure SOPS Age Key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+
       - name: Configure Kubernetes Context
         run: |
           # This is a placeholder for configuring kubectl context

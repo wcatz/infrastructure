@@ -1,38 +1,17 @@
 # Ansible Inventory Example
-# Copy this file and customize for your environment
 
 [k3s_servers]
-# k3s server nodes (control plane)
-# Example:
-# k3s-server-01 ansible_host=192.168.1.10 ansible_user=ubuntu hostname=k3s-master-01
+# k3s control plane nodes
+# k3s-server-01 ansible_host=192.168.1.10 ansible_user=ubuntu
 
 [k3s_agents]
-# k3s agent nodes (workers)
-# Example:
-# k3s-agent-01 ansible_host=192.168.1.11 ansible_user=ubuntu hostname=k3s-worker-01
-# k3s-agent-02 ansible_host=192.168.1.12 ansible_user=ubuntu hostname=k3s-worker-02
-
-[haproxy_servers]
-# HAProxy TCP/UDP load balancer servers
-# Example:
-# haproxy-01 ansible_host=192.168.1.5 ansible_user=ubuntu hostname=haproxy-lb-01
+# k3s worker nodes
+# k3s-agent-01 ansible_host=192.168.1.11 ansible_user=ubuntu
+# k3s-agent-02 ansible_host=192.168.1.12 ansible_user=ubuntu
 
 [all:vars]
-# Common variables for all hosts
-# ansible_python_interpreter=/usr/bin/python3
+ansible_python_interpreter=/usr/bin/python3
 
-# Tailscale configuration (set in group_vars/all.yml or vault)
-# tailscale_auth_key=tskey-auth-xxxxx-yyyyy
-# tailscale_args=--accept-routes --advertise-exit-node=false
-
-[k3s_servers:vars]
-# Common variables for k3s servers
-# domain=k3s.example.com
-
-[k3s_agents:vars]
-# Common variables for k3s agents
-# domain=k3s.example.com
-
-[haproxy_servers:vars]
-# Common variables for HAProxy servers
-# domain=lb.example.com
+# Tailscale configuration (optional)
+# tailscale_auth_key=tskey-auth-xxxxx
+# tailscale_args=--accept-routes

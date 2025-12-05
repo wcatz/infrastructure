@@ -1,117 +1,21 @@
 ---
 # k3s Deployment Playbook
-# This playbook deploys k3s without Traefik for HAProxy ingress
+# Deploys k3s without Traefik (HAProxy will be the ingress controller)
 
 - name: Deploy k3s Server
   hosts: k3s_servers
   become: true
-
   roles:
     - k3s
-
   vars:
     k3s_server_enabled: true
     k3s_agent_enabled: false
 
-  post_tasks:
-    - name: Wait for k3s to be ready
-      ansible.builtin.wait_for:
-        path: /etc/rancher/k3s/k3s.yaml
-        state: present
-        timeout: 300
-
-    - name: Create kubeconfig directory for current user
-      ansible.builtin.file:
-        path: "{{ ansible_env.HOME }}/.kube"
-        state: directory
-        mode: '0755'
-      become: false
-
-    - name: Copy kubeconfig to user directory
-      ansible.builtin.copy:
-        src: /etc/rancher/k3s/k3s.yaml
-        dest: "{{ ansible_env.HOME }}/.kube/config"
-        remote_src: true
-        mode: '0600'
-        owner: "{{ ansible_user_id }}"
-        group: "{{ ansible_user_gid }}"
-
 - name: Deploy k3s Agents
   hosts: k3s_agents
   become: true
-
   roles:
     - k3s
-
   vars:
     k3s_server_enabled: false
     k3s_agent_enabled: true
-
-- name: Seed Initial Secrets (Optional)
-  hosts: k3s_servers[0]
-  become: true
-  vars:
-    seed_secrets: false  # Set to true to seed secrets from SOPS-encrypted files
-    secrets_dir: "../secrets"  # Path to directory containing encrypted secrets
-  
-  tasks:
-    - name: Check if SOPS is available
-      ansible.builtin.command: which sops
-      register: sops_check
-      failed_when: false
-      changed_when: false
-      when: seed_secrets | bool
-
-    - name: Install SOPS if not present
-      block:
-        - name: Download SOPS
-          ansible.builtin.get_url:
-            url: https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
-            dest: /usr/local/bin/sops
-            mode: '0755'
-          when: sops_check.rc != 0
-      when: seed_secrets | bool
-
-    - name: Find encrypted secret files
-      ansible.builtin.find:
-        paths: "{{ secrets_dir }}"
-        patterns: "*.yaml"
-        recurse: yes
-      delegate_to: localhost
-      become: false
-      register: secret_files
-      when: seed_secrets | bool
-
-    - name: Decrypt and apply secrets to cluster
-      block:
-        - name: Copy encrypted secret to server
-          ansible.builtin.copy:
-            src: "{{ item.path }}"
-            dest: "/tmp/{{ item.path | basename }}"
-            mode: '0600'
-          loop: "{{ secret_files.files }}"
-          when: secret_files.matched > 0
-
-        - name: Decrypt and apply secrets with kubectl
-          ansible.builtin.shell: |
-            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-            sops -d /tmp/{{ item.path | basename }} | kubectl apply -f -
-          loop: "{{ secret_files.files }}"
-          when: secret_files.matched > 0
-          register: apply_secrets
-          failed_when: false
-
-        - name: Display secret deployment results
-          ansible.builtin.debug:
-            var: apply_secrets
-          when: apply_secrets is defined
-
-        - name: Clean up temporary secret files
-          ansible.builtin.file:
-            path: "/tmp/{{ item.path | basename }}"
-            state: absent
-          loop: "{{ secret_files.files }}"
-          when: secret_files.matched > 0
-      when: seed_secrets | bool
-      environment:
-        SOPS_AGE_KEY_FILE: "{{ ansible_env.HOME }}/.config/sops/age/keys.txt"
