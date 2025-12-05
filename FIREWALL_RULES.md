@@ -124,7 +124,6 @@ Worker nodes have public IPs and run all application workloads. They expose serv
 
 | Source | Port/Protocol | Purpose | Required |
 |--------|--------------|---------|----------|
-| Tailscale network (100.64.0.0/10) | 6443/tcp | Kubernetes API (service discovery, pod lifecycle) | ✅ Yes |
 | Tailscale network (100.64.0.0/10) | 10250/tcp | Kubelet API | ✅ Yes |
 | Tailscale network (100.64.0.0/10) | 41641/udp | Tailscale WireGuard | ✅ Yes |
 | 0.0.0.0/0 (Public) | 30000-32767/tcp | NodePort services | ⚠️ As needed per service |
@@ -525,7 +524,11 @@ elif [ -f /etc/redhat-release ]; then
     service iptables save
 else
     # Create directory if it doesn't exist
-    mkdir -p /etc/iptables
+    if ! mkdir -p /etc/iptables; then
+        echo "❌ Failed to create /etc/iptables directory"
+        echo "⚠️  You may need to run this script with sudo"
+        exit 1
+    fi
     iptables-save > /etc/iptables/rules.v4
     echo "⚠️  Rules saved to /etc/iptables/rules.v4"
     echo "⚠️  To restore on boot, install iptables-persistent: apt install iptables-persistent"
@@ -597,7 +600,15 @@ if command -v netfilter-persistent &> /dev/null; then
 elif [ -f /etc/redhat-release ]; then
     service iptables save
 else
+    # Create directory if it doesn't exist
+    if ! mkdir -p /etc/iptables; then
+        echo "❌ Failed to create /etc/iptables directory"
+        echo "⚠️  You may need to run this script with sudo"
+        exit 1
+    fi
     iptables-save > /etc/iptables/rules.v4
+    echo "⚠️  Rules saved to /etc/iptables/rules.v4"
+    echo "⚠️  To restore on boot, install iptables-persistent: apt install iptables-persistent"
 fi
 
 echo "⚠️  Remember to add specific NodePort rules for your services"
