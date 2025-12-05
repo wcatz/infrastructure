@@ -1,0 +1,113 @@
+---
+# Example ConfigMap
+#
+# ConfigMaps store non-sensitive configuration data as key-value pairs.
+# Use ConfigMaps for application configuration, not secrets.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: example-app-config
+  namespace: default
+  labels:
+    app: example-app
+data:
+  # Simple key-value pairs
+  environment: "production"
+  log_level: "info"
+  api_url: "https://api.example.com"
+
+  # Multi-line configuration files
+  app.conf: |
+    server {
+      listen 80;
+      server_name app.example.com;
+
+      location / {
+        proxy_pass http://backend:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+      }
+    }
+
+  database.conf: |
+    [database]
+    host = postgres.default.svc.cluster.local
+    port = 5432
+    database = myapp
+    # Credentials should be in a Secret, not ConfigMap
+
+  features.json: |
+    {
+      "featureFlags": {
+        "newUI": true,
+        "betaFeatures": false,
+        "analytics": true
+      },
+      "limits": {
+        "maxConnections": 100,
+        "requestTimeout": 30
+      }
+    }
+
+---
+# Using ConfigMap in a Deployment
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-app-with-config
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: example-app-with-config
+  template:
+    metadata:
+      labels:
+        app: example-app-with-config
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.25-alpine
+
+          # Method 1: Use ConfigMap as environment variables
+          envFrom:
+            - configMapRef:
+                name: example-app-config
+
+          # Method 2: Use specific keys as environment variables
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: example-app-config
+                  key: environment
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: example-app-config
+                  key: log_level
+
+          # Method 3: Mount ConfigMap as files
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+            - name: app-config
+              mountPath: /etc/nginx/conf.d/app.conf
+              subPath: app.conf
+
+      volumes:
+        # Mount entire ConfigMap as directory
+        - name: config-volume
+          configMap:
+            name: example-app-config
+
+        # Mount specific key as file
+        - name: app-config
+          configMap:
+            name: example-app-config
+            items:
+              - key: app.conf
+                path: app.conf
