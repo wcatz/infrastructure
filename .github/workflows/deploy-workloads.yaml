@@ -78,8 +78,8 @@ jobs:
 
       - name: Deploy Cardano Node
         if: |
-          ${{ github.event.inputs.workload == 'cardano-node' ||
-          github.event.inputs.workload == 'all' }}
+          github.event.inputs.workload == 'cardano-node' ||
+          github.event.inputs.workload == 'all'
         run: |
           echo "Deploying Cardano node workload..."
           kubectl apply -f helmfile/manifests/workloads/cardano-node.yaml

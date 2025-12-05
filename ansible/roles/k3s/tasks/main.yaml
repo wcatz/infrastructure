@@ -12,7 +12,7 @@
     INSTALL_K3S_VERSION={{ k3s_version }} \
     K3S_TOKEN={{ k3s_token | default('') }} \
     sh /tmp/k3s-install.sh server {{ k3s_server_args | join(' ') }} \
-    {% if k3s_node_labels | length > 0 %}--node-label={{ k3s_node_labels | join(',') }}{% endif %}
+    {% if k3s_node_labels | length > 0 %}{% for label in k3s_node_labels %}--node-label={{ label }} {% endfor %}{% endif %}
   args:
     creates: /usr/local/bin/k3s
   when: k3s_server_enabled
@@ -54,7 +54,7 @@
     K3S_URL=https://{{ hostvars[groups['k3s_servers'][0]]['ansible_host'] }}:6443 \
     K3S_TOKEN={{ k3s_token }} \
     sh /tmp/k3s-install.sh agent \
-    {% if k3s_node_labels | length > 0 %}--node-label={{ k3s_node_labels | join(',') }}{% endif %}
+    {% if k3s_node_labels | length > 0 %}{% for label in k3s_node_labels %}--node-label={{ label }} {% endfor %}{% endif %}
   args:
     creates: /usr/local/bin/k3s
   when: k3s_agent_enabled

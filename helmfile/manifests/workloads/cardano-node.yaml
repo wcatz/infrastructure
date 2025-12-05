@@ -121,6 +121,9 @@ spec:
               memory: 16Gi
 
           # Liveness probe to check if node is responsive
+          # Note: Adjust the cardano-cli command based on your network
+          # For mainnet: cardano-cli query tip --mainnet
+          # For testnet: cardano-cli query tip --testnet-magic <MAGIC>
           livenessProbe:
             exec:
               command:
