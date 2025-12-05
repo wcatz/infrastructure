@@ -5,11 +5,11 @@ GitOps-based infrastructure for k3s clusters with Cloudflare tunnels, Tailscale 
 ## Stack
 
 - **k3s**: Lightweight Kubernetes
-- **HAProxy Ingress**: HTTP/HTTPS ingress controller
+- **HAProxy Ingress**: HTTP/HTTPS via NodePort (ports 30080/30443)
 - **Cloudflared**: Secure tunnel to Cloudflare
 - **Tailscale**: VPN on hosts + Kubernetes operator
 - **Prometheus/Grafana**: Monitoring
-- **SOPS**: Secret encryption for GitOps
+- **SOPS**: Secret encryption (age-based)
 
 ## Quick Setup
 
@@ -33,18 +33,13 @@ sed -i 's/127.0.0.1/YOUR_SERVER_IP/' ~/.kube/config
 
 ```bash
 cd helmfile
-
-# Review and enable services
-vim config/enabled.yaml
-
-# Deploy all enabled services
 helmfile apply
 ```
 
 ### 3. Setup Secrets with SOPS
 
 ```bash
-# Install age and sops
+# Install tools
 brew install age sops
 
 # Generate age key
@@ -56,59 +51,50 @@ creation_rules:
   - age: YOUR_PUBLIC_KEY
 EOY
 
-# Encrypt secrets
+# Encrypt and deploy secrets
 sops -e secrets/example.yaml > secrets/example.enc.yaml
-
-# Deploy secrets
 sops -d secrets/example.enc.yaml | kubectl apply -f -
 ```
 
 ## Components
 
-### Ansible (`ansible/`)
+### Ansible
 - k3s deployment (Traefik disabled)
-- Tailscale VPN setup on hosts
-- System configuration
+- Tailscale VPN on hosts
 
-### Helmfile (`helmfile/`)
-- HAProxy Ingress Controller
+### Helmfile
+- HAProxy Ingress (NodePort 30080/30443)
 - Cloudflared tunnels
 - Tailscale Kubernetes Operator
-- Prometheus & Grafana monitoring
-- Environment-specific configs (dev/staging/prod)
+- Prometheus & Grafana
+- Environment configs (dev/staging/prod)
 
-### GitHub Actions (`.github/workflows/`)
+### GitHub Actions
 - `helmfile-diff.yaml`: Preview changes on PRs
-- `helmfile-apply.yaml`: Manual deployment workflow
+- `helmfile-apply.yaml`: Manual deployment
 
 ## Environment Management
 
-Override base configs per environment:
+Deploy to specific environments:
 
 ```bash
-# Deploy to specific environment
 helmfile -e dev apply
 helmfile -e staging apply
 helmfile -e prod apply
 ```
 
-Environment overrides in `helmfile/environments/{env}/`.
-
 ## Documentation
 
-- [Ansible README](ansible/README.md) - Playbook details
-- [Helmfile README](helmfile/README.md) - Release management
-- [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md) - Tunnel configuration
-- [Secrets Management](SECRETS.md) - SOPS and secret workflows
-- [Disaster Recovery](DISASTER_RECOVERY.md) - Backup and restore
-- [Testing Guide](TESTING.md) - Validation procedures
+- [Ansible README](ansible/README.md)
+- [Helmfile README](helmfile/README.md)
+- [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md)
+- [Secrets Management](SECRETS.md)
+- [Testing Guide](TESTING.md)
 
 ## Traffic Flow
 
 ```
-Internet → Cloudflare Tunnel → HAProxy Ingress → k3s Services
-                                      ↓
-                            Prometheus Monitoring
+Internet → External LB → NodePort 30080/30443 → HAProxy Ingress → Services
 ```
 
-Tailscale provides secure VPN access to infrastructure.
+Tailscale provides VPN access to infrastructure.

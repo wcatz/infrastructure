@@ -1,12 +1,5 @@
-# HAProxy Ingress Controller Helm Chart Values
-# These values configure the HAProxy Ingress Controller for HTTP/HTTPS traffic routing
-#
-# ARCHITECTURE:
-# - This HAProxy Ingress Controller handles HTTP/HTTPS traffic INSIDE Kubernetes
-# - It receives traffic from Cloudflared tunnel or direct ingress
-# - For NodePort TCP/UDP load balancing (MySQL, WireGuard, etc.), see:
-#   - External HAProxy deployment via Ansible (ansible/roles/haproxy)
-#   - Documentation: docs/haproxy-setup.md
+# HAProxy Ingress Controller - NodePort Configuration
+# Exposes HAProxy on each node for external load balancing
 
 controller:
   replicaCount: 2
@@ -19,13 +12,7 @@ controller:
       cpu: 200m
       memory: 256Mi
 
-  # HAProxy-specific configuration
   config:
-    # Timeout configurations
-    # Adjust these based on your application requirements:
-    # - Short timeouts (5-10s) for APIs
-    # - Long timeouts (60s+) for uploads/downloads
-    # - Very long timeouts (1h+) for WebSocket connections
     timeout-client: "50s"
     timeout-client-fin: "50s"
     timeout-connect: "5s"
@@ -34,44 +21,23 @@ controller:
     timeout-queue: "5s"
     timeout-server: "50s"
     timeout-server-fin: "50s"
-    timeout-tunnel: "1h"  # WebSocket and long-lived connections
-
-    # Keep-alive settings for connection pooling
+    timeout-tunnel: "1h"
     backend-check-interval: "2s"
     forwardfor: "add"
     maxconn-server: "1000"
-
-    # SSL/TLS settings
     ssl-redirect: "true"
 
   service:
-    # Service type configuration
-    # - ClusterIP: Accessible only from within cluster (recommended with Cloudflared)
-    # - NodePort: Expose on each node's IP at a static port (30000-32767)
-    # - LoadBalancer: Expose via cloud provider load balancer
-    type: ClusterIP
-
-    # For NodePort or LoadBalancer service types, uncomment and configure:
-    # type: NodePort
-    # nodePorts:
-    #   http: 30080
-    #   https: 30443
-    # externalTrafficPolicy: Local  # Preserve client source IP
-
-    # For cloud provider load balancers, add annotations:
-    annotations: {}
-    # AWS ALB example:
-    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    # service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
-
-    # Cloudflared tunnel connects directly to this ClusterIP service
-    # No external exposure needed when using Cloudflared
+    type: NodePort
+    nodePorts:
+      http: 30080
+      https: 30443
+    externalTrafficPolicy: Local
 
   metrics:
     enabled: true
     serviceMonitor:
       enabled: true
-      # Prometheus will automatically discover and scrape metrics
 
   autoscaling:
     enabled: true
@@ -79,8 +45,6 @@ controller:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 80
     targetMemoryUtilizationPercentage: 80
-    # Scales based on CPU and memory usage
-    # Adjust maxReplicas based on your traffic patterns
 
 defaultBackend:
   enabled: true
@@ -92,4 +56,3 @@ defaultBackend:
     limits:
       cpu: 20m
       memory: 40Mi
-  # Returns 404 for unmapped routes

@@ -92,20 +92,12 @@ releases:
       - values/external-secrets-values.yaml
 {{- end }}
 
-{{- if $enabled.velero | default false }}
-  - name: velero
-    namespace: velero
+{{- if $enabled.tailscaleOperator | default false }}
+  - name: tailscale-operator
+    namespace: tailscale
     createNamespace: true
-    chart: vmware-tanzu/velero
-    version: 5.2.0
+    chart: tailscale/tailscale-operator
+    version: 1.56.1
     values:
-      - values/velero-values.yaml
-      # Environment-specific overrides
-      {{- if eq $env "dev" }}
-      - environments/dev/velero-values.yaml
-      {{- else if eq $env "staging" }}
-      - environments/staging/velero-values.yaml
-      {{- else if eq $env "prod" }}
-      - environments/prod/velero-values.yaml
-      {{- end }}
+      - values/tailscale-operator-values.yaml
 {{- end }}
