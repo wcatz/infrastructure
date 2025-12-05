@@ -224,8 +224,19 @@ if command -v tailscale &> /dev/null; then
     if tailscale status &> /dev/null; then
         print_success "Tailscale is authenticated and running"
         # Show current status
-        ts_status=$(tailscale status --json 2>/dev/null | python3 -c "import sys, json; data=json.load(sys.stdin); print(f\"{data['Self']['HostName']} ({data['Self']['TailscaleIPs'][0]})\")" 2>/dev/null || echo "unknown")
-        print_info "  Status: $ts_status"
+        if tailscale status --json &> /dev/null; then
+            ts_status=$(tailscale status --json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    hostname = data['Self']['HostName']
+    ip = data['Self']['TailscaleIPs'][0]
+    print(f'{hostname} ({ip})')
+except:
+    print('unknown')
+" 2>/dev/null)
+            print_info "  Status: $ts_status"
+        fi
     else
         print_warning "Tailscale is installed but not authenticated"
         print_info "  Authenticate with: tailscale up"
@@ -320,9 +331,19 @@ if command -v tailscale &> /dev/null; then
             print_success "Tailscale network is active (IP: $self_ip)"
             
             # List active peers
-            peer_count=$(tailscale status --json 2>/dev/null | python3 -c "import sys, json; data=json.load(sys.stdin); print(len([p for p in data['Peer'].values() if p.get('Online', False)]))" 2>/dev/null || echo "0")
-            if [ "$peer_count" -gt 0 ]; then
-                print_info "  Connected peers: $peer_count"
+            if tailscale status --json &> /dev/null; then
+                peer_count=$(tailscale status --json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    online_peers = [p for p in data.get('Peer', {}).values() if p.get('Online', False)]
+    print(len(online_peers))
+except:
+    print('0')
+" 2>/dev/null)
+                if [ "$peer_count" -gt 0 ]; then
+                    print_info "  Connected peers: $peer_count"
+                fi
             fi
         else
             print_warning "Tailscale is running but no IP assigned"
