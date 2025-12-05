@@ -72,7 +72,7 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 - k3s deployment (Traefik disabled)
 - Tailscale VPN on hosts for inter-node communication
 - Ansible Vault for encrypted secrets (K3s token, Tailscale key)
-- **Note**: Tailscale ACLs are managed in the Tailscale admin console
+- **Note**: Tailscale ACLs (Access Control Lists) control which devices can communicate with each other. They are managed in the [Tailscale admin console](https://login.tailscale.com/admin/acls), not in this repository.
 
 ### Helmfile
 - HAProxy Ingress (NodePort 30080/30443)
