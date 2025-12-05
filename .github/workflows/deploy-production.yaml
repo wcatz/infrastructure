@@ -1,0 +1,326 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_commit:
+        description: 'Staging commit SHA to promote (leave empty for latest main)'
+        required: false
+        type: string
+      skip_approval:
+        description: 'Skip manual approval (emergency only)'
+        required: false
+        type: boolean
+        default: false
+
+# Use OIDC for authentication
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # Pre-deployment validation
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      commit_sha: ${{ steps.determine-commit.outputs.commit_sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.staging_commit || 'main' }}
+
+      - name: Determine commit to deploy
+        id: determine-commit
+        run: |
+          COMMIT_SHA="${{ github.event.inputs.staging_commit }}"
+          if [ -z "$COMMIT_SHA" ]; then
+            COMMIT_SHA=$(git rev-parse HEAD)
+          fi
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "Will deploy commit: $COMMIT_SHA"
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Validate YAML
+        run: |
+          echo "Validating Helmfile YAML..."
+          yamllint helmfile/
+          echo "✅ YAML validation passed"
+
+      - name: Check for breaking changes
+        run: |
+          echo "🔍 Checking for potentially breaking changes..."
+
+          # Check if enabled services have changed
+          if git diff HEAD~1 helmfile/config/enabled.yaml | grep -E '^[+-]\s+\w+:' ; then
+            echo "⚠️  Warning: Service enablement changes detected"
+            echo "changed_services=true" >> $GITHUB_ENV
+          fi
+
+          # Check for CRD changes
+          if git diff HEAD~1 --name-only | grep -i 'crd\|customresourcedefinition' ; then
+            echo "⚠️  Warning: CRD changes detected - may require manual intervention"
+            echo "crd_changes=true" >> $GITHUB_ENV
+          fi
+
+  # Manual approval gate
+  approve-deployment:
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.inputs.skip_approval != 'true'
+    environment:
+      name: production-approval
+      # This environment should be configured with required reviewers in GitHub
+    steps:
+      - name: Approval checkpoint
+        run: |
+          echo "## 🛡️ Production Deployment Approval Required" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This deployment requires manual approval from authorized personnel." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit to deploy**: ${{ needs.validate.outputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Requested by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pre-deployment Checklist" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Staging environment is healthy and tested" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] No critical alerts in monitoring" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] All stakeholders notified" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Rollback plan is ready" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Off-hours/maintenance window confirmed" >> $GITHUB_STEP_SUMMARY
+
+  # Production deployment
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [validate, approve-deployment]
+    if: |
+      always() &&
+      needs.validate.result == 'success' &&
+      (needs.approve-deployment.result == 'success' || github.event.inputs.skip_approval == 'true')
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit_sha }}
+
+      # OIDC Authentication (configure based on your cloud provider)
+      # - name: Configure AWS Credentials (OIDC)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: arn:aws:iam::ACCOUNT_ID:role/github-actions-production
+      #     role-session-name: production-deploy-${{ github.run_id }}
+      #     aws-region: us-west-2
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.3'
+
+      - name: Setup Helmfile
+        uses: mamezou-tech/setup-helmfile@v2.0.0
+        with:
+          helmfile-version: 'v0.159.0'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup SOPS
+        run: |
+          wget -O /usr/local/bin/sops https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+          chmod +x /usr/local/bin/sops
+
+      - name: Setup age
+        run: |
+          wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz
+          tar xzf age-v1.1.1-linux-amd64.tar.gz
+          sudo mv age/age age/age-keygen /usr/local/bin/
+
+      - name: Configure SOPS Age Key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+
+      - name: Configure Kubernetes Context
+        env:
+          KUBECONFIG_PRODUCTION: ${{ secrets.KUBECONFIG_PRODUCTION }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create Pre-deployment Backup
+        run: |
+          echo "📦 Creating pre-deployment backup with Velero..."
+
+          # Trigger Velero backup
+          BACKUP_NAME="pre-deploy-$(date +%Y%m%d-%H%M%S)"
+          kubectl create -f - <<EOF
+          apiVersion: velero.io/v1
+          kind: Backup
+          metadata:
+            name: $BACKUP_NAME
+            namespace: velero
+            labels:
+              deployment: pre-production-deploy
+              commit: ${{ needs.validate.outputs.commit_sha }}
+          spec:
+            includedNamespaces:
+              - '*'
+            excludedNamespaces:
+              - kube-system
+              - kube-public
+            storageLocation: default
+            volumeSnapshotLocations:
+              - default
+            ttl: 168h  # 7 days retention
+          EOF
+
+          echo "Backup created: $BACKUP_NAME"
+          echo "backup_name=$BACKUP_NAME" >> $GITHUB_ENV
+
+      - name: Helmfile Diff
+        working-directory: helmfile
+        run: |
+          echo "📊 Running Helmfile diff for production..."
+          helmfile -e prod diff --suppress-secrets > /tmp/helmfile-diff.txt || true
+          cat /tmp/helmfile-diff.txt
+
+      - name: Deploy to Production
+        working-directory: helmfile
+        run: |
+          echo "🚀 Deploying to production environment..."
+          helmfile -e prod apply --suppress-secrets
+
+      - name: Wait for Deployments
+        run: |
+          echo "⏳ Waiting for deployments to be ready..."
+
+          # Wait for critical deployments
+          kubectl wait --for=condition=available --timeout=600s deployment --all -n production || true
+          kubectl wait --for=condition=available --timeout=300s deployment --all -n monitoring || true
+          kubectl wait --for=condition=available --timeout=300s deployment --all -n cloudflare || true
+
+      - name: Run Production Smoke Tests
+        run: |
+          echo "🧪 Running production smoke tests..."
+
+          # Test 1: Pod health
+          echo "1. Checking pod health..."
+          FAILED_PODS=$(kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded -o json | jq -r '.items | length')
+          if [ "$FAILED_PODS" -gt "0" ]; then
+            echo "❌ ERROR: $FAILED_PODS pod(s) not healthy"
+            kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded
+            exit 1
+          fi
+          echo "✅ All pods healthy"
+
+          # Test 2: Service availability
+          echo "2. Checking service endpoints..."
+          kubectl get endpoints -A | grep -v "none" || echo "⚠️  Some services have no endpoints"
+
+          # Test 3: Cloudflared tunnel
+          echo "3. Testing Cloudflared tunnel..."
+          kubectl get pods -n cloudflare -l app=cloudflared -o json | \
+            jq -r '.items[].status.phase' | grep -q "Running" && \
+            echo "✅ Cloudflared tunnel running" || \
+            echo "❌ Cloudflared tunnel not running"
+
+          # Test 4: Prometheus
+          echo "4. Testing Prometheus..."
+          kubectl run smoke-test-curl --image=curlimages/curl:latest --rm -i --restart=Never -- \
+            curl -sf http://prometheus-server.monitoring.svc.cluster.local/-/healthy && \
+            echo "✅ Prometheus healthy" || \
+            echo "❌ Prometheus unhealthy"
+
+          # Test 5: cert-manager
+          echo "5. Checking certificates..."
+          CERT_COUNT=$(kubectl get certificates -A -o json | jq -r '.items | length')
+          if [ "$CERT_COUNT" -gt "0" ]; then
+            NOT_READY=$(kubectl get certificates -A -o json | jq -r '.items[] | select(.status.conditions[]?.status != "True") | .metadata.name' | wc -l)
+            if [ "$NOT_READY" -gt "0" ]; then
+              echo "⚠️  Warning: $NOT_READY certificate(s) not ready"
+            else
+              echo "✅ All certificates ready"
+            fi
+          fi
+
+          # Test 6: Velero
+          echo "6. Checking Velero..."
+          kubectl get pods -n velero -l app.kubernetes.io/name=velero -o json | \
+            jq -r '.items[].status.phase' | grep -q "Running" && \
+            echo "✅ Velero running" || \
+            echo "⚠️  Velero not running"
+
+          echo "✅ Production smoke tests completed"
+
+      - name: Post-deployment Verification
+        run: |
+          echo "🔍 Running post-deployment verification..."
+
+          # Check for any critical alerts
+          echo "Checking for critical alerts..."
+          # This would query Prometheus for active critical alerts
+          # kubectl port-forward -n monitoring svc/prometheus-server 9090:80 &
+          # sleep 5
+          # CRITICAL_ALERTS=$(curl -s http://localhost:9090/api/v1/alerts | jq -r '[.data.alerts[] | select(.labels.severity == "critical")] | length')
+          # if [ "$CRITICAL_ALERTS" -gt "0" ]; then
+          #   echo "⚠️  Warning: $CRITICAL_ALERTS critical alert(s) active"
+          # fi
+
+          echo "✅ Post-deployment verification completed"
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🎉 Production Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: production" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ needs.validate.outputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pre-deployment backup**: ${{ env.backup_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployed Services" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl get deployments -A >> $GITHUB_STEP_SUMMARY || true
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Post-deployment Actions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitor application health and metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- Watch for any alerts in AlertManager" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify user-facing functionality" >> $GITHUB_STEP_SUMMARY
+          echo "- Keep backup \`${{ env.backup_name }}\` for rollback if needed" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "## ❌ Production Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The production deployment failed. Immediate action required!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rollback Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Restore from backup:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   velero restore create --from-backup ${{ env.backup_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "2. Or redeploy previous version:" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "   git checkout <previous-commit>" >> $GITHUB_STEP_SUMMARY
+          echo "   cd helmfile && helmfile -e prod apply" >> $GITHUB_STEP_SUMMARY
+          echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY

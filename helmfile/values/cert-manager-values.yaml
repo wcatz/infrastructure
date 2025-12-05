@@ -1,0 +1,112 @@
+# cert-manager configuration for internal TLS certificate management
+# See documentation for certificate lifecycle management
+
+# Install CRDs (handled by helmfile hook)
+installCRDs: false  # CRDs installed via hook in releases.yaml.gotmpl
+
+# Global settings
+global:
+  leaderElection:
+    namespace: cert-manager
+
+# Resource limits
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Prometheus metrics
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    labels:
+      release: prometheus
+
+# Webhook configuration
+webhook:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# CA Injector configuration
+cainjector:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Enable pod security standards
+securityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# Controller configuration
+replicaCount: 1
+
+# Node selector and tolerations
+# Uncomment to schedule on specific nodes
+# nodeSelector:
+#   node-role: worker
+
+# Tolerations for control plane taints
+# tolerations:
+#   - key: node-role.kubernetes.io/control-plane
+#     operator: Exists
+#     effect: NoSchedule
+
+# DNS configuration for validating webhooks
+# Used for ACME DNS-01 challenges
+# Configure based on your DNS provider
+
+# Feature gates
+featureGates: ""
+
+# Enable DNS01 recursion nameservers
+# dns01RecursiveNameservers: "8.8.8.8:53,1.1.1.1:53"
+# dns01RecursiveNameserversOnly: false
+
+# Log level: 0-5 (higher is more verbose)
+logLevel: 2
+
+# Enable leader election
+leaderElect: true
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  # For AWS IRSA (if using AWS Route53 for DNS validation):
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/cert-manager
+
+# Additional arguments to pass to cert-manager controller
+extraArgs: []
+# Example: Enable experimental features
+# extraArgs:
+#   - --enable-certificate-owner-ref=true
+
+# Additional environment variables
+extraEnv: []
+
+# Startup API check
+startupapicheck:
+  enabled: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi

@@ -32,42 +32,165 @@ alertmanager:
   config:
     global:
       resolve_timeout: 5m
+      # Slack API URL (configure via secret or environment variable)
+      # slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+      # PagerDuty API URL
+      # pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
 
+    # Routing tree
     route:
-      group_by: ['alertname', 'cluster', 'service']
+      # Root route
+      receiver: 'default'
+      group_by: ['alertname', 'cluster', 'service', 'namespace']
       group_wait: 10s
       group_interval: 10s
       repeat_interval: 12h
-      receiver: 'default'
+
+      # Child routes
       routes:
+        # Critical alerts to PagerDuty and Slack critical channel
         - match:
             severity: critical
-          receiver: 'critical'
+          receiver: 'pagerduty-critical'
           continue: true
+          group_wait: 10s
+          repeat_interval: 5m
+
+        # Warning alerts to Slack warning channel
         - match:
             severity: warning
-          receiver: 'warning'
+          receiver: 'slack-warning'
+          continue: false
+          group_wait: 30s
+          repeat_interval: 4h
 
+        # Backup-related alerts (high priority)
+        - match_re:
+            alertname: '^(Velero|Backup).*'
+          receiver: 'backup-alerts'
+          continue: true
+
+        # Certificate-related alerts
+        - match_re:
+            alertname: '^Certificate.*'
+          receiver: 'security-alerts'
+          continue: true
+
+    # Inhibition rules (suppress certain alerts when others are firing)
+    inhibit_rules:
+      # Suppress warning if critical is firing for same alert
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'namespace', 'service']
+
+      # Suppress backup old alerts if backup failed alert is firing
+      - source_match:
+          alertname: 'VeleroBackupFailed'
+        target_match:
+          alertname: 'VeleroBackupTooOld'
+        equal: ['schedule']
+
+    # Receivers configuration
     receivers:
       - name: 'default'
-        # Configure your default notification channel
+        # Default receiver - logs only or webhook
         # webhook_configs:
         #   - url: 'http://webhook-receiver/alerts'
+        #     send_resolved: true
 
-      - name: 'critical'
-        # Configure critical alerts notification
-        # email_configs:
-        #   - to: 'alerts@example.com'
-        #     from: 'prometheus@example.com'
-        # slack_configs:
-        #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
-        #     channel: '#alerts-critical'
+      - name: 'pagerduty-critical'
+        # PagerDuty for critical alerts
+        # Configure PagerDuty integration key as a secret
+        pagerduty_configs:
+          - routing_key: '<PAGERDUTY_INTEGRATION_KEY>'  # Replace with secret reference
+            description: '{{ .GroupLabels.alertname }} - {{ .CommonAnnotations.summary }}'
+            severity: 'critical'
+            client: 'Prometheus AlertManager'
+            client_url: 'http://prometheus.monitoring.svc.cluster.local'
+            send_resolved: true
+            # Use service_key for Events API v1 (legacy)
+            # Use routing_key for Events API v2 (recommended)
 
-      - name: 'warning'
-        # Configure warning alerts notification
-        # slack_configs:
-        #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
-        #     channel: '#alerts-warning'
+        # Also send to Slack critical channel
+        slack_configs:
+          - api_url: '<SLACK_WEBHOOK_URL>'  # Replace with secret reference
+            channel: '#alerts-critical'
+            title: '🚨 Critical Alert'
+            text: |
+              *Alert:* {{ .GroupLabels.alertname }}
+              *Severity:* {{ .CommonLabels.severity }}
+              *Summary:* {{ .CommonAnnotations.summary }}
+              *Description:* {{ .CommonAnnotations.description }}
+              *Namespace:* {{ .CommonLabels.namespace }}
+            send_resolved: true
+            username: 'Prometheus'
+            icon_emoji: ':prometheus:'
+            color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+      - name: 'slack-warning'
+        # Slack for warning alerts
+        slack_configs:
+          - api_url: '<SLACK_WEBHOOK_URL>'  # Replace with secret reference
+            channel: '#alerts-warning'
+            title: '⚠️  Warning Alert'
+            text: |
+              *Alert:* {{ .GroupLabels.alertname }}
+              *Severity:* {{ .CommonLabels.severity }}
+              *Summary:* {{ .CommonAnnotations.summary }}
+              *Description:* {{ .CommonAnnotations.description }}
+              *Namespace:* {{ .CommonLabels.namespace }}
+            send_resolved: true
+            username: 'Prometheus'
+            icon_emoji: ':warning:'
+            color: 'warning'
+
+      - name: 'backup-alerts'
+        # Dedicated channel for backup alerts
+        slack_configs:
+          - api_url: '<SLACK_WEBHOOK_URL>'  # Replace with secret reference
+            channel: '#alerts-backup'
+            title: '💾 Backup Alert'
+            text: |
+              *Alert:* {{ .GroupLabels.alertname }}
+              *Severity:* {{ .CommonLabels.severity }}
+              *Summary:* {{ .CommonAnnotations.summary }}
+              *Description:* {{ .CommonAnnotations.description }}
+              *Schedule:* {{ .CommonLabels.schedule }}
+            send_resolved: true
+            username: 'Velero'
+            icon_emoji: ':floppy_disk:'
+            color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+        # Also send to PagerDuty if critical
+        pagerduty_configs:
+          - routing_key: '<PAGERDUTY_INTEGRATION_KEY>'
+            description: 'Backup Alert: {{ .GroupLabels.alertname }}'
+            severity: '{{ .CommonLabels.severity }}'
+            send_resolved: true
+
+      - name: 'security-alerts'
+        # Security-related alerts (certificates, secrets, etc.)
+        slack_configs:
+          - api_url: '<SLACK_WEBHOOK_URL>'  # Replace with secret reference
+            channel: '#alerts-security'
+            title: '🔒 Security Alert'
+            text: |
+              *Alert:* {{ .GroupLabels.alertname }}
+              *Severity:* {{ .CommonLabels.severity }}
+              *Summary:* {{ .CommonAnnotations.summary }}
+              *Description:* {{ .CommonAnnotations.description }}
+              *Certificate:* {{ .CommonLabels.name }}
+              *Namespace:* {{ .CommonLabels.namespace }}
+            send_resolved: true
+            username: 'cert-manager'
+            icon_emoji: ':lock:'
+            color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+    # Templates for alert messages
+    templates:
+      - '/etc/alertmanager/template/*.tmpl'
 
 serverFiles:
   alerting_rules.yml:
@@ -92,7 +215,9 @@ serverFiles:
               severity: warning
             annotations:
               summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
-              description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently ({{ $value }} restarts/sec in last 15 minutes)"
+              description: >-
+                Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting
+                frequently ({{ $value }} restarts/sec in last 15 minutes)
 
           # Resource alerts
           - alert: HighCPUUsage
@@ -160,6 +285,61 @@ serverFiles:
               summary: "Velero backup is too old"
               description: "Last successful backup for schedule {{ $labels.schedule }} was more than 24 hours ago"
 
+          - alert: VeleroBackupPartialFailure
+            expr: velero_backup_partial_failure_total > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Velero backup partially failed"
+              description: "Backup {{ $labels.schedule }} has partial failures"
+
+          - alert: VeleroRestoreFailed
+            expr: velero_restore_failed_total > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Velero restore failed"
+              description: "Restore operation has failed"
+
+          # cert-manager alerts
+          - alert: CertificateExpiringSoon
+            expr: certmanager_certificate_expiration_timestamp_seconds - time() < 604800
+            for: 1h
+            labels:
+              severity: warning
+            annotations:
+              summary: "Certificate expiring soon"
+              description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in less than 7 days"
+
+          - alert: CertificateExpiringSoonCritical
+            expr: certmanager_certificate_expiration_timestamp_seconds - time() < 259200
+            for: 1h
+            labels:
+              severity: critical
+            annotations:
+              summary: "Certificate expiring very soon"
+              description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in less than 3 days"
+
+          - alert: CertificateNotReady
+            expr: certmanager_certificate_ready_status == 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Certificate not ready"
+              description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} is not in ready state"
+
+          - alert: CertificateRenewalFailed
+            expr: increase(certmanager_certificate_renewal_total{status="failed"}[1h]) > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Certificate renewal failed"
+              description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} renewal has failed"
+
           # Kubernetes alerts
           - alert: KubernetesPersistentVolumeFull
             expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes * 100 < 10
@@ -177,7 +357,10 @@ serverFiles:
               severity: warning
             annotations:
               summary: "Kubernetes Deployment replicas mismatch"
-              description: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has {{ $value }} replicas available, expected {{ $labels.spec_replicas }}"
+              description: >-
+                Deployment {{ $labels.namespace }}/{{ $labels.deployment }}
+                has {{ $value }} replicas available,
+                expected {{ $labels.spec_replicas }}
 
 nodeExporter:
   enabled: true

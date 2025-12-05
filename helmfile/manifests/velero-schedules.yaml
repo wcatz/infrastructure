@@ -1,0 +1,201 @@
+# Velero Backup Schedules
+# Apply with: kubectl apply -f velero-schedules.yaml
+# Or manage via Helmfile manifests integration
+
+---
+# Daily full cluster backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-full-backup
+  namespace: velero
+spec:
+  # Daily at 2 AM UTC
+  schedule: "0 2 * * *"
+  template:
+    # Include all namespaces except system namespaces
+    includedNamespaces:
+      - '*'
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+      - velero
+    # Include cluster-scoped resources
+    includeClusterResources: true
+    # Storage location
+    storageLocation: default
+    # Volume snapshot locations
+    volumeSnapshotLocations:
+      - default
+    # TTL: 30 days
+    ttl: 720h
+    # Enable snapshots for persistent volumes
+    snapshotVolumes: true
+    # Include hooks for consistent backups
+    hooks: {}
+    # Default volumes to file-system backup if no snapshot available
+    defaultVolumesToFsBackup: true
+
+---
+# Hourly backup for critical production workloads
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: hourly-production-backup
+  namespace: velero
+spec:
+  # Every hour
+  schedule: "0 * * * *"
+  template:
+    # Only production namespace
+    includedNamespaces:
+      - production
+    includeClusterResources: false
+    storageLocation: default
+    volumeSnapshotLocations:
+      - default
+    # TTL: 7 days
+    ttl: 168h
+    snapshotVolumes: true
+    defaultVolumesToFsBackup: true
+    # Backup labels
+    labels:
+      backup-type: hourly
+      environment: production
+
+---
+# Every 4 hours backup for databases
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: database-backup-4h
+  namespace: velero
+spec:
+  # Every 4 hours
+  schedule: "0 */4 * * *"
+  template:
+    # Only databases namespace
+    includedNamespaces:
+      - databases
+    includeClusterResources: false
+    storageLocation: default
+    volumeSnapshotLocations:
+      - default
+    # TTL: 14 days
+    ttl: 336h
+    snapshotVolumes: true
+    defaultVolumesToFsBackup: true
+    # Backup hooks for database consistency
+    hooks:
+      resources:
+        - name: mysql-backup-hook
+          includedNamespaces:
+            - databases
+          labelSelector:
+            matchLabels:
+              app: mysql
+          pre:
+            - exec:
+                container: mysql
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    # Flush tables and lock for consistent backup
+                    mysql -u root -p${MYSQL_ROOT_PASSWORD} -e "FLUSH TABLES WITH READ LOCK;"
+                timeout: 3m
+          post:
+            - exec:
+                container: mysql
+                command:
+                  - /bin/bash
+                  - -c
+                  - |
+                    # Unlock tables after backup
+                    mysql -u root -p${MYSQL_ROOT_PASSWORD} -e "UNLOCK TABLES;"
+                timeout: 1m
+    labels:
+      backup-type: database
+      frequency: 4h
+
+---
+# Weekly backup for monitoring data
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: weekly-monitoring-backup
+  namespace: velero
+spec:
+  # Every Sunday at 3 AM UTC
+  schedule: "0 3 * * 0"
+  template:
+    includedNamespaces:
+      - monitoring
+    includeClusterResources: false
+    storageLocation: default
+    volumeSnapshotLocations:
+      - default
+    # TTL: 90 days
+    ttl: 2160h
+    snapshotVolumes: true
+    defaultVolumesToFsBackup: true
+    labels:
+      backup-type: weekly
+      namespace: monitoring
+
+---
+# Backup before cluster upgrades (on-demand template)
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: pre-upgrade-backup
+  namespace: velero
+spec:
+  # This is disabled by default - enable before upgrades
+  # Set schedule to a specific time before your upgrade window
+  schedule: "0 0 1 1 *"  # Effectively disabled (Jan 1 yearly)
+  paused: true  # Paused by default
+  template:
+    includedNamespaces:
+      - '*'
+    includeClusterResources: true
+    storageLocation: default
+    volumeSnapshotLocations:
+      - default
+    # TTL: 60 days
+    ttl: 1440h
+    snapshotVolumes: true
+    defaultVolumesToFsBackup: true
+    labels:
+      backup-type: pre-upgrade
+      critical: "true"
+
+---
+# Notes on using these schedules:
+#
+# 1. Apply schedules:
+#    kubectl apply -f helmfile/manifests/velero-schedules.yaml
+#
+# 2. View schedules:
+#    kubectl get schedules -n velero
+#
+# 3. View backups created by schedules:
+#    kubectl get backups -n velero
+#
+# 4. Manually trigger a scheduled backup:
+#    velero backup create --from-schedule daily-full-backup
+#
+# 5. Enable pre-upgrade backup:
+#    kubectl patch schedule pre-upgrade-backup -n velero \
+#      --type merge -p '{"spec":{"paused":false,"schedule":"0 1 * * *"}}'
+#
+# 6. Monitor backup status:
+#    velero backup get
+#    velero backup describe <backup-name>
+#    velero backup logs <backup-name>
+#
+# 7. Restore from backup:
+#    velero restore create --from-backup <backup-name>
+#
+# See DISASTER_RECOVERY.md for complete backup and restore procedures.

@@ -42,8 +42,8 @@ Disaster recovery (DR) ensures business continuity in the event of catastrophic 
 | Stateless Workloads | 20 minutes | Time to redeploy via Helmfile |
 | Stateful Workloads (with PV) | 1-2 hours | Includes volume restore from backup |
 | MySQL Database | 1-2 hours | Includes restore and validation |
-| Cloudflared Tunnels | 10 minutes | Fast recovery with existing credentials |
 | Monitoring Stack | 30 minutes | Non-critical, acceptable longer downtime |
+| cert-manager | 15 minutes | Fast recovery, certificates auto-renew |
 
 ### Recovery Point Objective (RPO)
 
@@ -63,10 +63,13 @@ Disaster recovery (DR) ensures business continuity in the event of catastrophic 
 - k3s control plane
 - MySQL databases
 - Cloudflared tunnels
+- MySQL databases
+- cert-manager (for TLS certificates)
 
 **Priority 2 (Important)**: Restore within 2-4 hours
 - Stateful applications with persistent volumes
 - External Secrets Operator
+- Tailscale Operator
 
 **Priority 3 (Standard)**: Restore within 8-24 hours
 - Monitoring stack (Prometheus, Grafana)

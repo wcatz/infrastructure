@@ -1,0 +1,213 @@
+# cert-manager Cluster Issuers and Certificate Examples
+# Apply with: kubectl apply -f cert-manager-resources.yaml
+
+---
+# Self-signed ClusterIssuer for internal certificates
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+
+---
+# Private CA for internal services
+# First, create a self-signed root CA certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: internal-ca
+  secretName: internal-ca-secret
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  duration: 87600h  # 10 years
+  renewBefore: 8760h  # 1 year before expiry
+
+---
+# ClusterIssuer using the internal CA
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: internal-ca-issuer
+spec:
+  ca:
+    secretName: internal-ca-secret
+
+---
+# Let's Encrypt Staging Issuer (for testing)
+# Uncomment and configure for ACME certificates
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-staging
+# spec:
+#   acme:
+#     # Staging server for testing
+#     server: https://acme-staging-v02.api.letsencrypt.org/directory
+#     email: your-email@example.com  # Update with your email
+#     privateKeySecretRef:
+#       name: letsencrypt-staging
+#     solvers:
+#       # HTTP-01 challenge (requires ingress)
+#       - http01:
+#           ingress:
+#             class: nginx
+#       # DNS-01 challenge (recommended for wildcard certs)
+#       # Uncomment and configure based on your DNS provider
+#       # - dns01:
+#       #     cloudflare:
+#       #       email: your-email@example.com
+#       #       apiTokenSecretRef:
+#       #         name: cloudflare-api-token
+#       #         key: api-token
+
+---
+# Let's Encrypt Production Issuer
+# Uncomment and configure for production ACME certificates
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-prod
+# spec:
+#   acme:
+#     # Production server
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: your-email@example.com  # Update with your email
+#     privateKeySecretRef:
+#       name: letsencrypt-prod
+#     solvers:
+#       - http01:
+#           ingress:
+#             class: nginx
+#       # Or DNS-01 for wildcard certificates
+#       # - dns01:
+#       #     cloudflare:
+#       #       email: your-email@example.com
+#       #       apiTokenSecretRef:
+#       #         name: cloudflare-api-token
+#       #         key: api-token
+
+---
+# Example: Internal service certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-internal-cert
+  namespace: production
+spec:
+  # Secret name where certificate will be stored
+  secretName: example-tls
+  # Duration and renewal
+  duration: 2160h  # 90 days
+  renewBefore: 360h  # 15 days before expiry
+  # Subject Alternative Names
+  dnsNames:
+    - example.internal
+    - example.production.svc.cluster.local
+  # Issuer reference
+  issuerRef:
+    name: internal-ca-issuer
+    kind: ClusterIssuer
+  # Private key configuration
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  # Key usages
+  usages:
+    - server auth
+    - client auth
+
+---
+# Example: Wildcard certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-internal-cert
+  namespace: cert-manager
+spec:
+  secretName: wildcard-internal-tls
+  duration: 2160h  # 90 days
+  renewBefore: 360h  # 15 days before expiry
+  dnsNames:
+    - '*.internal.cluster'
+    - internal.cluster
+  issuerRef:
+    name: internal-ca-issuer
+    kind: ClusterIssuer
+  privateKey:
+    algorithm: RSA
+    size: 2048
+
+---
+# Example: Certificate with email in subject
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: service-cert-with-subject
+  namespace: production
+spec:
+  secretName: service-tls
+  duration: 2160h
+  renewBefore: 360h
+  subject:
+    organizations:
+      - "MyOrg"
+    organizationalUnits:
+      - "Infrastructure"
+  dnsNames:
+    - service.example.com
+  emailAddresses:
+    - admin@example.com
+  issuerRef:
+    name: internal-ca-issuer
+    kind: ClusterIssuer
+
+---
+# Notes on certificate lifecycle management:
+#
+# 1. Automatic Renewal:
+#    - cert-manager automatically renews certificates based on renewBefore
+#    - Default: renews when 2/3 of duration has passed
+#    - Certificates are automatically reissued and secrets updated
+#
+# 2. Manual Renewal:
+#    kubectl cert-manager renew <certificate-name> -n <namespace>
+#
+# 3. Check certificate status:
+#    kubectl get certificates -A
+#    kubectl describe certificate <name> -n <namespace>
+#
+# 4. View certificate details:
+#    kubectl get secret <secret-name> -n <namespace> -o jsonpath='{.data.tls\.crt}' | \
+#      base64 -d | openssl x509 -text -noout
+#
+# 5. Monitor certificate expiration:
+#    kubectl get certificates -A -o json | \
+#      jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name): \(.status.notAfter)"'
+#
+# 6. Force certificate renewal:
+#    kubectl annotate certificate <name> -n <namespace> \
+#      cert-manager.io/issue-temporary-certificate="true" --overwrite
+#
+# 7. Certificate renewal alerts:
+#    Prometheus metrics are exposed for monitoring:
+#    - certmanager_certificate_expiration_timestamp_seconds
+#    - certmanager_certificate_ready_status
+#
+# 8. Troubleshooting:
+#    kubectl describe certificaterequest -n <namespace>
+#    kubectl describe order -n <namespace>
+#    kubectl describe challenge -n <namespace>
+#    kubectl logs -n cert-manager deployment/cert-manager
+#
+# See helmfile/dashboards/cert-manager-dashboard.json for Grafana monitoring

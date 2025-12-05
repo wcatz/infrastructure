@@ -1,0 +1,161 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'helmfile/**'
+      - 'ansible/**'
+      - '.github/workflows/deploy-staging.yaml'
+
+# Use OIDC for authentication
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # OIDC Authentication (configure based on your cloud provider)
+      # - name: Configure AWS Credentials (OIDC)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: arn:aws:iam::ACCOUNT_ID:role/github-actions-staging
+      #     role-session-name: staging-deploy-${{ github.run_id }}
+      #     aws-region: us-west-2
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.3'
+
+      - name: Setup Helmfile
+        uses: mamezou-tech/setup-helmfile@v2.0.0
+        with:
+          helmfile-version: 'v0.159.0'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup SOPS
+        run: |
+          wget -O /usr/local/bin/sops https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+          chmod +x /usr/local/bin/sops
+
+      - name: Setup age
+        run: |
+          wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz
+          tar xzf age-v1.1.1-linux-amd64.tar.gz
+          sudo mv age/age age/age-keygen /usr/local/bin/
+
+      - name: Configure SOPS Age Key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+
+      - name: Configure Kubernetes Context
+        env:
+          KUBECONFIG_STAGING: ${{ secrets.KUBECONFIG_STAGING }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_STAGING" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Helmfile Diff
+        working-directory: helmfile
+        run: |
+          echo "📊 Running Helmfile diff for staging..."
+          helmfile -e staging diff --suppress-secrets || true
+
+      - name: Deploy to Staging
+        working-directory: helmfile
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          helmfile -e staging apply --suppress-secrets
+
+      - name: Wait for Deployments
+        run: |
+          echo "⏳ Waiting for deployments to be ready..."
+          kubectl wait --for=condition=available --timeout=300s deployment --all -n production || true
+          kubectl wait --for=condition=available --timeout=300s deployment --all -n monitoring || true
+
+      - name: Run Smoke Tests
+        run: |
+          echo "🧪 Running smoke tests..."
+
+          # Test 1: Check all pods are running
+          echo "Checking pod status..."
+          FAILED_PODS=$(kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded -o json | jq -r '.items | length')
+          if [ "$FAILED_PODS" -gt "0" ]; then
+            echo "⚠️  Warning: $FAILED_PODS pod(s) not in Running/Succeeded state"
+            kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded
+          else
+            echo "✅ All pods are running"
+          fi
+
+          # Test 2: Check critical services are up
+          echo "Checking critical services..."
+          kubectl get svc -n monitoring prometheus-server || echo "⚠️  Prometheus service not found"
+          kubectl get svc -n cloudflare cloudflared || echo "⚠️  Cloudflared service not found"
+
+          # Test 3: Test Prometheus is reachable
+          echo "Testing Prometheus health..."
+          kubectl run curl-test --image=curlimages/curl:latest --rm -i --restart=Never -- \
+            curl -sf http://prometheus-server.monitoring.svc.cluster.local/-/healthy || \
+            echo "⚠️  Prometheus health check failed"
+
+          # Test 4: Check Velero backup status
+          echo "Checking Velero status..."
+          kubectl get backups -n velero --sort-by=.metadata.creationTimestamp | tail -5 || \
+            echo "⚠️  Could not retrieve Velero backup status"
+
+          # Test 5: Check cert-manager
+          echo "Checking cert-manager status..."
+          kubectl get certificates -A || echo "⚠️  Could not retrieve certificate status"
+
+          echo "✅ Smoke tests completed"
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🎯 Staging Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: staging" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployed Services" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl get deployments -A >> $GITHUB_STEP_SUMMARY || true
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify staging environment functionality" >> $GITHUB_STEP_SUMMARY
+          echo "- Run integration tests" >> $GITHUB_STEP_SUMMARY
+          echo "- If successful, promote to production using the 'Deploy to Production' workflow" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "## ❌ Staging Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The staging deployment failed. Please check the logs and fix the issues." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
