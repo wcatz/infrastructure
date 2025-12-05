@@ -1,0 +1,157 @@
+# Default values for github-runner chart
+
+# GitHub configuration
+github:
+  # Repository URL (e.g., https://github.com/owner/repo)
+  # Can also be organization URL for org-level runners
+  repository: ""
+  
+  # GitHub PAT or runner registration token
+  # For production, use a secret or external-secrets
+  token: ""
+  
+  # Use tokenSecret instead of token for better security
+  tokenSecretName: "github-runner-token"
+  tokenSecretKey: "token"
+
+# Runner configuration
+runner:
+  # Runner name (if empty, uses pod name)
+  name: ""
+  
+  # Runner group (empty for default)
+  group: ""
+  
+  # Runner labels (comma-separated or list)
+  labels:
+    - self-hosted
+    - kubernetes
+    - tailscale
+    - linux
+    - x64
+  
+  # Number of runner replicas
+  replicas: 1
+  
+  # Ephemeral mode (runner is removed after one job)
+  ephemeral: false
+  
+  # Runner image
+  image:
+    repository: ghcr.io/actions/actions-runner
+    tag: "2.311.0"
+    pullPolicy: IfNotPresent
+  
+  # Runner work directory
+  workDir: /work
+
+# Tailscale configuration
+tailscale:
+  # Enable Tailscale sidecar
+  enabled: true
+  
+  # Tailscale image
+  image:
+    repository: tailscale/tailscale
+    tag: v1.56.1
+    pullPolicy: IfNotPresent
+  
+  # Tailscale auth key or OAuth secret
+  # Use authKeySecret for better security
+  authKey: ""
+  authKeySecretName: "tailscale-auth"
+  authKeySecretKey: "authkey"
+  
+  # Tailscale hostname
+  hostname: "github-runner"
+  
+  # Tailscale tags for ACL
+  tags:
+    - tag:k8s
+    - tag:ci
+  
+  # Accept routes from Tailscale
+  acceptRoutes: true
+  
+  # Enable Tailscale userspace networking
+  userspace: true
+
+# Kubernetes configuration
+kubernetes:
+  # Namespace to deploy runner
+  namespace: github-runner
+  
+  # Create namespace
+  createNamespace: true
+  
+  # Service account
+  serviceAccount:
+    create: true
+    name: github-runner
+    annotations: {}
+  
+  # RBAC
+  rbac:
+    create: true
+    # Cluster-wide permissions for deployments
+    clusterRole: true
+  
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 1000
+  
+  # Container security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  
+  # Resources
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Node selector
+  nodeSelector: {}
+  
+  # Tolerations
+  tolerations: []
+  
+  # Affinity
+  affinity: {}
+  
+  # Annotations
+  podAnnotations: {}
+
+# Storage for runner work directory
+storage:
+  enabled: true
+  storageClass: ""
+  size: 10Gi
+  accessMode: ReadWriteOnce
+
+# Environment variables
+env:
+  # Additional environment variables
+  # - name: CUSTOM_VAR
+  #   value: "value"
+
+# Kubectl/Helm access
+clusterAccess:
+  # Enable kubeconfig mounting
+  enabled: true
+  
+  # Kubeconfig secret (if using external kubeconfig)
+  # Leave empty to use in-cluster config + service account
+  kubeconfigSecret: ""
+  kubeconfigSecretKey: "kubeconfig"
+  
+  # Use service account token for cluster access
+  useServiceAccount: true

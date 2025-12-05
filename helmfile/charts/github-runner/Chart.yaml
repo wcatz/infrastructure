@@ -1,0 +1,16 @@
+apiVersion: v2
+name: github-runner
+description: GitHub Actions self-hosted runner with Tailscale connectivity
+type: application
+version: 1.0.0
+appVersion: "2.311.0"
+keywords:
+  - github-actions
+  - runner
+  - tailscale
+  - ci-cd
+maintainers:
+  - name: infrastructure-team
+home: https://github.com/actions/runner
+sources:
+  - https://github.com/actions/runner

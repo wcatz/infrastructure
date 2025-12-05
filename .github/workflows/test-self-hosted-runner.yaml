@@ -1,0 +1,261 @@
+name: Test Self-Hosted Runner
+
+# This workflow demonstrates using the self-hosted GitHub Actions runner
+# with Tailscale connectivity to access the Kubernetes cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of test to run'
+        required: true
+        default: 'connectivity'
+        type: choice
+        options:
+          - connectivity
+          - kubectl
+          - helm
+          - full
+
+jobs:
+  # Test basic connectivity and environment
+  test-connectivity:
+    if: github.event.inputs.test_type == 'connectivity' || github.event.inputs.test_type == 'full'
+    runs-on: [self-hosted, tailscale]
+    
+    steps:
+      - name: Check runner environment
+        run: |
+          echo "============================================"
+          echo "Runner Environment Information"
+          echo "============================================"
+          echo "Hostname: $(hostname)"
+          echo "User: $(whoami)"
+          echo "Working Directory: $(pwd)"
+          echo "OS: $(uname -a)"
+          echo ""
+      
+      - name: Test Tailscale connectivity
+        run: |
+          echo "============================================"
+          echo "Tailscale Connectivity Test"
+          echo "============================================"
+          tailscale status
+          echo ""
+          
+          # Get control plane Tailscale IP
+          CONTROL_IP=$(tailscale status --json | jq -r '.Peer[] | select(.HostName | contains("control")) | .TailscaleIPs[0]' | head -1)
+          
+          if [ -z "$CONTROL_IP" ]; then
+            echo "❌ ERROR: Could not find control plane Tailscale IP"
+            exit 1
+          fi
+          
+          echo "Control Plane Tailscale IP: $CONTROL_IP"
+          echo ""
+          
+          # Test ping
+          echo "Testing ping to control plane..."
+          if ping -c 3 -W 5 "$CONTROL_IP"; then
+            echo "✅ Ping test passed"
+          else
+            echo "❌ Ping test failed"
+            exit 1
+          fi
+          echo ""
+          
+          # Test Kubernetes API port
+          echo "Testing connection to Kubernetes API (port 6443)..."
+          if nc -zv -w 5 "$CONTROL_IP" 6443; then
+            echo "✅ Port 6443 is reachable"
+          else
+            echo "❌ Port 6443 is not reachable"
+            exit 1
+          fi
+      
+      - name: Connectivity test summary
+        if: success()
+        run: |
+          echo "============================================"
+          echo "✅ Connectivity Test: PASSED"
+          echo "============================================"
+          echo "- Tailscale is operational"
+          echo "- Control plane is reachable"
+          echo "- Kubernetes API port is accessible"
+
+  # Test kubectl commands
+  test-kubectl:
+    if: github.event.inputs.test_type == 'kubectl' || github.event.inputs.test_type == 'full'
+    runs-on: [self-hosted, tailscale]
+    
+    steps:
+      - name: Verify kubectl installation
+        run: |
+          echo "============================================"
+          echo "kubectl Verification"
+          echo "============================================"
+          kubectl version --client
+          echo ""
+      
+      - name: Test cluster access
+        run: |
+          echo "============================================"
+          echo "Cluster Access Test"
+          echo "============================================"
+          kubectl cluster-info
+          echo ""
+      
+      - name: List cluster nodes
+        run: |
+          echo "============================================"
+          echo "Cluster Nodes"
+          echo "============================================"
+          kubectl get nodes -o wide
+          echo ""
+      
+      - name: List all pods
+        run: |
+          echo "============================================"
+          echo "All Pods in Cluster"
+          echo "============================================"
+          kubectl get pods -A -o wide
+          echo ""
+      
+      - name: List all services
+        run: |
+          echo "============================================"
+          echo "All Services in Cluster"
+          echo "============================================"
+          kubectl get services -A
+          echo ""
+      
+      - name: Check cluster health
+        run: |
+          echo "============================================"
+          echo "Cluster Health"
+          echo "============================================"
+          kubectl get componentstatuses || echo "⚠️  Component statuses not available (deprecated in newer Kubernetes)"
+          echo ""
+          
+          # Check if metrics server is available
+          if kubectl top nodes 2>/dev/null; then
+            echo "✅ Metrics server is available"
+            kubectl top nodes
+          else
+            echo "⚠️  Metrics server is not available"
+          fi
+      
+      - name: kubectl test summary
+        if: success()
+        run: |
+          echo "============================================"
+          echo "✅ kubectl Test: PASSED"
+          echo "============================================"
+          echo "- kubectl is properly configured"
+          echo "- Cluster access is working"
+          echo "- All kubectl commands executed successfully"
+
+  # Test Helm commands
+  test-helm:
+    if: github.event.inputs.test_type == 'helm' || github.event.inputs.test_type == 'full'
+    runs-on: [self-hosted, tailscale]
+    
+    steps:
+      - name: Verify Helm installation
+        run: |
+          echo "============================================"
+          echo "Helm Verification"
+          echo "============================================"
+          
+          # Check if Helm is installed
+          if command -v helm &> /dev/null; then
+            helm version
+            echo "✅ Helm is installed"
+          else
+            echo "⚠️  Helm is not installed, installing..."
+            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+            helm version
+          fi
+          echo ""
+      
+      - name: List Helm releases
+        run: |
+          echo "============================================"
+          echo "Helm Releases (All Namespaces)"
+          echo "============================================"
+          helm list -A
+          echo ""
+      
+      - name: Show Helm repositories
+        run: |
+          echo "============================================"
+          echo "Helm Repositories"
+          echo "============================================"
+          helm repo list || echo "No repositories configured"
+          echo ""
+      
+      - name: Test Helm dry-run
+        run: |
+          echo "============================================"
+          echo "Helm Dry-Run Test"
+          echo "============================================"
+          
+          # Add a test repository
+          helm repo add bitnami https://charts.bitnami.com/bitnami || true
+          helm repo update
+          
+          # Dry-run install of nginx (won't actually install)
+          echo "Testing Helm dry-run installation..."
+          helm install test-nginx bitnami/nginx \
+            --dry-run \
+            --namespace test \
+            --create-namespace \
+            --set service.type=ClusterIP
+          
+          echo "✅ Helm dry-run completed successfully"
+          echo ""
+      
+      - name: Helm test summary
+        if: success()
+        run: |
+          echo "============================================"
+          echo "✅ Helm Test: PASSED"
+          echo "============================================"
+          echo "- Helm is properly configured"
+          echo "- Can list releases"
+          echo "- Dry-run installation works"
+
+  # Final summary
+  test-summary:
+    if: always() && github.event.inputs.test_type == 'full'
+    needs: [test-connectivity, test-kubectl, test-helm]
+    runs-on: [self-hosted, tailscale]
+    
+    steps:
+      - name: Overall test summary
+        run: |
+          echo "============================================"
+          echo "Overall Test Summary"
+          echo "============================================"
+          echo ""
+          echo "Test Results:"
+          echo "- Connectivity: ${{ needs.test-connectivity.result }}"
+          echo "- kubectl: ${{ needs.test-kubectl.result }}"
+          echo "- Helm: ${{ needs.test-helm.result }}"
+          echo ""
+          
+          if [ "${{ needs.test-connectivity.result }}" = "success" ] && \
+             [ "${{ needs.test-kubectl.result }}" = "success" ] && \
+             [ "${{ needs.test-helm.result }}" = "success" ]; then
+            echo "✅✅✅ ALL TESTS PASSED ✅✅✅"
+            echo ""
+            echo "The self-hosted runner is fully operational:"
+            echo "- Tailscale connectivity to control plane: ✅"
+            echo "- kubectl access: ✅"
+            echo "- Helm functionality: ✅"
+            echo ""
+            echo "You can now use this runner for deployments!"
+          else
+            echo "❌ Some tests failed. Please review the logs above."
+            exit 1
+          fi

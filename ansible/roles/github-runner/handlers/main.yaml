@@ -1,0 +1,24 @@
+---
+# Handlers for GitHub Actions runner role
+
+- name: Start GitHub runner service
+  ansible.builtin.systemd:
+    name: "actions.runner.{{ github_runner_repository_url.split('/')[-2] }}-{{ github_runner_repository_url.split('/')[-1] }}.{{ github_runner_name }}.service"
+    state: started
+    enabled: true
+  become: true
+  listen: "Start GitHub runner service"
+
+- name: Restart GitHub runner service
+  ansible.builtin.systemd:
+    name: "actions.runner.{{ github_runner_repository_url.split('/')[-2] }}-{{ github_runner_repository_url.split('/')[-1] }}.{{ github_runner_name }}.service"
+    state: restarted
+  become: true
+  listen: "Restart GitHub runner service"
+
+- name: Stop GitHub runner service
+  ansible.builtin.systemd:
+    name: "actions.runner.{{ github_runner_repository_url.split('/')[-2] }}-{{ github_runner_repository_url.split('/')[-1] }}.{{ github_runner_name }}.service"
+    state: stopped
+  become: true
+  listen: "Stop GitHub runner service"

@@ -1,0 +1,174 @@
+name: Helmfile Apply (Self-Hosted Runner)
+
+# This workflow uses the self-hosted GitHub Actions runner with Tailscale
+# connectivity to deploy Helmfile directly to the cluster without needing
+# to configure external access or store kubeconfig in GitHub Secrets
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - dev
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  # Validation runs on GitHub-hosted runners (faster, no cluster access needed)
+  validate-before-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: |
+          pip install yamllint
+
+      - name: Lint YAML files
+        run: |
+          echo "Linting Helmfile YAML files..."
+          yamllint helmfile/
+
+          echo "✅ YAML validation passed"
+
+  # Deployment runs on self-hosted runner with Tailscale access
+  helmfile-apply:
+    runs-on: [self-hosted, tailscale, kubernetes]
+    needs: validate-before-deploy
+    environment: ${{ github.event.inputs.environment }}
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Verify connectivity before proceeding
+      - name: Verify Tailscale connectivity
+        run: |
+          echo "Verifying Tailscale connectivity..."
+          tailscale status
+          
+          CONTROL_IP=$(tailscale status --json | jq -r '.Peer[] | select(.HostName | contains("control")) | .TailscaleIPs[0]' | head -1)
+          echo "Control plane Tailscale IP: $CONTROL_IP"
+          
+          if [ -z "$CONTROL_IP" ]; then
+            echo "❌ ERROR: Could not find control plane"
+            exit 1
+          fi
+          
+          echo "✅ Tailscale connectivity verified"
+
+      - name: Verify Kubernetes access
+        run: |
+          echo "Verifying Kubernetes access..."
+          kubectl cluster-info
+          kubectl get nodes
+          echo "✅ Kubernetes access verified"
+
+      # Setup tools (if not already installed on runner)
+      - name: Setup Helm
+        run: |
+          if ! command -v helm &> /dev/null; then
+            echo "Installing Helm..."
+            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          fi
+          helm version
+
+      - name: Setup Helmfile
+        run: |
+          if ! command -v helmfile &> /dev/null; then
+            echo "Installing Helmfile..."
+            wget -O /tmp/helmfile https://github.com/helmfile/helmfile/releases/download/v0.159.0/helmfile_0.159.0_linux_amd64.tar.gz
+            tar -xzf /tmp/helmfile -C /tmp
+            sudo mv /tmp/helmfile /usr/local/bin/
+            sudo chmod +x /usr/local/bin/helmfile
+          fi
+          helmfile version
+
+      - name: Setup SOPS
+        run: |
+          if ! command -v sops &> /dev/null; then
+            echo "Installing SOPS..."
+            wget -O /tmp/sops https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+            sudo mv /tmp/sops /usr/local/bin/sops
+            sudo chmod +x /usr/local/bin/sops
+          fi
+          sops --version
+
+      - name: Setup age for SOPS decryption
+        run: |
+          if ! command -v age &> /dev/null; then
+            echo "Installing age..."
+            wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz
+            tar xzf age-v1.1.1-linux-amd64.tar.gz
+            sudo mv age/age age/age-keygen /usr/local/bin/
+          fi
+          age --version
+
+      - name: Configure SOPS Age Key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+          echo "✅ SOPS age key configured"
+
+      - name: Helmfile Diff (Pre-deployment)
+        working-directory: helmfile
+        run: |
+          echo "Running helmfile diff for environment: ${{ github.event.inputs.environment }}"
+          if [ "${{ github.event.inputs.environment }}" = "default" ]; then
+            helmfile diff --suppress-secrets || true
+          else
+            helmfile -e ${{ github.event.inputs.environment }} diff --suppress-secrets || true
+          fi
+
+      - name: Helmfile Apply
+        working-directory: helmfile
+        run: |
+          echo "Running helmfile apply for environment: ${{ github.event.inputs.environment }}"
+          if [ "${{ github.event.inputs.environment }}" = "default" ]; then
+            helmfile apply --suppress-secrets
+          else
+            helmfile -e ${{ github.event.inputs.environment }} apply --suppress-secrets
+          fi
+
+      - name: Verify Deployment
+        run: |
+          echo "Verifying deployment..."
+          kubectl get pods -A
+          kubectl get svc -A
+
+      - name: Deployment Summary
+        run: |
+          echo "✅ Helmfile deployment completed successfully"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: Self-hosted (Tailscale)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Success" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployed using self-hosted runner with direct Tailscale access to control plane." >> $GITHUB_STEP_SUMMARY
+          echo "No external cluster exposure or kubeconfig secrets required." >> $GITHUB_STEP_SUMMARY

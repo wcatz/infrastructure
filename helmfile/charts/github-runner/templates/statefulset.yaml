@@ -1,0 +1,289 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "github-runner.fullname" . }}
+  namespace: {{ .Values.kubernetes.namespace }}
+  labels:
+    {{- include "github-runner.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "github-runner.fullname" . }}
+  replicas: {{ .Values.runner.replicas }}
+  selector:
+    matchLabels:
+      {{- include "github-runner.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.kubernetes.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "github-runner.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.kubernetes.serviceAccount.create }}
+      serviceAccountName: {{ include "github-runner.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.kubernetes.podSecurityContext | nindent 8 }}
+      
+      {{- if .Values.tailscale.enabled }}
+      # Init container to set up Tailscale
+      initContainers:
+        - name: tailscale-init
+          image: "{{ .Values.tailscale.image.repository }}:{{ .Values.tailscale.image.tag }}"
+          imagePullPolicy: {{ .Values.tailscale.image.pullPolicy }}
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tailscale.authKeySecretName }}
+                  key: {{ .Values.tailscale.authKeySecretKey }}
+            - name: TS_KUBE_SECRET
+              value: ""
+            - name: TS_USERSPACE
+              value: "{{ .Values.tailscale.userspace }}"
+            - name: TS_STATE_DIR
+              value: /var/lib/tailscale
+            - name: TS_ACCEPT_DNS
+              value: "false"
+            {{- if .Values.tailscale.acceptRoutes }}
+            - name: TS_EXTRA_ARGS
+              value: "--accept-routes"
+            {{- end }}
+            {{- if .Values.tailscale.tags }}
+            - name: TS_TAGS
+              value: {{ join "," .Values.tailscale.tags | quote }}
+            {{- end }}
+            - name: TS_HOSTNAME
+              value: "{{ .Values.tailscale.hostname }}-$(POD_NAME)"
+          envFrom:
+            - fieldRef:
+                fieldPath: metadata.name
+              prefix: POD_
+          volumeMounts:
+            - name: tailscale-state
+              mountPath: /var/lib/tailscale
+            - name: dev-net-tun
+              mountPath: /dev/net/tun
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+      {{- end }}
+      
+      containers:
+        {{- if .Values.tailscale.enabled }}
+        # Tailscale sidecar container
+        - name: tailscale
+          image: "{{ .Values.tailscale.image.repository }}:{{ .Values.tailscale.image.tag }}"
+          imagePullPolicy: {{ .Values.tailscale.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
+              sleep 5
+              tailscale up \
+                --authkey=${TS_AUTHKEY} \
+                --hostname=${TS_HOSTNAME}-$(POD_NAME) \
+                {{- if .Values.tailscale.tags }}
+                --advertise-tags={{ join "," .Values.tailscale.tags }} \
+                {{- end }}
+                {{- if .Values.tailscale.acceptRoutes }}
+                --accept-routes \
+                {{- end }}
+                --accept-dns=false
+              
+              # Keep container running
+              sleep infinity
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tailscale.authKeySecretName }}
+                  key: {{ .Values.tailscale.authKeySecretKey }}
+            - name: TS_HOSTNAME
+              value: "{{ .Values.tailscale.hostname }}"
+            - name: TS_USERSPACE
+              value: "{{ .Values.tailscale.userspace }}"
+            - name: TS_STATE_DIR
+              value: /var/lib/tailscale
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: tailscale-state
+              mountPath: /var/lib/tailscale
+            - name: tailscale-sock
+              mountPath: /var/run/tailscale
+            - name: dev-net-tun
+              mountPath: /dev/net/tun
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+        {{- end }}
+        
+        # GitHub Actions Runner container
+        - name: runner
+          image: "{{ .Values.runner.image.repository }}:{{ .Values.runner.image.tag }}"
+          imagePullPolicy: {{ .Values.runner.image.pullPolicy }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              
+              # Wait for Tailscale to be ready
+              {{- if .Values.tailscale.enabled }}
+              echo "Waiting for Tailscale to be ready..."
+              while [ ! -S /var/run/tailscale/tailscaled.sock ]; do
+                sleep 1
+              done
+              
+              # Wait for Tailscale to be connected
+              timeout=60
+              while ! tailscale status &>/dev/null && [ $timeout -gt 0 ]; do
+                echo "Waiting for Tailscale connection... ($timeout seconds remaining)"
+                sleep 2
+                timeout=$((timeout-2))
+              done
+              
+              if [ $timeout -le 0 ]; then
+                echo "ERROR: Tailscale did not connect in time"
+                exit 1
+              fi
+              
+              echo "✅ Tailscale connected"
+              tailscale status
+              {{- end }}
+              
+              # Configure runner
+              RUNNER_NAME="{{ .Values.runner.name }}"
+              if [ -z "$RUNNER_NAME" ]; then
+                RUNNER_NAME="$(hostname)"
+              fi
+              
+              # Build labels
+              LABELS="{{ include "github-runner.labels-string" . }}"
+              
+              echo "Configuring GitHub Actions runner..."
+              echo "  Name: $RUNNER_NAME"
+              echo "  Repository: {{ .Values.github.repository }}"
+              echo "  Labels: $LABELS"
+              
+              # Configure the runner
+              ./config.sh \
+                --url {{ .Values.github.repository }} \
+                --token ${GITHUB_TOKEN} \
+                --name ${RUNNER_NAME} \
+                --labels ${LABELS} \
+                {{- if .Values.runner.group }}
+                --runnergroup {{ .Values.runner.group }} \
+                {{- end }}
+                --work {{ .Values.runner.workDir }} \
+                {{- if .Values.runner.ephemeral }}
+                --ephemeral \
+                {{- end }}
+                --unattended \
+                --replace
+              
+              echo "✅ Runner configured successfully"
+              
+              # Run the runner
+              ./run.sh
+          env:
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.github.tokenSecretName }}
+                  key: {{ .Values.github.tokenSecretKey }}
+            {{- if .Values.tailscale.enabled }}
+            - name: TAILSCALE_SOCKET
+              value: /var/run/tailscale/tailscaled.sock
+            {{- end }}
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: work
+              mountPath: {{ .Values.runner.workDir }}
+            {{- if .Values.tailscale.enabled }}
+            - name: tailscale-sock
+              mountPath: /var/run/tailscale
+            {{- end }}
+            {{- if .Values.clusterAccess.enabled }}
+            {{- if .Values.clusterAccess.useServiceAccount }}
+            - name: kube-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+            {{- else if .Values.clusterAccess.kubeconfigSecret }}
+            - name: kubeconfig
+              mountPath: /home/runner/.kube
+              readOnly: true
+            {{- end }}
+            {{- end }}
+          securityContext:
+            {{- toYaml .Values.kubernetes.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.kubernetes.resources | nindent 12 }}
+      
+      volumes:
+        {{- if .Values.tailscale.enabled }}
+        - name: tailscale-state
+          emptyDir: {}
+        - name: tailscale-sock
+          emptyDir: {}
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        {{- end }}
+        {{- if and .Values.clusterAccess.enabled .Values.clusterAccess.kubeconfigSecret }}
+        - name: kubeconfig
+          secret:
+            secretName: {{ .Values.clusterAccess.kubeconfigSecret }}
+            items:
+              - key: {{ .Values.clusterAccess.kubeconfigSecretKey }}
+                path: config
+        {{- end }}
+      
+      {{- with .Values.kubernetes.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.kubernetes.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.kubernetes.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  
+  {{- if .Values.storage.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: work
+      spec:
+        accessModes:
+          - {{ .Values.storage.accessMode }}
+        {{- if .Values.storage.storageClass }}
+        storageClassName: {{ .Values.storage.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}
+  {{- else }}
+  # Use emptyDir if persistent storage is disabled
+  volumes:
+    - name: work
+      emptyDir: {}
+  {{- end }}

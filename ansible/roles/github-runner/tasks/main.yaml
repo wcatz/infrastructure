@@ -1,0 +1,181 @@
+---
+# Tasks for GitHub Actions runner role
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - github_runner_repository_url is defined
+      - github_runner_repository_url | length > 0
+      - github_runner_token is defined
+      - github_runner_token | length > 0
+    fail_msg: "github_runner_repository_url and github_runner_token are required"
+
+- name: Install dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - jq
+      - tar
+      - sudo
+      - libicu-dev
+      - libssl-dev
+    state: present
+    update_cache: true
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Create runner user
+  ansible.builtin.user:
+    name: "{{ github_runner_user }}"
+    comment: "GitHub Actions Runner"
+    shell: /bin/bash
+    create_home: true
+    system: true
+  become: true
+
+- name: Add runner user to sudoers for kubectl/helm
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/github-runner
+    line: "{{ github_runner_user }} ALL=(ALL) NOPASSWD: ALL"
+    create: true
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  become: true
+
+- name: Create runner installation directory
+  ansible.builtin.file:
+    path: "{{ github_runner_install_dir }}"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0755'
+  become: true
+
+- name: Detect latest runner version
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/actions/runner/releases/latest
+    return_content: true
+  register: github_runner_latest_release
+  when: github_runner_version == "latest"
+  delegate_to: localhost
+  become: false
+
+- name: Set detected runner version
+  ansible.builtin.set_fact:
+    github_runner_detected_version: "{{ github_runner_latest_release.json.tag_name | regex_replace('^v', '') }}"
+  when: github_runner_version == "latest"
+
+- name: Set runner version from variable
+  ansible.builtin.set_fact:
+    github_runner_detected_version: "{{ github_runner_version }}"
+  when: github_runner_version != "latest"
+
+- name: Check if runner is already installed
+  ansible.builtin.stat:
+    path: "{{ github_runner_install_dir }}/config.sh"
+  register: runner_installed
+
+- name: Download and extract runner
+  when: not runner_installed.stat.exists
+  block:
+    - name: Download GitHub Actions runner
+      ansible.builtin.get_url:
+        url: "{{ github_runner_download_url }}"
+        dest: "/tmp/actions-runner-{{ github_runner_detected_version }}.tar.gz"
+        mode: '0644'
+      become: true
+
+    - name: Extract runner archive
+      ansible.builtin.unarchive:
+        src: "/tmp/actions-runner-{{ github_runner_detected_version }}.tar.gz"
+        dest: "{{ github_runner_install_dir }}"
+        remote_src: true
+        owner: "{{ github_runner_user }}"
+        group: "{{ github_runner_user }}"
+      become: true
+
+    - name: Remove downloaded archive
+      ansible.builtin.file:
+        path: "/tmp/actions-runner-{{ github_runner_detected_version }}.tar.gz"
+        state: absent
+      become: true
+
+- name: Check if runner is already configured
+  ansible.builtin.stat:
+    path: "{{ github_runner_install_dir }}/.runner"
+  register: runner_configured
+
+- name: Configure GitHub Actions runner
+  ansible.builtin.shell: |
+    ./config.sh --unattended \
+      --url {{ github_runner_repository_url }} \
+      --token {{ github_runner_token }} \
+      --name {{ github_runner_name }} \
+      --labels {{ github_runner_labels }} \
+      {% if github_runner_group %}--runnergroup {{ github_runner_group }} {% endif %}\
+      --work {{ github_runner_work_dir }} \
+      {% if github_runner_replace %}--replace {% endif %}\
+      {% if github_runner_ephemeral %}--ephemeral {% endif %}\
+      {% if github_runner_disable_update %}--disableupdate {% endif %}\
+      {{ github_runner_extra_args }}
+  args:
+    chdir: "{{ github_runner_install_dir }}"
+  become: true
+  become_user: "{{ github_runner_user }}"
+  when: not runner_configured.stat.exists
+  no_log: true  # Hide token from logs
+
+- name: Install runner service
+  ansible.builtin.command:
+    cmd: ./svc.sh install {{ github_runner_user }}
+    chdir: "{{ github_runner_install_dir }}"
+  become: true
+  when: github_runner_enable_service and not runner_configured.stat.exists
+  notify: Start GitHub runner service
+
+- name: Ensure runner service is enabled and started
+  ansible.builtin.systemd:
+    name: "actions.runner.{{ github_runner_repository_url.split('/')[-2] }}-{{ github_runner_repository_url.split('/')[-1] }}.{{ github_runner_name }}.service"
+    enabled: true
+    state: started
+  become: true
+  when: github_runner_enable_service
+
+- name: Copy kubeconfig for runner user
+  ansible.builtin.copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "/home/{{ github_runner_user }}/.kube/config"
+    remote_src: true
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0600'
+  become: true
+  when: runner_configured.stat.exists or not runner_configured.stat.exists
+
+- name: Create .kube directory for runner user
+  ansible.builtin.file:
+    path: "/home/{{ github_runner_user }}/.kube"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: '0755'
+  become: true
+
+- name: Update kubeconfig server URL to use Tailscale IP
+  ansible.builtin.shell: |
+    # Get Tailscale IP of control plane
+    CONTROL_PLANE_IP=$(tailscale status --json | jq -r '.Peer[] | select(.HostName | contains("control")) | .TailscaleIPs[0]' | head -1)
+    if [ -z "$CONTROL_PLANE_IP" ]; then
+      # Fallback: try to get from inventory
+      CONTROL_PLANE_IP="{{ hostvars[groups['k3s_servers'][0]]['tailscale_ip'] | default('') }}"
+    fi
+    if [ -n "$CONTROL_PLANE_IP" ]; then
+      sed -i "s|https://127.0.0.1:6443|https://$CONTROL_PLANE_IP:6443|g" /home/{{ github_runner_user }}/.kube/config
+    fi
+  become: true
+  become_user: "{{ github_runner_user }}"
+  when: "'k3s_agents' in group_names"
+
+- name: Display runner status
+  ansible.builtin.debug:
+    msg: "GitHub Actions runner '{{ github_runner_name }}' installed and configured"
