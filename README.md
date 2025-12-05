@@ -94,9 +94,17 @@ sudo apt-get install -y ansible kubectl
 # Install Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
+# Detect architecture for Linux
+ARCH=$(uname -m)
+case $ARCH in
+  x86_64) HELMFILE_ARCH="amd64"; AGE_ARCH="amd64" ;;
+  aarch64|arm64) HELMFILE_ARCH="arm64"; AGE_ARCH="arm64" ;;
+  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
 # Install Helmfile
-wget https://github.com/helmfile/helmfile/releases/latest/download/helmfile_linux_amd64
-chmod +x helmfile_linux_amd64 && sudo mv helmfile_linux_amd64 /usr/local/bin/helmfile
+wget https://github.com/helmfile/helmfile/releases/latest/download/helmfile_linux_${HELMFILE_ARCH}
+chmod +x helmfile_linux_${HELMFILE_ARCH} && sudo mv helmfile_linux_${HELMFILE_ARCH} /usr/local/bin/helmfile
 
 # Install Helm diff plugin
 helm plugin install https://github.com/databus23/helm-diff
@@ -104,9 +112,34 @@ helm plugin install https://github.com/databus23/helm-diff
 # Install SOPS and age
 wget https://github.com/mozilla/sops/releases/latest/download/sops-latest.linux
 chmod +x sops-latest.linux && sudo mv sops-latest.linux /usr/local/bin/sops
-wget https://github.com/FiloSottile/age/releases/latest/download/age-latest-linux-amd64.tar.gz
-tar xzf age-latest-linux-amd64.tar.gz && sudo mv age/age* /usr/local/bin/
+wget https://github.com/FiloSottile/age/releases/latest/download/age-latest-linux-${AGE_ARCH}.tar.gz
+tar xzf age-latest-linux-${AGE_ARCH}.tar.gz && sudo mv age/age* /usr/local/bin/
 ```
+
+### Validate Prerequisites
+
+After installing the required tools, validate your environment before proceeding:
+
+```bash
+# Run the prerequisite validation script
+./scripts/validate-prereqs.sh
+```
+
+The validation script checks:
+- **Required Tools**: Verifies installation of ansible, kubectl, helm, helmfile, sops, age, and other dependencies
+- **Credentials**: Checks for Ansible vault files, SOPS age keys, Cloudflare tokens, and Tailscale authentication
+- **Connectivity**: Tests access to Kubernetes cluster, Tailscale network, container registries, and external services
+
+**Expected Output**:
+- ✅ Green checkmarks indicate successful checks
+- ⚠️  Yellow warnings indicate optional components or recommended configurations
+- ❌ Red errors indicate missing required components that must be resolved
+
+If validation fails, follow the instructions in the output and refer to:
+- [DEPLOYMENT_AUDIT.md](DEPLOYMENT_AUDIT.md) - Tool installation steps
+- [SECRETS.md](SECRETS.md) - Credential and secret management
+- [TAILSCALE_SETUP.md](TAILSCALE_SETUP.md) - Tailscale configuration
+- [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md) - Cloudflare tunnel setup
 
 ## Quick Setup
 
