@@ -1,5 +1,10 @@
 # Infrastructure Management
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-k3s-326CE5?logo=kubernetes)](https://k3s.io/)
+[![Helm](https://img.shields.io/badge/Helm-v3-0F1689?logo=helm)](https://helm.sh/)
+[![Ansible](https://img.shields.io/badge/Ansible-2.10+-EE0000?logo=ansible)](https://www.ansible.com/)
+
 GitOps-based infrastructure for hybrid k3s clusters with Tailscale networking and Cloudflared tunnels.
 
 ## Table of Contents
