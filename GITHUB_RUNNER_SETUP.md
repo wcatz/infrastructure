@@ -160,6 +160,388 @@ kubectl exec -n github-runner github-runner-0 -c runner -- kubectl get nodes
 
 ### Option 2: Host-Based Deployment
 
+**Install the runner directly on the worker node using Ansible.**
+
+✅ **Advantages:**
+- Direct host access (no containerization overhead)
+- Simpler for single-runner setups
+- Full system access if needed
+- Traditional deployment model
+
+⚠️ **Considerations:**
+- Requires host-level changes
+- Manual scaling (multiple nodes needed for multiple runners)
+- Less portable than Kubernetes approach
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                       GitHub Actions                     │
+│  Workflow (runs-on: [self-hosted, tailscale])          │
+└────────────────────┬────────────────────────────────────┘
+                     │ HTTPS (GitHub API)
+          ┌──────────▼──────────┐
+          │  Worker Node        │
+          │  (Public IP)        │
+          │  ┌──────────────┐   │
+          │  │ GitHub       │   │
+          │  │ Runner       │   │
+          │  │ Service      │   │
+          │  └──────────────┘   │
+          │  ┌──────────────┐   │
+          │  │ Tailscale    │   │
+          │  │ Client       │   │
+          │  └──────────────┘   │
+          └─────────┬───────────┘
+                    │ Tailscale Mesh
+          ┌─────────▼───────────┐
+          │ Control Plane       │
+          │ (Behind CGNAT)      │
+          │ K3s API: 6443       │
+          └─────────────────────┘
+```
+
+#### Quick Start
+
+**Prerequisites:**
+- Tailscale and k3s already deployed via Ansible
+- SSH access to worker node
+- Ansible installed locally
+
+**Step 1: Generate GitHub Runner Token**
+
+Get a registration token from:
+- GitHub UI: `https://github.com/OWNER/REPO/settings/actions/runners/new`
+- Or via GitHub CLI:
+  ```bash
+  gh api --method POST /repos/OWNER/REPO/actions/runners/registration-token --jq .token
+  ```
+
+**Step 2: Configure Inventory**
+
+Edit `ansible/inventory.ini`:
+
+```ini
+[k3s_agents]
+worker-01 ansible_host=x.x.x.x ansible_user=ubuntu
+
+[all:vars]
+github_runner_repository_url=https://github.com/YOUR_ORG/YOUR_REPO
+```
+
+**Step 3: Run Ansible Playbook**
+
+```bash
+cd ansible
+
+# Deploy runner
+ansible-playbook -i inventory.ini \
+  playbooks/setup-github-runner.yaml \
+  -e "github_runner_token=YOUR_REGISTRATION_TOKEN"
+```
+
+**Step 4: Verify Installation**
+
+```bash
+# SSH to worker node
+ssh user@worker-node
+
+# Check runner service
+sudo systemctl status actions.runner.*.service
+
+# Verify Tailscale connectivity
+tailscale status
+
+# Test kubectl access
+sudo -u github-runner kubectl get nodes
+```
+
+**📚 Full Documentation:** See the detailed host-based setup instructions in the sections below.
+
+---
+
+## Comparison: Kubernetes vs Host-Based
+
+| Feature | Kubernetes Deployment | Host-Based Deployment |
+|---------|----------------------|----------------------|
+| **Deployment** | Helm/Helmfile (declarative) | Ansible (imperative) |
+| **Scaling** | Easy (adjust replicas) | Manual (add nodes) |
+| **Updates** | Rolling updates | Manual restart |
+| **Isolation** | Pod-level | User-level |
+| **Portability** | High (runs anywhere Kubernetes runs) | Moderate (tied to host) |
+| **Resource Management** | Kubernetes resource limits | Host resources |
+| **High Availability** | Built-in (replicas) | Requires multiple nodes |
+| **GitOps Ready** | ✅ Yes | Partial |
+| **Security** | Pod security policies | Host-level permissions |
+| **Recommended For** | Production, multi-runner | Development, single runner |
+
+**Recommendation:** Use **Kubernetes deployment** for production environments. Use **host-based** for development or if you prefer traditional deployment.
+
+---
+
+## Security Configuration
+
+### Tailscale ACL Configuration
+
+Configure Tailscale ACLs to restrict runner access to only necessary services:
+
+```json
+{
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["tag:github-runner", "tag:ci"],
+      "dst": ["tag:k8s-control-plane:6443,10250"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:k8s-control-plane"],
+      "dst": ["tag:github-runner:*", "tag:ci:*"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:github-runner", "tag:ci"],
+      "dst": ["tag:k8s-worker:*"]
+    }
+  ],
+  "tagOwners": {
+    "tag:github-runner": ["autogroup:admin"],
+    "tag:ci": ["autogroup:admin"],
+    "tag:k8s-control-plane": ["autogroup:admin"],
+    "tag:k8s-worker": ["autogroup:admin"]
+  }
+}
+```
+
+**Key ACL Rules:**
+- Runners can access control plane on port 6443 (Kubernetes API) and 10250 (kubelet)
+- Control plane can respond to runners
+- Runners can access worker nodes for service endpoints
+- All other traffic is implicitly denied
+
+### GitHub Repository Security
+
+#### 1. Use Runner Groups (GitHub Enterprise/Organizations)
+
+For better control, create a runner group:
+
+1. Go to **Organization Settings** → **Actions** → **Runner groups**
+2. Create a new group (e.g., "Production Kubernetes")
+3. Limit which repositories can use this group
+4. Assign runners to this group during setup
+
+#### 2. Limit Runner Scope with Labels
+
+Configure runners with specific labels:
+
+```yaml
+# Kubernetes deployment
+runner:
+  labels:
+    - self-hosted
+    - kubernetes
+    - tailscale
+    - production  # Environment-specific
+
+# Host-based deployment
+github_runner_labels: "self-hosted,tailscale,k8s,production"
+```
+
+Then in workflows, be specific:
+
+```yaml
+runs-on: [self-hosted, tailscale, kubernetes, production]
+```
+
+#### 3. Use GitHub Secrets for Sensitive Data
+
+Never hardcode sensitive information. Use GitHub Secrets:
+
+```yaml
+env:
+  SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+  CUSTOM_TOKEN: ${{ secrets.CUSTOM_TOKEN }}
+```
+
+#### 4. Use Environment Protection Rules
+
+For production deployments, enable environment protection:
+
+1. Go to **Repository Settings** → **Environments**
+2. Create environment (e.g., "production")
+3. Configure:
+   - Required reviewers
+   - Wait timer
+   - Deployment branches
+4. Use in workflow:
+   ```yaml
+   jobs:
+     deploy:
+       environment: production
+       runs-on: [self-hosted, tailscale]
+   ```
+
+#### 5. Rotate Tokens Regularly
+
+**GitHub Runner Tokens:**
+- Registration tokens expire after 1 hour (secure by default)
+- For long-term runners, use GitHub Apps or PATs
+- Rotate PATs quarterly
+
+**Tailscale Auth Keys:**
+- Set expiration (90 days recommended)
+- Use reusable, non-ephemeral keys for runners
+- Rotate before expiration
+- Store in Kubernetes secrets or Ansible Vault
+
+### Kubernetes RBAC Security
+
+#### Principle of Least Privilege
+
+The default ClusterRole provides broad permissions. For production:
+
+**Option 1: Namespace-Scoped Permissions**
+
+```yaml
+# In values file
+kubernetes:
+  rbac:
+    clusterRole: false  # Use Role instead of ClusterRole
+```
+
+**Option 2: Custom ClusterRole**
+
+Create a custom role with minimal permissions:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: github-runner-limited
+rules:
+  # Read-only cluster access
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  
+  # Full access to specific namespaces only
+  - apiGroups: ["", "apps", "batch"]
+    resources: ["*"]
+    verbs: ["*"]
+    # Restrict to specific namespaces via RoleBinding
+```
+
+#### Audit Logging
+
+Enable audit logging to track runner actions:
+
+```bash
+# View runner service account activity
+kubectl get events -n github-runner
+
+# Check pod logs
+kubectl logs -n github-runner github-runner-0 -c runner
+
+# View API server audit logs (if enabled)
+kubectl logs -n kube-system kube-apiserver-* | grep github-runner
+```
+
+### Network Security
+
+#### Firewall Rules
+
+**On Worker Node:**
+```bash
+# Allow outbound to Tailscale control plane
+sudo ufw allow out to 100.64.0.0/10
+
+# Allow outbound HTTPS to GitHub
+sudo ufw allow out 443/tcp
+
+# Deny all other outbound by default (optional, very strict)
+# sudo ufw default deny outgoing
+```
+
+**On Control Plane:**
+```bash
+# Allow from Tailscale network only
+sudo ufw allow from 100.64.0.0/10 to any port 6443 proto tcp
+sudo ufw allow from 100.64.0.0/10 to any port 10250 proto tcp
+
+# Deny public access to API server
+sudo ufw deny 6443/tcp
+```
+
+#### Network Policies
+
+Use Kubernetes Network Policies to restrict pod traffic:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: github-runner-policy
+  namespace: github-runner
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: github-runner
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    
+    # Allow Tailscale
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+    
+    # Allow GitHub API
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+    
+    # Allow Kubernetes API
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 6443
+```
+
+### Security Checklist
+
+Before deploying to production:
+
+- [ ] **Tailscale ACLs** configured to restrict runner access
+- [ ] **GitHub runner tokens** stored securely (Kubernetes secrets or Ansible Vault)
+- [ ] **Tailscale auth keys** have expiration set (90 days max)
+- [ ] **RBAC permissions** follow least privilege principle
+- [ ] **Environment protection** rules enabled for production deployments
+- [ ] **Runner labels** are specific and meaningful
+- [ ] **Firewall rules** configured on worker and control plane
+- [ ] **Network policies** applied (Kubernetes deployment)
+- [ ] **Audit logging** enabled for runner actions
+- [ ] **Secrets rotation** schedule established (quarterly)
+- [ ] **Runner ephemeral mode** enabled (Kubernetes) for one-time jobs
+- [ ] **Control plane** not exposed to public internet
+- [ ] **Workflow approval** required for sensitive operations
+- [ ] **Service account** has minimal necessary permissions
+- [ ] **Pod security** standards applied (Kubernetes deployment)
+
+---
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                       GitHub Actions                             │

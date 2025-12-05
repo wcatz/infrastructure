@@ -117,12 +117,24 @@ Configure access control lists in Tailscale admin console for secure inter-node 
       "action": "accept",
       "src": ["tag:worker"],
       "dst": ["tag:control-plane:6443,10250"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:ci", "tag:github-runner"],
+      "dst": ["tag:control-plane:6443,10250"]
+    },
+    {
+      "action": "accept",
+      "src": ["tag:ci", "tag:github-runner"],
+      "dst": ["tag:worker:*"]
     }
   ],
   "tagOwners": {
     "tag:k8s": ["autogroup:admin"],
     "tag:control-plane": ["autogroup:admin"],
-    "tag:worker": ["autogroup:admin"]
+    "tag:worker": ["autogroup:admin"],
+    "tag:ci": ["autogroup:admin"],
+    "tag:github-runner": ["autogroup:admin"]
   }
 }
 ```
@@ -131,6 +143,8 @@ Configure access control lists in Tailscale admin console for secure inter-node 
 - All k8s nodes can communicate with each other
 - Workers can access control plane on port 6443 (Kubernetes API)
 - Control plane can access workers on port 10250 (kubelet)
+- **GitHub runners** (tag:ci or tag:github-runner) can access control plane and workers
+- GitHub runners use these tags for CI/CD access (see [GITHUB_RUNNER_SETUP.md](GITHUB_RUNNER_SETUP.md))
 
 ## Part 2: Tailscale Kubernetes Operator (via Helmfile)
 
