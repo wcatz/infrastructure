@@ -11,9 +11,9 @@ cloudflare:
 
 # Staging ingress rules
 ingress:
-  # Example staging services
+  # Example staging services - route directly to Kubernetes services
   # - hostname: app.staging.example.com
-  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  #   service: http://my-app-service.default.svc.cluster.local:80
   # - hostname: api.staging.example.com
   #   service: http://api-service.default.svc.cluster.local:8080
   # - hostname: monitoring.staging.example.com

@@ -11,13 +11,14 @@ This repository provides a **minimalist, modular framework** for deploying a hyb
   - Tainted to prevent workload scheduling
   - Secured with Tailscale for cluster communication
   - No public exposure required
-  - Uses Cloudflared for HTTP/S ingress
+  - Internal-only access via Tailscale mesh
 
-- **Worker Node(s)** (Netcup VPS/Public IP):
+- **Worker Node(s)** (VPS/Public IP):
   - Runs all application workloads
-  - Cloudflared for HTTP/HTTPS ingress via Cloudflare (routes directly to services)
+  - Cloudflared for HTTP/HTTPS ingress via Cloudflare tunnels
+  - Direct TCP exposure via NodePort or hostNetwork for P2P/services
   - Tailscale for secure control plane communication
-  - Supports NodePort services and `hostNetwork` when needed
+  - Public IP for direct service access
 
 ## Stack
 
@@ -31,11 +32,12 @@ This repository provides a **minimalist, modular framework** for deploying a hyb
 
 ## Key Features
 
-- **No HAProxy/MetalLB**: Simplified networking with Cloudflared for HTTP/S and direct TCP exposure
-- **Tailscale Mesh**: Secure L3 networking between cluster nodes
+- **No Load Balancers**: Simplified networking without HAProxy/MetalLB - uses Cloudflared for HTTP/S and direct TCP exposure via public IPs
+- **Tailscale Mesh**: Secure L3 networking between cluster nodes for internal communication
 - **Workload Placement**: Control plane behind CGNAT, workers with public IPs
 - **Stateful Workloads**: PVC-based persistent storage with failover support
 - **Hybrid Architecture**: Minimal and scalable design for distributed deployments
+- **Direct Service Access**: TCP services exposed directly via NodePort on worker public IPs
 
 ## Quick Setup
 
@@ -111,6 +113,7 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 - Tailscale Kubernetes Operator (L3 mesh networking, optional)
 - Prometheus & Grafana (monitoring)
 - External Secrets (optional)
+- HAProxy Ingress (legacy/optional - disabled by default)
 
 ### GitHub Actions
 - `helmfile-diff.yaml`: Preview changes on PRs
@@ -142,16 +145,16 @@ helmfile -e prod apply
 
 ```
 HTTP/S Traffic:
-Internet → Cloudflare → Cloudflared (tunnel) → Services
+Internet → Cloudflare → Cloudflared Tunnel (worker) → Kubernetes Services → Pods
 
-TCP Traffic:
+TCP Traffic (P2P/Direct Services):
 Internet → Worker Public IP:NodePort → Application Pods
 
-Internal Cluster:
-Nodes ↔ Tailscale Mesh (L3) ↔ Kubernetes Services
+Internal Cluster Communication:
+Control Plane ↔ Tailscale Mesh (L3) ↔ Worker Nodes
 ```
 
-Tailscale provides secure L3 mesh networking for inter-node communication.
+**Network Model**: Tailscale mesh for secure inter-node communication + public IPs on workers for direct service access. No load balancers (HAProxy/MetalLB) required.
 
 ## License
 

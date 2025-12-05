@@ -84,7 +84,7 @@ jobs:
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
           chmod 600 ~/.config/sops/age/keys.txt
-          
+
           # Verify SOPS can read the key
           echo "SOPS age key configured successfully"
 

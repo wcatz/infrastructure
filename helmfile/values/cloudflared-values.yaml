@@ -27,8 +27,10 @@ cloudflare:
 # Configure which services should be accessible through the tunnel
 ingress:
   # Example ingress rules - customize for your services
+  # Route directly to Kubernetes services (ClusterIP or NodePort)
+  #
   # - hostname: app.example.com
-  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  #   service: http://my-app-service.default.svc.cluster.local:80
   # - hostname: api.example.com
   #   service: http://api-service.default.svc.cluster.local:8080
   # - hostname: monitoring.example.com

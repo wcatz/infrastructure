@@ -1,20 +1,26 @@
 ---
-# Example Ingress Configuration
+# Example Kubernetes Ingress Configuration (OPTIONAL)
 #
-# This Ingress routes external HTTP/HTTPS traffic to your services.
-# In the hybrid cluster, configure Cloudflared to route traffic directly to services.
+# NOTE: In the current architecture, standard Kubernetes Ingress resources are OPTIONAL.
+# The recommended approach is to use Cloudflared tunnels which route directly to services.
 #
-# Traffic flow:
-#   Internet → Cloudflare → Cloudflared (worker) → Kubernetes Service → Pods
+# Traffic flow with Cloudflared (RECOMMENDED):
+#   Internet → Cloudflare → Cloudflared Tunnel (worker) → Kubernetes Service → Pods
 #
-# Usage:
-#   1. Deploy your application and service
-#   2. Configure Cloudflared to route the hostname to your service
+# This example shows traditional Ingress resources for legacy support or if you enable
+# HAProxy Ingress Controller (disabled by default in helmfile/config/enabled.yaml).
 #
-# Note: Standard Kubernetes Ingress resources are optional with Cloudflared.
-# You can route directly to services via Cloudflared tunnel configuration.
+# For most deployments, configure routing in helmfile/values/cloudflared-values.yaml:
+#   ingress:
+#     - hostname: app.example.com
+#       service: http://my-app-service.default.svc.cluster.local:80
+#
+# TCP/UDP services should use NodePort directly on worker public IPs:
+#   kubectl expose deployment my-app --type=NodePort --port=8080
+#   Access via: http://worker-public-ip:30xxx
 
-# Example: Using standard Kubernetes Ingress (if needed)
+# Example: Using standard Kubernetes Ingress (LEGACY/OPTIONAL)
+# Only needed if you enable HAProxy Ingress Controller or similar
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -22,6 +28,10 @@ metadata:
   namespace: default
   labels:
     app: example-app
+  annotations:
+    # Example annotations for HAProxy Ingress (if enabled)
+    # haproxy.org/ssl-redirect: "true"
+    # haproxy.org/rate-limit: "100"
 spec:
   rules:
     - host: app.example.com
