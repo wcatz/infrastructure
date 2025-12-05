@@ -70,8 +70,9 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 
 ### Ansible
 - k3s deployment (Traefik disabled)
-- Tailscale VPN on hosts
+- Tailscale VPN on hosts for inter-node communication
 - Ansible Vault for encrypted secrets (K3s token, Tailscale key)
+- **Note**: Tailscale ACLs are managed in the Tailscale admin console
 
 ### Helmfile
 - HAProxy Ingress (NodePort 30080/30443)
@@ -100,7 +101,7 @@ helmfile -e prod apply
 - [Helmfile README](helmfile/README.md)
 - [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md)
 - [Secrets Management](SECRETS.md)
-- [Testing Guide](TESTING.md)
+- [CI/CD Vault Integration](ansible/CI_CD_VAULT_INTEGRATION.md)
 
 ## Traffic Flow
 
