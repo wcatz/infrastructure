@@ -34,7 +34,7 @@ configuration:
 
   # AWS Configuration
   provider: aws
-  
+
   # Azure Configuration
   # provider: azure
   # backupStorageLocation:

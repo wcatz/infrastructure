@@ -54,13 +54,13 @@ jobs:
       - name: Check for breaking changes
         run: |
           echo "🔍 Checking for potentially breaking changes..."
-          
+
           # Check if enabled services have changed
           if git diff HEAD~1 helmfile/config/enabled.yaml | grep -E '^[+-]\s+\w+:' ; then
             echo "⚠️  Warning: Service enablement changes detected"
             echo "changed_services=true" >> $GITHUB_ENV
           fi
-          
+
           # Check for CRD changes
           if git diff HEAD~1 --name-only | grep -i 'crd\|customresourcedefinition' ; then
             echo "⚠️  Warning: CRD changes detected - may require manual intervention"
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate, approve-deployment]
     if: |
-      always() && 
+      always() &&
       needs.validate.result == 'success' &&
       (needs.approve-deployment.result == 'success' || github.event.inputs.skip_approval == 'true')
     environment: production
@@ -164,7 +164,7 @@ jobs:
       - name: Create Pre-deployment Backup
         run: |
           echo "📦 Creating pre-deployment backup with Velero..."
-          
+
           # Trigger Velero backup
           BACKUP_NAME="pre-deploy-$(date +%Y%m%d-%H%M%S)"
           kubectl create -f - <<EOF
@@ -187,7 +187,7 @@ jobs:
               - default
             ttl: 168h  # 7 days retention
           EOF
-          
+
           echo "Backup created: $BACKUP_NAME"
           echo "backup_name=$BACKUP_NAME" >> $GITHUB_ENV
 
@@ -207,7 +207,7 @@ jobs:
       - name: Wait for Deployments
         run: |
           echo "⏳ Waiting for deployments to be ready..."
-          
+
           # Wait for critical deployments
           kubectl wait --for=condition=available --timeout=600s deployment --all -n production || true
           kubectl wait --for=condition=available --timeout=300s deployment --all -n monitoring || true
@@ -216,7 +216,7 @@ jobs:
       - name: Run Production Smoke Tests
         run: |
           echo "🧪 Running production smoke tests..."
-          
+
           # Test 1: Pod health
           echo "1. Checking pod health..."
           FAILED_PODS=$(kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded -o json | jq -r '.items | length')
@@ -226,25 +226,25 @@ jobs:
             exit 1
           fi
           echo "✅ All pods healthy"
-          
+
           # Test 2: Service availability
           echo "2. Checking service endpoints..."
           kubectl get endpoints -A | grep -v "none" || echo "⚠️  Some services have no endpoints"
-          
+
           # Test 3: Cloudflared tunnel
           echo "3. Testing Cloudflared tunnel..."
           kubectl get pods -n cloudflare -l app=cloudflared -o json | \
             jq -r '.items[].status.phase' | grep -q "Running" && \
             echo "✅ Cloudflared tunnel running" || \
             echo "❌ Cloudflared tunnel not running"
-          
+
           # Test 4: Prometheus
           echo "4. Testing Prometheus..."
           kubectl run smoke-test-curl --image=curlimages/curl:latest --rm -i --restart=Never -- \
             curl -sf http://prometheus-server.monitoring.svc.cluster.local/-/healthy && \
             echo "✅ Prometheus healthy" || \
             echo "❌ Prometheus unhealthy"
-          
+
           # Test 5: cert-manager
           echo "5. Checking certificates..."
           CERT_COUNT=$(kubectl get certificates -A -o json | jq -r '.items | length')
@@ -256,20 +256,20 @@ jobs:
               echo "✅ All certificates ready"
             fi
           fi
-          
+
           # Test 6: Velero
           echo "6. Checking Velero..."
           kubectl get pods -n velero -l app.kubernetes.io/name=velero -o json | \
             jq -r '.items[].status.phase' | grep -q "Running" && \
             echo "✅ Velero running" || \
             echo "⚠️  Velero not running"
-          
+
           echo "✅ Production smoke tests completed"
 
       - name: Post-deployment Verification
         run: |
           echo "🔍 Running post-deployment verification..."
-          
+
           # Check for any critical alerts
           echo "Checking for critical alerts..."
           # This would query Prometheus for active critical alerts
@@ -279,7 +279,7 @@ jobs:
           # if [ "$CRITICAL_ALERTS" -gt "0" ]; then
           #   echo "⚠️  Warning: $CRITICAL_ALERTS critical alert(s) active"
           # fi
-          
+
           echo "✅ Post-deployment verification completed"
 
       - name: Deployment Summary

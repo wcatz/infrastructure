@@ -45,7 +45,7 @@ alertmanager:
       group_wait: 10s
       group_interval: 10s
       repeat_interval: 12h
-      
+
       # Child routes
       routes:
         # Critical alerts to PagerDuty and Slack critical channel
@@ -55,7 +55,7 @@ alertmanager:
           continue: true
           group_wait: 10s
           repeat_interval: 5m
-        
+
         # Warning alerts to Slack warning channel
         - match:
             severity: warning
@@ -63,13 +63,13 @@ alertmanager:
           continue: false
           group_wait: 30s
           repeat_interval: 4h
-        
+
         # Backup-related alerts (high priority)
         - match_re:
             alertname: '^(Velero|Backup).*'
           receiver: 'backup-alerts'
           continue: true
-        
+
         # Certificate-related alerts
         - match_re:
             alertname: '^Certificate.*'
@@ -84,7 +84,7 @@ alertmanager:
         target_match:
           severity: 'warning'
         equal: ['alertname', 'namespace', 'service']
-      
+
       # Suppress backup old alerts if backup failed alert is firing
       - source_match:
           alertname: 'VeleroBackupFailed'
@@ -112,7 +112,7 @@ alertmanager:
             send_resolved: true
             # Use service_key for Events API v1 (legacy)
             # Use routing_key for Events API v2 (recommended)
-        
+
         # Also send to Slack critical channel
         slack_configs:
           - api_url: '<SLACK_WEBHOOK_URL>'  # Replace with secret reference
@@ -162,7 +162,7 @@ alertmanager:
             username: 'Velero'
             icon_emoji: ':floppy_disk:'
             color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
-        
+
         # Also send to PagerDuty if critical
         pagerduty_configs:
           - routing_key: '<PAGERDUTY_INTEGRATION_KEY>'
@@ -187,7 +187,7 @@ alertmanager:
             username: 'cert-manager'
             icon_emoji: ':lock:'
             color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
-    
+
     # Templates for alert messages
     templates:
       - '/etc/alertmanager/template/*.tmpl'
@@ -215,7 +215,9 @@ serverFiles:
               severity: warning
             annotations:
               summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
-              description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently ({{ $value }} restarts/sec in last 15 minutes)"
+              description: >-
+                Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting
+                frequently ({{ $value }} restarts/sec in last 15 minutes)
 
           # Resource alerts
           - alert: HighCPUUsage
@@ -355,7 +357,10 @@ serverFiles:
               severity: warning
             annotations:
               summary: "Kubernetes Deployment replicas mismatch"
-              description: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has {{ $value }} replicas available, expected {{ $labels.spec_replicas }}"
+              description: >-
+                Deployment {{ $labels.namespace }}/{{ $labels.deployment }}
+                has {{ $value }} replicas available,
+                expected {{ $labels.spec_replicas }}
 
 nodeExporter:
   enabled: true

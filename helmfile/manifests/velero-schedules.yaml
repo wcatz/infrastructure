@@ -173,7 +173,7 @@ spec:
 
 ---
 # Notes on using these schedules:
-# 
+#
 # 1. Apply schedules:
 #    kubectl apply -f helmfile/manifests/velero-schedules.yaml
 #

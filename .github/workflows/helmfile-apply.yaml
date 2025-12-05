@@ -117,7 +117,7 @@ jobs:
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
           chmod 600 ~/.config/sops/age/keys.txt
-          
+
           # Verify SOPS can read the key
           echo "SOPS age key configured successfully"
 
@@ -164,7 +164,7 @@ jobs:
           echo "Triggered by: ${{ github.actor }}"
           echo "Commit SHA: ${{ github.sha }}"
           echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-          
+
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY

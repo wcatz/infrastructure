@@ -96,7 +96,7 @@ jobs:
       - name: Run Smoke Tests
         run: |
           echo "🧪 Running smoke tests..."
-          
+
           # Test 1: Check all pods are running
           echo "Checking pod status..."
           FAILED_PODS=$(kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded -o json | jq -r '.items | length')
@@ -106,27 +106,27 @@ jobs:
           else
             echo "✅ All pods are running"
           fi
-          
+
           # Test 2: Check critical services are up
           echo "Checking critical services..."
           kubectl get svc -n monitoring prometheus-server || echo "⚠️  Prometheus service not found"
           kubectl get svc -n cloudflare cloudflared || echo "⚠️  Cloudflared service not found"
-          
+
           # Test 3: Test Prometheus is reachable
           echo "Testing Prometheus health..."
           kubectl run curl-test --image=curlimages/curl:latest --rm -i --restart=Never -- \
             curl -sf http://prometheus-server.monitoring.svc.cluster.local/-/healthy || \
             echo "⚠️  Prometheus health check failed"
-          
+
           # Test 4: Check Velero backup status
           echo "Checking Velero status..."
           kubectl get backups -n velero --sort-by=.metadata.creationTimestamp | tail -5 || \
             echo "⚠️  Could not retrieve Velero backup status"
-          
+
           # Test 5: Check cert-manager
           echo "Checking cert-manager status..."
           kubectl get certificates -A || echo "⚠️  Could not retrieve certificate status"
-          
+
           echo "✅ Smoke tests completed"
 
       - name: Deployment Summary
