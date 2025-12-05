@@ -94,9 +94,17 @@ sudo apt-get install -y ansible kubectl
 # Install Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
+# Detect architecture for Linux
+ARCH=$(uname -m)
+case $ARCH in
+  x86_64) HELMFILE_ARCH="amd64"; AGE_ARCH="amd64" ;;
+  aarch64|arm64) HELMFILE_ARCH="arm64"; AGE_ARCH="arm64" ;;
+  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
 # Install Helmfile
-wget https://github.com/helmfile/helmfile/releases/latest/download/helmfile_linux_amd64
-chmod +x helmfile_linux_amd64 && sudo mv helmfile_linux_amd64 /usr/local/bin/helmfile
+wget https://github.com/helmfile/helmfile/releases/latest/download/helmfile_linux_${HELMFILE_ARCH}
+chmod +x helmfile_linux_${HELMFILE_ARCH} && sudo mv helmfile_linux_${HELMFILE_ARCH} /usr/local/bin/helmfile
 
 # Install Helm diff plugin
 helm plugin install https://github.com/databus23/helm-diff
@@ -104,8 +112,8 @@ helm plugin install https://github.com/databus23/helm-diff
 # Install SOPS and age
 wget https://github.com/mozilla/sops/releases/latest/download/sops-latest.linux
 chmod +x sops-latest.linux && sudo mv sops-latest.linux /usr/local/bin/sops
-wget https://github.com/FiloSottile/age/releases/latest/download/age-latest-linux-amd64.tar.gz
-tar xzf age-latest-linux-amd64.tar.gz && sudo mv age/age* /usr/local/bin/
+wget https://github.com/FiloSottile/age/releases/latest/download/age-latest-linux-${AGE_ARCH}.tar.gz
+tar xzf age-latest-linux-${AGE_ARCH}.tar.gz && sudo mv age/age* /usr/local/bin/
 ```
 
 ### Validate Prerequisites
