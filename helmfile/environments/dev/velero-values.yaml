@@ -1,0 +1,41 @@
+# Velero Development Environment Overrides
+# Minimal backups for dev environment
+
+configuration:
+  # Development backup schedule - less frequent
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: dev-k3s-backups
+      config:
+        region: us-west-2
+  
+  volumeSnapshotLocation:
+    - name: default
+      provider: aws
+      config:
+        region: us-west-2
+
+# Backup schedules for dev
+schedules:
+  daily:
+    disabled: false
+    schedule: "0 2 * * *"  # 2 AM daily
+    template:
+      ttl: "168h"  # 7 days retention
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Only backup important namespaces
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.8.0
+    volumeMounts:
+      - mountPath: /target
+        name: plugins

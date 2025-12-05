@@ -1,0 +1,45 @@
+# Velero Staging Environment Overrides
+# Regular backups for staging environment
+
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: staging-k3s-backups
+      config:
+        region: us-west-2
+  
+  volumeSnapshotLocation:
+    - name: default
+      provider: aws
+      config:
+        region: us-west-2
+
+# Backup schedules for staging
+schedules:
+  daily:
+    disabled: false
+    schedule: "0 1 * * *"  # 1 AM daily
+    template:
+      ttl: "336h"  # 14 days retention
+  
+  weekly:
+    disabled: false
+    schedule: "0 0 * * 0"  # Sunday midnight
+    template:
+      ttl: "720h"  # 30 days retention
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.8.0
+    volumeMounts:
+      - mountPath: /target
+        name: plugins

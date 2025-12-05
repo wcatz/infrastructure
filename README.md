@@ -2,6 +2,34 @@
 
 This repository contains infrastructure management tools and GitOps workflows for Kubernetes and non-Kubernetes infrastructure.
 
+## Quick Links
+
+### 📚 Documentation
+- **[First-Time Setup Guide](docs/first-time-setup.md)**: Complete step-by-step setup for new deployments
+- **[HAProxy Setup Guide](docs/haproxy-setup.md)**: Deploy and configure HAProxy for Kubernetes ingress and NodePort load balancing
+- **[Secrets Management Guide](docs/secrets-management.md)**: Manage secrets with SOPS, Ansible Vault, and External Secrets Operator
+- **[GitOps Workflows Guide](docs/gitops-workflows.md)**: CI/CD automation with GitHub Actions
+- **[HAProxy Advanced Configuration](docs/haproxy-advanced.md)**: Performance tuning, security hardening, and advanced patterns
+- **[Disaster Recovery Guide](docs/disaster-recovery.md)**: Backup and restore procedures with Velero
+- **[Cloudflared Setup Guide](helmfile/CLOUDFLARED_SETUP.md)**: Complete Cloudflare tunnel configuration
+- **[DNS Setup Guide](DNS_SETUP.md)**: DNS configuration for Cloudflare services
+- **[Testing Guide](TESTING.md)**: Comprehensive testing procedures
+- **[Ansible Documentation](ansible/README.md)**: Ansible playbooks and role documentation
+- **[Helmfile Management](helmfile/README.md)**: Helmfile releases, environments, and deployments
+
+### 🚀 Quick Start
+
+**New to this repository?** Start here:
+
+1. **[Prerequisites & Installation](docs/first-time-setup.md#prerequisites)** - Install required tools
+2. **[Deploy k3s Cluster](docs/first-time-setup.md#phase-1-provisioning-k3s)** - Provision Kubernetes
+3. **[Deploy HAProxy](docs/haproxy-setup.md#haproxy-ingress-controller-kubernetes)** - Set up load balancing
+4. **[Deploy Core Services](docs/first-time-setup.md#phase-3-deploy-core-services)** - Install monitoring and ingress
+5. **[Configure Secrets](docs/secrets-management.md)** - Manage secrets securely
+6. **[Setup GitOps](docs/gitops-workflows.md)** - Automate deployments
+
+## Overview
+
 ## Traffic Flow Architecture
 
 ```
@@ -366,13 +394,27 @@ kubectl get pods -n monitoring
 
 ## Structure
 
+This repository is organized for clear separation of concerns and ease of navigation:
+
+- **docs/**: Comprehensive documentation guides
+  - `first-time-setup.md`: Step-by-step setup for new deployments
+  - `haproxy-setup.md`: HAProxy deployment and configuration
+  - `haproxy-advanced.md`: Advanced HAProxy patterns and tuning
+  - `secrets-management.md`: SOPS, Ansible Vault, and secret workflows
+  - `gitops-workflows.md`: CI/CD automation with GitHub Actions
+  - `disaster-recovery.md`: Backup and restore procedures
 - **ansible/**: Ansible playbooks and roles for infrastructure automation
   - **playbooks/**: Deployment playbooks
     - `deploy-k3s.yaml`: Deploy k3s without Traefik (for HAProxy ingress)
+    - `deploy-haproxy.yaml`: Deploy HAProxy load balancer for NodePort services
+    - `configure-hostname.yaml`: Set system hostnames
+    - `setup-tailscale.yaml`: Install and configure Tailscale VPN
   - **roles/**: Ansible roles
-    - `k3s/`: k3s installation role (Traefik disabled)
+    - `k3s/`: k3s installation role (Traefik disabled, with SOPS secret seeding)
+    - `haproxy/`: HAProxy load balancer role for TCP/UDP NodePort services
     - `hostname/`: Hostname configuration role
     - `tailscale/`: Tailscale VPN configuration role
+  - `inventory-*.ini.example`: Environment-specific inventory templates (dev/staging/prod)
   - **README.md**: Ansible usage documentation
 - **helmfile/**: Helmfile configurations for Kubernetes deployments
   - **helmfile.yaml**: Main Helmfile configuration
@@ -387,7 +429,6 @@ kubectl get pods -n monitoring
     - `prod/`: Production environment overrides
   - **README.md**: Helmfile management guide
   - **CLOUDFLARED_SETUP.md**: Cloudflared tunnel setup guide
-- **DNS_SETUP.md**: DNS configuration guide for Cloudflare
 - **.github/workflows/**: GitHub Actions workflows for GitOps automation
   - **helmfile-diff.yaml**: Automatic diff on pull requests
   - **helmfile-apply.yaml**: Manual deployment workflow
