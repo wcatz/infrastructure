@@ -14,6 +14,11 @@ on:
           - staging
           - production
 
+# Use OIDC for secure authentication instead of long-lived credentials
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC
+
 jobs:
   validate-before-deploy:
     runs-on: ubuntu-latest
@@ -40,9 +45,36 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
     permissions:
       contents: read
+      id-token: write  # Required for OIDC
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # OIDC Authentication for AWS (if using AWS)
+      # Uncomment and configure for AWS-based infrastructure
+      # - name: Configure AWS Credentials (OIDC)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: arn:aws:iam::ACCOUNT_ID:role/github-actions-role
+      #     role-session-name: helmfile-deploy-${{ github.run_id }}
+      #     aws-region: us-west-2
+
+      # OIDC Authentication for Azure (if using Azure)
+      # Uncomment and configure for Azure-based infrastructure
+      # - name: Azure Login (OIDC)
+      #   uses: azure/login@v1
+      #   with:
+      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # OIDC Authentication for GCP (if using GCP)
+      # Uncomment and configure for GCP-based infrastructure
+      # - name: Authenticate to GCP (OIDC)
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     workload_identity_provider: 'projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID'
+      #     service_account: 'github-actions@PROJECT_ID.iam.gserviceaccount.com'
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
@@ -74,13 +106,14 @@ jobs:
           sudo mv age/age age/age-keygen /usr/local/bin/
           age --version
 
-      - name: Configure SOPS Age Key
+      - name: Configure SOPS Age Key (from GitHub Encrypted Secrets)
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: |
-          # Configure age key for SOPS decryption
+          # Configure age key for SOPS decryption from GitHub encrypted secrets
           # The SOPS_AGE_KEY secret should contain the private key from ~/.config/sops/age/keys.txt
-          # To generate: age-keygen -o ~/.config/sops/age/keys.txt
+          # This is stored as an encrypted secret in GitHub Actions (not in repository)
+          # Rotation: Update this secret quarterly (see SECRETS.md for rotation procedures)
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
           chmod 600 ~/.config/sops/age/keys.txt
@@ -131,3 +164,10 @@ jobs:
           echo "Triggered by: ${{ github.actor }}"
           echo "Commit SHA: ${{ github.sha }}"
           echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Success" >> $GITHUB_STEP_SUMMARY
