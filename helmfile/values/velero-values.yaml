@@ -1,0 +1,182 @@
+# Velero configuration for cluster-wide backups
+# See DISASTER_RECOVERY.md for setup and usage instructions
+
+# Configure credentials via secret (create manually or via External Secrets Operator)
+# kubectl create secret generic cloud-credentials \
+#   --from-file=cloud=credentials-velero \
+#   -n velero
+
+configuration:
+  # Default backup storage location (update with your provider)
+  backupStorageLocation:
+    - name: default
+      provider: aws  # Options: aws, azure, gcp
+      bucket: velero-backups  # Update with your bucket name
+      default: true
+      config:
+        region: us-west-2  # Update with your region
+        # For S3-compatible storage (MinIO, etc.):
+        # s3Url: https://minio.example.com
+        # s3ForcePathStyle: "true"
+      credential:
+        name: cloud-credentials
+        key: cloud
+
+  # Volume snapshot location (for PV snapshots)
+  volumeSnapshotLocation:
+    - name: default
+      provider: aws  # Options: aws, azure, gcp
+      config:
+        region: us-west-2  # Update with your region
+
+  # Provider-specific configuration
+  # Uncomment based on your cloud provider:
+
+  # AWS Configuration
+  provider: aws
+  
+  # Azure Configuration
+  # provider: azure
+  # backupStorageLocation:
+  #   - name: default
+  #     provider: azure
+  #     bucket: velero
+  #     config:
+  #       resourceGroup: velero-backup-rg
+  #       storageAccount: velerobackups
+  #       subscriptionId: <subscription-id>
+
+  # GCP Configuration
+  # provider: gcp
+  # backupStorageLocation:
+  #   - name: default
+  #     provider: gcp
+  #     bucket: velero-backups
+  #     config:
+  #       project: <gcp-project-id>
+
+  # Features to enable
+  features: |
+    - EnableCSI  # Enable CSI snapshot support
+    - EnableAPIGroupVersions  # Enable API group version support
+
+  # Default backup settings
+  defaultBackupStorageLocation: default
+  defaultVolumeSnapshotLocations: default
+  defaultBackupTTL: 720h  # 30 days retention
+
+# Init containers for plugin installation
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.8.2
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+  # Uncomment for Azure:
+  # - name: velero-plugin-for-microsoft-azure
+  #   image: velero/velero-plugin-for-microsoft-azure:v1.8.2
+  #   volumeMounts:
+  #     - mountPath: /target
+  #       name: plugins
+  # Uncomment for GCP:
+  # - name: velero-plugin-for-gcp
+  #   image: velero/velero-plugin-for-gcp:v1.8.2
+  #   volumeMounts:
+  #     - mountPath: /target
+  #       name: plugins
+  # CSI plugin (for CSI volume snapshots):
+  - name: velero-plugin-for-csi
+    image: velero/velero-plugin-for-csi:v0.6.2
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+# Resource limits
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true  # Enable if Prometheus Operator is installed
+    additionalLabels:
+      release: prometheus
+
+# Backup schedules (create via manifests or kubectl)
+# Example schedules are in helmfile/manifests/velero-schedules.yaml
+
+# Node selector for scheduling Velero pod
+# Uncomment to schedule on specific nodes
+# nodeSelector:
+#   node-role: worker
+
+# Tolerations for scheduling
+# Uncomment if control plane is tainted
+# tolerations:
+#   - key: node-role.kubernetes.io/control-plane
+#     operator: Exists
+#     effect: NoSchedule
+
+# Security context
+securityContext:
+  fsGroup: 65534
+  runAsUser: 65534
+  runAsNonRoot: true
+
+# Enable cleanup of backup and restore resources
+cleanUpCRDs: false
+
+# Upgrade settings
+upgradeCRDs: true
+
+# Service account annotations (for IRSA on AWS, Workload Identity on GCP, etc.)
+serviceAccount:
+  server:
+    create: true
+    name: velero
+    annotations: {}
+    # For AWS IRSA (IAM Roles for Service Accounts):
+    # annotations:
+    #   eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/velero
+    # For GCP Workload Identity:
+    # annotations:
+    #   iam.gke.io/gcp-service-account: velero@PROJECT_ID.iam.gserviceaccount.com
+
+# kubectl settings
+kubectl:
+  image:
+    repository: docker.io/bitnami/kubectl
+    tag: 1.28
+
+# Velero deployment settings
+deployRestic: false  # Deprecated, use node-agent instead
+deployNodeAgent: true  # For file-level backups (replaces restic)
+
+# Node agent configuration
+nodeAgent:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1024Mi
+  tolerations: []
+  # Uncomment to run on control plane if needed:
+  # tolerations:
+  #   - key: node-role.kubernetes.io/control-plane
+  #     operator: Exists
+  #     effect: NoSchedule
+
+# Snapshot configuration
+snapshotsEnabled: true
+
+# Configure log level
+logLevel: info
+logFormat: text

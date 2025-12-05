@@ -1,0 +1,299 @@
+# Service Level Objectives (SLO) Definitions and Monitoring
+# 
+# SLOs define target reliability for services. These are implemented as
+# Prometheus recording rules and alerts to track and enforce SLOs.
+#
+# Apply with: kubectl apply -f slo-definitions.yaml
+# Or include in Prometheus configuration via serverFiles
+
+---
+# SLO Recording Rules
+# These calculate SLIs (Service Level Indicators) from metrics
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-slo-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+data:
+  slo_rules.yml: |
+    groups:
+      # API Availability SLO
+      - name: slo_api_availability
+        interval: 30s
+        rules:
+          # SLI: API availability (percentage of successful requests)
+          - record: slo:api_availability:ratio
+            expr: |
+              sum(rate(http_requests_total{code!~"5.."}[5m])) by (service)
+              /
+              sum(rate(http_requests_total[5m])) by (service)
+          
+          # SLO: 99.9% availability target
+          - record: slo:api_availability:target
+            expr: 0.999
+          
+          # Error budget remaining (1 - SLO target = 0.1% error budget)
+          - record: slo:api_availability:error_budget_remaining
+            expr: |
+              1 - (
+                (1 - slo:api_availability:ratio)
+                /
+                (1 - slo:api_availability:target)
+              )
+
+      # API Latency SLO
+      - name: slo_api_latency
+        interval: 30s
+        rules:
+          # SLI: Percentage of requests faster than 500ms
+          - record: slo:api_latency:ratio
+            expr: |
+              sum(rate(http_request_duration_seconds_bucket{le="0.5"}[5m])) by (service)
+              /
+              sum(rate(http_request_duration_seconds_count[5m])) by (service)
+          
+          # SLO: 95% of requests under 500ms
+          - record: slo:api_latency:target
+            expr: 0.95
+          
+          # Error budget remaining
+          - record: slo:api_latency:error_budget_remaining
+            expr: |
+              1 - (
+                (1 - slo:api_latency:ratio)
+                /
+                (1 - slo:api_latency:target)
+              )
+
+      # Cloudflared Tunnel Availability SLO
+      - name: slo_cloudflared_availability
+        interval: 30s
+        rules:
+          # SLI: Cloudflared tunnel uptime
+          - record: slo:cloudflared_availability:ratio
+            expr: avg_over_time(up{job="cloudflared"}[5m])
+          
+          # SLO: 99.9% tunnel availability
+          - record: slo:cloudflared_availability:target
+            expr: 0.999
+          
+          # Error budget remaining
+          - record: slo:cloudflared_availability:error_budget_remaining
+            expr: |
+              1 - (
+                (1 - slo:cloudflared_availability:ratio)
+                /
+                (1 - slo:cloudflared_availability:target)
+              )
+
+      # Backup Success Rate SLO
+      - name: slo_backup_success
+        interval: 1h
+        rules:
+          # SLI: Backup success rate over last 7 days
+          - record: slo:backup_success:ratio
+            expr: |
+              sum(increase(velero_backup_success_total[7d])) by (schedule)
+              /
+              sum(increase(velero_backup_attempt_total[7d])) by (schedule)
+          
+          # SLO: 99% backup success rate
+          - record: slo:backup_success:target
+            expr: 0.99
+          
+          # Error budget remaining
+          - record: slo:backup_success:error_budget_remaining
+            expr: |
+              1 - (
+                (1 - slo:backup_success:ratio)
+                /
+                (1 - slo:backup_success:target)
+              )
+
+      # Certificate Renewal Success SLO
+      - name: slo_certificate_renewal
+        interval: 1h
+        rules:
+          # SLI: Certificate renewal success rate
+          - record: slo:certificate_renewal:ratio
+            expr: |
+              sum(rate(certmanager_certificate_renewal_total{status="success"}[24h]))
+              /
+              sum(rate(certmanager_certificate_renewal_total[24h]))
+          
+          # SLO: 99.5% renewal success rate
+          - record: slo:certificate_renewal:target
+            expr: 0.995
+          
+          # Error budget remaining
+          - record: slo:certificate_renewal:error_budget_remaining
+            expr: |
+              1 - (
+                (1 - slo:certificate_renewal:ratio)
+                /
+                (1 - slo:certificate_renewal:target)
+              )
+
+      # Database Availability SLO
+      - name: slo_database_availability
+        interval: 30s
+        rules:
+          # SLI: Database uptime
+          - record: slo:database_availability:ratio
+            expr: avg_over_time(up{job="mysql"}[5m])
+          
+          # SLO: 99.95% database availability
+          - record: slo:database_availability:target
+            expr: 0.9995
+          
+          # Error budget remaining
+          - record: slo:database_availability:error_budget_remaining
+            expr: |
+              1 - (
+                (1 - slo:database_availability:ratio)
+                /
+                (1 - slo:database_availability:target)
+              )
+
+---
+# SLO Alerting Rules
+# These alert when SLOs are violated or error budget is exhausted
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-slo-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+data:
+  slo_alerts.yml: |
+    groups:
+      - name: slo_alerts
+        interval: 1m
+        rules:
+          # API Availability SLO Violation
+          - alert: SLOViolationAPIAvailability
+            expr: slo:api_availability:ratio < slo:api_availability:target
+            for: 5m
+            labels:
+              severity: warning
+              slo: availability
+            annotations:
+              summary: "API availability SLO violation"
+              description: "API availability is {{ $value | humanizePercentage }}, below target of {{ printf `slo:api_availability:target` | query | first | value | humanizePercentage }}"
+
+          # API Availability Error Budget Exhausted
+          - alert: SLOErrorBudgetExhaustedAPIAvailability
+            expr: slo:api_availability:error_budget_remaining < 0.1
+            for: 5m
+            labels:
+              severity: critical
+              slo: availability
+            annotations:
+              summary: "API availability error budget nearly exhausted"
+              description: "Only {{ $value | humanizePercentage }} of error budget remaining for API availability SLO"
+
+          # API Latency SLO Violation
+          - alert: SLOViolationAPILatency
+            expr: slo:api_latency:ratio < slo:api_latency:target
+            for: 10m
+            labels:
+              severity: warning
+              slo: latency
+            annotations:
+              summary: "API latency SLO violation"
+              description: "Only {{ $value | humanizePercentage }} of requests are meeting latency SLO (target: {{ printf `slo:api_latency:target` | query | first | value | humanizePercentage }})"
+
+          # Cloudflared Availability SLO Violation
+          - alert: SLOViolationCloudflaredAvailability
+            expr: slo:cloudflared_availability:ratio < slo:cloudflared_availability:target
+            for: 5m
+            labels:
+              severity: critical
+              slo: availability
+            annotations:
+              summary: "Cloudflared tunnel availability SLO violation"
+              description: "Cloudflared availability is {{ $value | humanizePercentage }}, below target of {{ printf `slo:cloudflared_availability:target` | query | first | value | humanizePercentage }}"
+
+          # Backup Success Rate SLO Violation
+          - alert: SLOViolationBackupSuccess
+            expr: slo:backup_success:ratio < slo:backup_success:target
+            for: 1h
+            labels:
+              severity: critical
+              slo: backup
+            annotations:
+              summary: "Backup success rate SLO violation"
+              description: "Backup success rate for {{ $labels.schedule }} is {{ $value | humanizePercentage }}, below target of {{ printf `slo:backup_success:target` | query | first | value | humanizePercentage }}"
+
+          # Certificate Renewal SLO Violation
+          - alert: SLOViolationCertificateRenewal
+            expr: slo:certificate_renewal:ratio < slo:certificate_renewal:target
+            for: 1h
+            labels:
+              severity: warning
+              slo: certificate
+            annotations:
+              summary: "Certificate renewal success rate SLO violation"
+              description: "Certificate renewal success rate is {{ $value | humanizePercentage }}, below target"
+
+          # Database Availability SLO Violation
+          - alert: SLOViolationDatabaseAvailability
+            expr: slo:database_availability:ratio < slo:database_availability:target
+            for: 5m
+            labels:
+              severity: critical
+              slo: availability
+            annotations:
+              summary: "Database availability SLO violation"
+              description: "Database availability is {{ $value | humanizePercentage }}, below target of {{ printf `slo:database_availability:target` | query | first | value | humanizePercentage }}"
+
+---
+# SLO Documentation
+# 
+# Service Level Objectives (SLOs) define target reliability for services.
+# These are measured using Service Level Indicators (SLIs) derived from metrics.
+#
+# SLO Summary:
+#
+# | Service | SLI | SLO Target | Error Budget | Measurement Window |
+# |---------|-----|------------|--------------|-------------------|
+# | API | Availability | 99.9% | 0.1% | 5 minutes |
+# | API | Latency (p95 < 500ms) | 95% | 5% | 5 minutes |
+# | Cloudflared | Tunnel uptime | 99.9% | 0.1% | 5 minutes |
+# | Velero | Backup success rate | 99% | 1% | 7 days |
+# | cert-manager | Certificate renewal | 99.5% | 0.5% | 24 hours |
+# | MySQL | Database uptime | 99.95% | 0.05% | 5 minutes |
+#
+# Error Budget:
+# - Error budget is the allowed amount of unreliability (1 - SLO)
+# - When error budget is exhausted, focus shifts to reliability over features
+# - Error budget remaining tracks how much budget is left in the measurement window
+#
+# Usage:
+# 1. Query SLO metrics in Prometheus:
+#    - slo:api_availability:ratio (current SLI value)
+#    - slo:api_availability:target (SLO target)
+#    - slo:api_availability:error_budget_remaining (remaining error budget)
+#
+# 2. Create Grafana dashboards to visualize SLOs
+#
+# 3. Alerts fire when:
+#    - SLI falls below SLO target
+#    - Error budget is nearly exhausted (< 10% remaining)
+#
+# 4. Review SLO metrics in postmortems:
+#    - How much error budget was consumed?
+#    - Should we adjust SLO targets?
+#    - What improvements are needed?
+#
+# 5. Adjust SLO targets based on:
+#    - User requirements
+#    - Historical performance
+#    - Cost of achieving higher reliability
+#
+# See also:
+# - Google SRE Book: https://sre.google/sre-book/service-level-objectives/
+# - Implementing SLOs: https://sre.google/workbook/implementing-slos/

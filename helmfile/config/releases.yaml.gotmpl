@@ -101,3 +101,40 @@ releases:
     values:
       - values/tailscale-operator-values.yaml
 {{- end }}
+
+{{- if $enabled.velero | default false }}
+  - name: velero
+    namespace: velero
+    createNamespace: true
+    chart: vmware-tanzu/velero
+    version: 5.2.0
+    values:
+      - values/velero-values.yaml
+      # Environment-specific overrides
+      {{- if eq $env "dev" }}
+      - environments/dev/velero-values.yaml
+      {{- else if eq $env "staging" }}
+      - environments/staging/velero-values.yaml
+      {{- else if eq $env "prod" }}
+      - environments/prod/velero-values.yaml
+      {{- end }}
+{{- end }}
+
+{{- if $enabled.certManager | default false }}
+  - name: cert-manager
+    namespace: cert-manager
+    createNamespace: true
+    chart: jetstack/cert-manager
+    version: 1.13.3
+    values:
+      - values/cert-manager-values.yaml
+    hooks:
+      # Install CRDs before cert-manager
+      - events: ["presync"]
+        showlogs: true
+        command: "kubectl"
+        args:
+          - "apply"
+          - "-f"
+          - "https://github.com/cert-manager/cert-manager/releases/download/v1.13.3/cert-manager.crds.yaml"
+{{- end }}

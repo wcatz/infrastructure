@@ -7,3 +7,5 @@ enabled:
   grafana: true
   externalSecrets: true
   tailscaleOperator: true  # Enabled for Tailscale mesh networking
+  velero: true  # Enabled for cluster-wide backups and disaster recovery
+  certManager: true  # Enabled for internal TLS certificate management
