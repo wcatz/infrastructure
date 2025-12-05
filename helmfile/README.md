@@ -26,10 +26,10 @@ helmfile/
 │   ├── repositories.yaml.gotmpl
 │   └── releases.yaml.gotmpl
 ├── values/                    # Base values
-│   ├── haproxy-ingress.yaml
 │   ├── cloudflared-values.yaml
 │   ├── grafana-values.yaml
-│   └── prometheus-values.yaml
+│   ├── prometheus-values.yaml
+│   └── tailscale-operator-values.yaml
 └── environments/              # Environment overrides
     ├── dev/
     ├── staging/
@@ -43,10 +43,10 @@ Edit `config/enabled.yaml`:
 ```yaml
 enabled:
   prometheus: true
-  haproxyIngress: true
-  cloudflared: false  # Enable after tunnel setup
+  haproxyIngress: false  # Disabled for hybrid cluster
+  cloudflared: true  # HTTP/S ingress via Cloudflare tunnels
   grafana: true
-  tailscaleOperator: false
+  tailscaleOperator: true  # L3 mesh networking
   externalSecrets: true
 ```
 
@@ -55,13 +55,10 @@ enabled:
 Environment-specific values in `environments/{env}/`:
 
 ```yaml
-# environments/prod/haproxy-ingress.yaml
-controller:
-  replicaCount: 3
-  resources:
-    requests:
-      cpu: 200m
-      memory: 256Mi
+# environments/prod/cloudflared-values.yaml
+cloudflare:
+  tunnelName: "prod-tunnel"
+  tunnelId: "your-prod-tunnel-id"
 ```
 
 ## Secrets with SOPS

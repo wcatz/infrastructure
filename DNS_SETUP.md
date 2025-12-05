@@ -177,34 +177,24 @@ A       node      YOUR_WORKER_PUBLIC_IP    ✗      300
 variable "worker_public_ip" {
   description = "Netcup worker node public IP"
   type        = string
-  default     = "192.168.1.5"
+  default     = "YOUR_WORKER_PUBLIC_IP"
 }
 
 # MySQL database
 resource "cloudflare_record" "mysql" {
   zone_id = var.cloudflare_zone_id
   name    = "db"
-  value   = var.haproxy_ip
+  value   = var.worker_public_ip
   type    = "A"
   proxied = false  # MUST be false for TCP/UDP
   ttl     = 300
 }
 
-# WireGuard VPN
-resource "cloudflare_record" "wireguard" {
+# Example TCP service
+resource "cloudflare_record" "tcp_service" {
   zone_id = var.cloudflare_zone_id
-  name    = "vpn"
-  value   = var.haproxy_ip
-  type    = "A"
-  proxied = false
-  ttl     = 300
-}
-
-# Redis cache
-resource "cloudflare_record" "redis" {
-  zone_id = var.cloudflare_zone_id
-  name    = "redis"
-  value   = var.haproxy_ip
+  name    = "service"
+  value   = var.worker_public_ip
   type    = "A"
   proxied = false
   ttl     = 300
@@ -397,11 +387,11 @@ dig db.example.com
 2. Check tunnel ingress rules match DNS records
 3. Test from within cluster: `kubectl run -it curl --image=curlimages/curl -- curl http://service`
 
-**For TCP/UDP services:**
-1. Verify HAProxy is running: `systemctl status haproxy`
-2. Test connectivity: `nc -zv db.example.com 3306`
-3. Check HAProxy stats: `http://<haproxy-ip>:8404/stats`
-4. Verify firewall rules allow traffic
+**For TCP services:**
+1. Verify worker node is reachable: `ping YOUR_WORKER_PUBLIC_IP`
+2. Test connectivity: `nc -zv cardano.example.com 30001`
+3. Check pod is running on worker: `kubectl get pods -n cardano -o wide`
+4. Verify firewall rules allow traffic on NodePort
 
 ### Wrong IP Resolution
 
