@@ -31,7 +31,7 @@ cp inventory.ini.example inventory.ini
 # 2. Edit inventory with your servers
 vim inventory.ini
 
-# 3. Deploy k3s cluster (Traefik disabled for HAProxy)
+# 3. Deploy k3s cluster (Traefik and servicelb disabled for hybrid cluster)
 # Secrets are now automatically loaded from encrypted vault.yml
 ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
 
@@ -63,8 +63,8 @@ ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass ansible-playbook playbooks/deploy-k3s.ya
 
 ## Roles
 
-- **k3s**: Deploys k3s (Traefik disabled)
-- **tailscale**: Installs Tailscale VPN on hosts
+- **k3s**: Deploys k3s (Traefik and servicelb disabled for hybrid cluster)
+- **tailscale**: Installs Tailscale VPN on hosts for L3 mesh networking
 - **hostname**: Configures system hostnames
 
 ## Encrypted Variables
@@ -82,5 +82,5 @@ These are automatically referenced by the roles:
 
 After Ansible deployment:
 1. Copy kubeconfig from k3s server
-2. Deploy services via Helmfile (HAProxy, Cloudflared, Tailscale Operator)
+2. Deploy services via Helmfile (Cloudflared, Tailscale Operator, monitoring)
 3. Configure Kubernetes secrets with SOPS
