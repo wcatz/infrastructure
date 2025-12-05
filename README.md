@@ -245,6 +245,7 @@ helmfile -e prod apply
 
 - [Tailscale Setup](TAILSCALE_SETUP.md) - Configure Tailscale VPN mesh networking
 - [Hybrid Cluster Setup](HYBRID_CLUSTER_SETUP.md) - Deploy hybrid k3s cluster architecture
+- [Firewall Rules](FIREWALL_RULES.md) - Firewall configuration for control plane, workers, and CI/CD
 - [Secrets Management](SECRETS.md) - SOPS/age and Ansible Vault configuration
 - [GitHub Actions Runner Setup](GITHUB_RUNNER_SETUP.md) - Self-hosted runner with Tailscale
 - [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md) - Configure Cloudflare tunnels
