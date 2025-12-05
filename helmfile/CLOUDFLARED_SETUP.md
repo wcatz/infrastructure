@@ -1,10 +1,20 @@
 # Cloudflared Tunnel Setup Guide
 
-This guide explains how to set up Cloudflared tunnels for HTTP/HTTPS ingress traffic.
+This guide explains how to set up Cloudflared tunnels for HTTP/HTTPS ingress traffic in the hybrid Kubernetes cluster.
 
 ## Overview
 
-Cloudflared creates secure tunnels from your Kubernetes cluster to Cloudflare's edge network, allowing you to expose HTTP/HTTPS services without opening firewall ports or using traditional load balancers.
+Cloudflared creates secure tunnels from your Kubernetes cluster to Cloudflare's edge network, allowing you to expose HTTP/HTTPS services without opening firewall ports or using traditional load balancers. This is ideal for the control node behind CGNAT.
+
+**Use Cases:**
+- HTTP/S services on control node (behind CGNAT)
+- HTTP/S services on worker nodes
+- Services requiring Cloudflare features (DDoS protection, WAF, caching)
+
+**Not Suitable For:**
+- Direct TCP/UDP protocols (use NodePort on worker nodes instead)
+- Services requiring client IP preservation
+- Low-latency applications (adds Cloudflare proxy overhead)
 
 ## Prerequisites
 
@@ -121,21 +131,23 @@ cloudflare:
   tunnelId: "<TUNNEL-ID>"  # From step 3
   
 ingress:
-  # Route app.example.com to NGINX ingress controller
+  # Route app.example.com to services (no HAProxy needed)
   - hostname: app.example.com
-    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+    service: http://app-service.default.svc.cluster.local:8080
   
   # Route api.example.com to API service
   - hostname: api.example.com
     service: http://api-service.default.svc.cluster.local:8080
   
-  # Route monitoring.example.com to Prometheus
+  # Route monitoring.example.com to Grafana
   - hostname: monitoring.example.com
-    service: http://prometheus-server.monitoring.svc.cluster.local:80
+    service: http://grafana.monitoring.svc.cluster.local:80
   
   # Default catch-all (required)
   - service: http_status:404
 ```
+
+**Note:** HAProxy is no longer used in the hybrid setup. Services are accessed directly through Cloudflared.
 
 ### 7. Deploy with Helmfile
 

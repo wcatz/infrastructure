@@ -1,12 +1,12 @@
-# DNS Setup Guide for Cloudflare and HAProxy
+# DNS Setup Guide for Hybrid Kubernetes Cluster
 
-This guide explains how to configure DNS for services exposed through both Cloudflare tunnels (HTTP/HTTPS) and HAProxy load balancer (TCP/UDP NodePorts).
+This guide explains how to configure DNS for services exposed through Cloudflare tunnels (HTTP/HTTPS) and direct TCP via NodePort on worker nodes with public IPs.
 
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
 - [DNS Records for Cloudflare Tunnel](#dns-records-for-cloudflare-tunnel)
-- [DNS Records for HAProxy NodePorts](#dns-records-for-haproxy-nodeports)
+- [DNS Records for TCP Services](#dns-records-for-tcp-services)
 - [Complete Setup Example](#complete-setup-example)
 - [Multi-Environment DNS](#multi-environment-dns)
 - [Troubleshooting](#troubleshooting)
@@ -18,34 +18,32 @@ This guide explains how to configure DNS for services exposed through both Cloud
                                |
               ┌────────────────┼────────────────┐
               |                                 |
-        HTTP/HTTPS                         TCP/UDP
-    (Cloudflare Tunnel)                 (HAProxy LB)
+        HTTP/HTTPS                          TCP/UDP
+    (Cloudflare Tunnel)              (Direct NodePort)
               |                                 |
               v                                 v
     ┌──────────────────┐            ┌──────────────────┐
-    |  app.example.com |            | db.example.com   |
-    |  api.example.com |            | vpn.example.com  |
-    | *.apps.example.com|            | redis.example.com|
+    |  app.example.com |            | tcp.example.com  |
+    |  api.example.com |            | service.example.com |
+    | *.apps.example.com|            └──────────────────┘
+    └──────────────────┘                       |
+              |                                 v
+              v                     ┌──────────────────┐
+    ┌──────────────────┐            | Worker Public IP |
+    |   Cloudflared    |            | YOUR_WORKER_PUBLIC_IP:30001|
+    |  (in cluster)    |            └──────────────────┘
+    └──────────────────┘                       |
+              |                                 v
+              v                     ┌──────────────────┐
+    ┌──────────────────┐            |   K8s Workers    |
+    |  K8s Services    |            | NodePort: 30001  |
+    |  (ClusterIP)     |            | hostNetwork pods |
     └──────────────────┘            └──────────────────┘
-              |                                 |
-              v                                 v
-    ┌──────────────────┐            ┌──────────────────┐
-    |   Cloudflared    |            |     HAProxy      |
-    |  (in cluster)    |            | 192.168.1.5:3306 |
-    └──────────────────┘            | 192.168.1.5:51820|
-              |                     └──────────────────┘
-              v                                 |
-    ┌──────────────────┐                       v
-    |  HAProxy Ingress |            ┌──────────────────┐
-    |   Controller     |            |   K8s Workers    |
-    └──────────────────┘            | NodePort: 30306  |
-              |                     | NodePort: 31820  |
-              v                     └──────────────────┘
-    ┌──────────────────┐                       |
-    |  K8s Services    |                       v
-    |  (via Ingress)   |            ┌──────────────────┐
-    └──────────────────┘            |  K8s Services    |
-                                    |  (via NodePort)  |
+                                               |
+                                               v
+                                    ┌──────────────────┐
+                                    | Application Pods |
+                                    | (stateful)       |
                                     └──────────────────┘
 ```
 
@@ -137,18 +135,18 @@ resource "cloudflare_record" "wildcard_apps" {
 
 ### HTTP/HTTPS Service Examples
 
-| Service Type | DNS Record | Points To | Cloudflared Ingress |
-|-------------|------------|-----------|-------------------|
-| Web App | `app.example.com` | Tunnel CNAME | HAProxy Ingress Controller |
+| Service Type | DNS Record | Points To | Backend Service |
+|-------------|------------|-----------|----------------|
+| Web App | `app.example.com` | Tunnel CNAME | Application Service |
 | REST API | `api.example.com` | Tunnel CNAME | API Service |
 | Monitoring | `grafana.example.com` | Tunnel CNAME | Grafana Service |
-| Wildcard Apps | `*.apps.example.com` | Tunnel CNAME | HAProxy Ingress Controller |
+| Wildcard Apps | `*.apps.example.com` | Tunnel CNAME | Application Services |
 
-## DNS Records for HAProxy NodePorts
+## DNS Records for TCP Services
 
-HAProxy NodePort services use A records pointing to the HAProxy server's IP address.
+TCP services (like Application P2P) are exposed via NodePort on worker nodes with public IPs. Use A records pointing directly to the worker node's public IP.
 
-### Creating HAProxy DNS Records
+### Creating TCP Service DNS Records
 
 #### Method 1: Using Cloudflare Dashboard
 
@@ -158,18 +156,16 @@ HAProxy NodePort services use A records pointing to the HAProxy server's IP addr
 4. Click **Add record**
 5. Configure:
    - **Type**: A
-   - **Name**: subdomain (e.g., `db`, `vpn`, `redis`)
-   - **IPv4 address**: HAProxy server IP (e.g., `192.168.1.5`)
+   - **Name**: subdomain (e.g., `tcp`, `service`)
+   - **IPv4 address**: Worker node public IP (e.g., `YOUR_WORKER_PUBLIC_IP`)
    - **Proxy status**: DNS only (grey cloud) - **Important!**
    - **TTL**: 300 (5 minutes) or Auto
 
 Example records:
 ```
-Type    Name     Target          Proxy  TTL
-A       db       192.168.1.5     ✗      300
-A       vpn      192.168.1.5     ✗      300
-A       redis    192.168.1.5     ✗      300
-A       haproxy  192.168.1.5     ✗      300
+Type    Name      Target          Proxy  TTL
+A       tcp       YOUR_WORKER_PUBLIC_IP    ✗      300
+A       service   YOUR_WORKER_PUBLIC_IP    ✗      300
 ```
 
 **Important**: TCP/UDP services MUST have proxy disabled (grey cloud) as Cloudflare's proxy only supports HTTP/HTTPS traffic.
@@ -177,38 +173,28 @@ A       haproxy  192.168.1.5     ✗      300
 #### Method 2: Using Terraform
 
 ```hcl
-# HAProxy server IP
-variable "haproxy_ip" {
-  description = "HAProxy server public IP"
+# Worker node public IP
+variable "worker_public_ip" {
+  description = "Netcup worker node public IP"
   type        = string
-  default     = "192.168.1.5"
+  default     = "YOUR_WORKER_PUBLIC_IP"
 }
 
 # MySQL database
 resource "cloudflare_record" "mysql" {
   zone_id = var.cloudflare_zone_id
   name    = "db"
-  value   = var.haproxy_ip
+  value   = var.worker_public_ip
   type    = "A"
   proxied = false  # MUST be false for TCP/UDP
   ttl     = 300
 }
 
-# WireGuard VPN
-resource "cloudflare_record" "wireguard" {
+# Example TCP service
+resource "cloudflare_record" "tcp_service" {
   zone_id = var.cloudflare_zone_id
-  name    = "vpn"
-  value   = var.haproxy_ip
-  type    = "A"
-  proxied = false
-  ttl     = 300
-}
-
-# Redis cache
-resource "cloudflare_record" "redis" {
-  zone_id = var.cloudflare_zone_id
-  name    = "redis"
-  value   = var.haproxy_ip
+  name    = "service"
+  value   = var.worker_public_ip
   type    = "A"
   proxied = false
   ttl     = 300
@@ -223,44 +209,40 @@ resource "cloudflare_record" "redis" {
 
 ZONE_ID="your-zone-id"
 API_TOKEN="your-api-token"
-HAPROXY_IP="192.168.1.5"
+WORKER_IP="YOUR_WORKER_PUBLIC_IP"
 
 # Function to create DNS record
 create_record() {
   local name=$1
   local ip=$2
-  
+
   curl -X POST "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
     -H "Authorization: Bearer ${API_TOKEN}" \
     -H "Content-Type: application/json" \
     --data "{\"type\":\"A\",\"name\":\"${name}\",\"content\":\"${ip}\",\"proxied\":false,\"ttl\":300}"
 }
 
-# Create records
-create_record "db" "${HAPROXY_IP}"
-create_record "vpn" "${HAPROXY_IP}"
-create_record "redis" "${HAPROXY_IP}"
+# Create records for TCP services
+create_record "tcp" "${WORKER_IP}"
+create_record "service" "${WORKER_IP}"
 ```
 
-### TCP/UDP Service Examples
+### TCP Service Examples
 
-| Service Type | Port | DNS Record | Points To | HAProxy Backend |
-|-------------|------|------------|-----------|-----------------|
-| MySQL | 3306 | `db.example.com` | HAProxy IP | Worker NodePort 30306 |
-| WireGuard | 51820 | `vpn.example.com` | HAProxy IP | Worker NodePort 31820 |
-| PostgreSQL | 5432 | `postgres.example.com` | HAProxy IP | Worker NodePort 30432 |
-| Redis | 6379 | `redis.example.com` | HAProxy IP | Worker NodePort 30379 |
+| Service Type | Port | DNS Record | Points To | Access Method |
+|-------------|------|------------|-----------|---------------|
+| TCP Service | 30001 | `tcp.example.com` | Worker IP | Direct NodePort 30001 |
+| Custom TCP | varies | `service.example.com` | Worker IP | Direct NodePort |
 
 ## Complete Setup Example
 
-### Scenario: Production Infrastructure
+### Scenario: Hybrid Production Infrastructure
 
 **Requirements:**
-- Web application (HTTP/HTTPS)
-- REST API (HTTP/HTTPS)
-- MySQL database (TCP)
-- WireGuard VPN (UDP)
-- Redis cache (TCP)
+- Web application (HTTP/HTTPS) - runs on any node
+- REST API (HTTP/HTTPS) - runs on any node
+- TCP service (TCP) - runs on worker with public IP
+- Monitoring dashboards (HTTP/HTTPS) - runs on any node
 
 ### Step 1: DNS Records Setup
 
@@ -268,10 +250,11 @@ create_record "redis" "${HAPROXY_IP}"
 |--------|------|------|--------|-------|---------|
 | 1 | CNAME | `app` | `abc123.cfargotunnel.com` | ✓ | Web application |
 | 2 | CNAME | `api` | `abc123.cfargotunnel.com` | ✓ | REST API |
-| 3 | CNAME | `www` | `abc123.cfargotunnel.com` | ✓ | Website |
-| 4 | A | `db` | `192.168.1.5` | ✗ | MySQL database |
-| 5 | A | `vpn` | `192.168.1.5` | ✗ | WireGuard VPN |
-| 6 | A | `redis` | `192.168.1.5` | ✗ | Redis cache |
+| 3 | CNAME | `monitoring` | `abc123.cfargotunnel.com` | ✓ | Grafana dashboard |
+| 4 | A | `tcp` | `YOUR_WORKER_PUBLIC_IP` | ✗ | TCP service |
+| 5 | A | `service` | `YOUR_WORKER_PUBLIC_IP` | ✗ | Worker node access |
+
+**Note**: `YOUR_WORKER_PUBLIC_IP` is the Netcup worker node's public IP.
 
 ### Step 2: Cloudflared Configuration
 
@@ -281,95 +264,59 @@ Edit `helmfile/values/cloudflared-values.yaml`:
 ingress:
   # Web application
   - hostname: app.example.com
-    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
-  
+    service: http://app-service.default.svc.cluster.local:80
+
   # REST API
   - hostname: api.example.com
     service: http://api-service.default.svc.cluster.local:8080
-  
-  # Website
-  - hostname: www.example.com
-    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
-  
+
+  # Monitoring dashboard
+  - hostname: monitoring.example.com
+    service: http://grafana.monitoring.svc.cluster.local:80
+
   # Catch-all
   - service: http_status:404
 ```
 
-### Step 3: HAProxy Configuration
+### Step 3: Verify Configuration
 
-Edit `ansible/roles/haproxy/defaults/main.yaml`:
+Verify services are accessible:
 
-```yaml
-haproxy_tcp_backends:
-  # MySQL database
-  - name: mysql
-    port: 3306
-    mode: tcp
-    balance: leastconn
-    servers:
-      - name: k8s-worker-1
-        address: 192.168.1.11
-        port: 30306
-        check: true
-        check_interval: 2s
-        rise: 2
-        fall: 3
-      - name: k8s-worker-2
-        address: 192.168.1.12
-        port: 30306
-        check: true
-        check_interval: 2s
-        rise: 2
-        fall: 3
-  
-  # Redis cache
-  - name: redis
-    port: 6379
-    mode: tcp
-    balance: roundrobin
-    servers:
-      - name: k8s-worker-1
-        address: 192.168.1.11
-        port: 30379
-        check: true
-        check_interval: 2s
-      - name: k8s-worker-2
-        address: 192.168.1.12
-        port: 30379
-        check: true
-        check_interval: 2s
+```bash
+# Test HTTP/S services
+curl https://app.example.com
+curl https://api.example.com
 
-haproxy_udp_backends:
-  # WireGuard VPN
-  - name: wireguard
-    port: 51820
-    mode: udp
-    balance: roundrobin
-    servers:
-      - name: k8s-worker-1
-        address: 192.168.1.11
-        port: 31820
-      - name: k8s-worker-2
-        address: 192.168.1.12
-        port: 31820
+# Test TCP service
+telnet tcp.example.com 30001
 ```
 
 ### Step 4: Testing Connectivity
 
+#### HTTP/HTTPS Services (via Cloudflare)
+
 ```bash
-# Test HTTP/HTTPS (via Cloudflare)
+# Test web application
 curl https://app.example.com
-curl https://api.example.com
 
-# Test MySQL (via HAProxy)
-mysql -h db.example.com -P 3306 -u user -p
+# Test REST API
+curl https://api.example.com/health
 
-# Test Redis (via HAProxy)
-redis-cli -h redis.example.com -p 6379
+# Test monitoring dashboard
+curl https://monitoring.example.com
+```
 
-# Test WireGuard (via HAProxy)
-# Edit WireGuard client config with Endpoint = vpn.example.com:51820
-wg-quick up wg0
+#### TCP Services (Direct to Worker)
+
+```bash
+# Test TCP service (via DNS)
+telnet tcp.example.com 30001
+
+# Or using worker IP directly
+telnet YOUR_WORKER_PUBLIC_IP 30001
+
+# Check if NodePort is accessible
+nc -zv tcp.example.com 30001
 ```
 
 ## Multi-Environment DNS
@@ -382,8 +329,7 @@ wg-quick up wg0
 |---------|-----------|--------|-------|
 | Web App | `app.dev.example.com` | Dev Tunnel | Cloudflare Tunnel |
 | API | `api.dev.example.com` | Dev Tunnel | Cloudflare Tunnel |
-| Database | `db.dev.example.com` | `192.168.2.5` | Dev HAProxy |
-| VPN | `vpn.dev.example.com` | `192.168.2.5` | Dev HAProxy |
+| TCP Service | `tcp.dev.example.com` | Dev Worker IP | Direct NodePort |
 
 ### Staging Environment
 
@@ -393,8 +339,7 @@ wg-quick up wg0
 |---------|-----------|--------|-------|
 | Web App | `app.staging.example.com` | Staging Tunnel | Cloudflare Tunnel |
 | API | `api.staging.example.com` | Staging Tunnel | Cloudflare Tunnel |
-| Database | `db.staging.example.com` | `192.168.3.5` | Staging HAProxy |
-| VPN | `vpn.staging.example.com` | `192.168.3.5` | Staging HAProxy |
+| TCP Service | `tcp.staging.example.com` | Staging Worker IP | Direct NodePort |
 
 ### Production Environment
 
@@ -404,8 +349,7 @@ wg-quick up wg0
 |---------|-----------|--------|-------|
 | Web App | `app.example.com` | Prod Tunnel | Cloudflare Tunnel |
 | API | `api.example.com` | Prod Tunnel | Cloudflare Tunnel |
-| Database | `db.example.com` | `192.168.1.5` | Prod HAProxy |
-| VPN | `vpn.example.com` | `192.168.1.5` | Prod HAProxy |
+| TCP Service | `tcp.example.com` | Prod Worker IP | Direct NodePort |
 
 ## Troubleshooting
 
@@ -445,11 +389,11 @@ dig db.example.com
 2. Check tunnel ingress rules match DNS records
 3. Test from within cluster: `kubectl run -it curl --image=curlimages/curl -- curl http://service`
 
-**For TCP/UDP services:**
-1. Verify HAProxy is running: `systemctl status haproxy`
-2. Test connectivity: `nc -zv db.example.com 3306`
-3. Check HAProxy stats: `http://<haproxy-ip>:8404/stats`
-4. Verify firewall rules allow traffic
+**For TCP services:**
+1. Verify worker node is reachable: `ping YOUR_WORKER_PUBLIC_IP`
+2. Test connectivity: `nc -zv tcp.example.com 30001`
+3. Check pod is running on worker: `kubectl get pods -o wide`
+4. Verify firewall rules allow traffic on NodePort
 
 ### Wrong IP Resolution
 
@@ -461,10 +405,10 @@ dig db.example.com
    ```bash
    # Linux
    sudo systemd-resolve --flush-caches
-   
+
    # macOS
    sudo dscacheutil -flushcache
-   
+
    # Windows
    ipconfig /flushdns
    ```

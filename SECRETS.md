@@ -96,7 +96,27 @@ age-keygen -o ~/.config/sops/age/keys.txt
 cat ~/.config/sops/age/keys.txt | grep "public key:"
 ```
 
-**Back up `~/.config/sops/age/keys.txt` securely!**
+**Important: Back up `~/.config/sops/age/keys.txt` securely!**
+
+### Passphrase-Protected Age Keys
+
+For additional security, you can protect your age key with a passphrase:
+
+```bash
+# Generate passphrase-protected key
+age-keygen | age -p > ~/.config/sops/age/keys.txt.age
+
+# When needed, decrypt to use
+age -d ~/.config/sops/age/keys.txt.age > ~/.config/sops/age/keys.txt
+
+# Remember to remove decrypted key when done
+rm ~/.config/sops/age/keys.txt
+```
+
+**For GitHub Actions:**
+- Store the encrypted key (`keys.txt.age`) in the repository
+- Store the passphrase in GitHub Secrets as `AGE_PASSPHRASE`
+- Decrypt in workflow before using SOPS
 
 ### Configure SOPS
 
@@ -147,6 +167,39 @@ sops secrets/db.enc.yaml
 Add to repository secrets:
 - Name: `SOPS_AGE_KEY`
 - Value: Content of `~/.config/sops/age/keys.txt`
+
+**Alternative: Passphrase-Protected Approach**
+
+For enhanced security with passphrase-protected keys:
+
+1. **Generate and encrypt age key**:
+```bash
+age-keygen | age -p > age-keys.txt.age
+# Enter a strong passphrase when prompted
+```
+
+2. **Store in repository** (encrypted key is safe to commit):
+```bash
+mkdir -p .github/secrets
+mv age-keys.txt.age .github/secrets/
+git add .github/secrets/age-keys.txt.age
+git commit -m "Add encrypted age key"
+```
+
+3. **Add passphrase to GitHub Secrets**:
+   - Name: `AGE_PASSPHRASE`
+   - Value: Your passphrase
+
+4. **Update workflow** to decrypt key before use:
+```yaml
+- name: Setup age key
+  env:
+    AGE_PASSPHRASE: ${{ secrets.AGE_PASSPHRASE }}
+  run: |
+    mkdir -p ~/.config/sops/age
+    echo "$AGE_PASSPHRASE" | age -d .github/secrets/age-keys.txt.age > ~/.config/sops/age/keys.txt
+    chmod 600 ~/.config/sops/age/keys.txt
+```
 
 Workflows decrypt automatically.
 

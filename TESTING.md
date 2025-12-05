@@ -120,12 +120,9 @@ ab -n 1000 -c 10 https://api.example.com/health
 ### 3. Ingress Rule Validation
 
 ```bash
-# Test specific ingress rules
-curl -H "Host: app.example.com" http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local
-
-# Test from within cluster
+# Test specific service access
 kubectl run -it --rm curl --image=curlimages/curl --restart=Never -- \
-  curl -v http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  curl -v http://app-service.default.svc.cluster.local:8080
 ```
 
 ### 4. Cloudflare Access Testing
@@ -143,9 +140,9 @@ curl -H "CF-Access-Token: <token>" https://monitoring.example.com
 ### 1. Full Traffic Flow
 
 ```bash
-# HTTP/HTTPS path: Client → Cloudflare → Cloudflared → HAProxy Ingress → Service
+# HTTP/HTTPS path: Client → Cloudflare → Cloudflared → Services
 curl -v https://app.example.com
-kubectl logs -n haproxy-ingress -l app.kubernetes.io/name=haproxy-ingress --tail=20
+kubectl logs -n cloudflare -l app.kubernetes.io/name=cloudflared --tail=20
 kubectl logs -n default -l app=myapp --tail=20
 ```
 
@@ -224,14 +221,14 @@ while true; do
 done
 ```
 
-### 3. HAProxy Ingress Controller Failover
+### 3. Cloudflared Failover
 
 ```bash
-# Delete HAProxy ingress controller pod
-kubectl delete pod -n haproxy-ingress -l app.kubernetes.io/name=haproxy-ingress --force --grace-period=0
+# Delete cloudflared pod
+kubectl delete pod -n cloudflare -l app.kubernetes.io/name=cloudflared --force --grace-period=0
 
 # Verify new pod starts
-kubectl get pods -n haproxy-ingress -w
+kubectl get pods -n cloudflare -w
 
 # Test connectivity during failover
 while true; do
@@ -251,9 +248,8 @@ ab -n 10000 -c 100 https://app.example.com/
 # Sustained load test
 wrk -t 12 -c 400 -d 30s https://app.example.com/
 
-# Check HAProxy ingress metrics
-kubectl port-forward -n haproxy-ingress svc/haproxy-ingress 9101:9101
-curl http://localhost:9101/metrics
+# Check service metrics
+kubectl top pods -n default
 ```
 
 ### 2. Cloudflared Performance
@@ -346,16 +342,11 @@ The repository includes GitHub Actions workflows for automated testing:
 Set up automated monitoring:
 
 ```bash
-# Prometheus metrics from HAProxy Ingress
-kubectl port-forward -n haproxy-ingress svc/haproxy-ingress 9101:9101
-curl http://localhost:9101/metrics
-
 # Cloudflared metrics
 kubectl port-forward -n cloudflare svc/cloudflared 2000:2000
 curl http://localhost:2000/metrics
 
 # Grafana dashboards
-# - HAProxy Ingress dashboard
 # - Cloudflared tunnel metrics
 # - Kubernetes service health
 ```
@@ -389,19 +380,19 @@ EOF
 
 ## Troubleshooting Failed Tests
 
-### HAProxy Ingress Issues
+### Service Access Issues
 
 ```bash
-# Check HAProxy ingress logs
-kubectl logs -n haproxy-ingress -l app.kubernetes.io/name=haproxy-ingress --tail=100
+# Check service logs
+kubectl logs -n default -l app=myapp --tail=100
 
-# Check ingress controller status
-kubectl get pods -n haproxy-ingress
-kubectl describe pod -n haproxy-ingress <pod-name>
+# Check service status
+kubectl get pods -n default
+kubectl describe pod -n default <pod-name>
 
-# Check ingress resources
-kubectl get ingress -A
-nc -zv <worker-ip> 30306
+# Check service endpoints
+kubectl get svc -A
+kubectl get endpoints -A
 ```
 
 ### Cloudflared Issues
@@ -414,7 +405,7 @@ kubectl logs -n cloudflare -l app.kubernetes.io/name=cloudflared
 kubectl get secret -n cloudflare cloudflared-credentials -o yaml
 
 # Test from within cluster
-kubectl run -it curl --image=curlimages/curl -- curl http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local
+kubectl run -it curl --image=curlimages/curl -- curl http://app-service.default.svc.cluster.local
 ```
 
 ### Network Issues
@@ -447,7 +438,6 @@ kubectl get endpoints -A
 
 ## References
 
-- [HAProxy Documentation](https://www.haproxy.org/documentation.html)
 - [Cloudflared Testing](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide/remote/)
 - [Kubernetes Testing Best Practices](https://kubernetes.io/docs/tasks/debug/)
 - [Load Testing Tools](https://github.com/topics/load-testing)

@@ -1,6 +1,7 @@
 ---
 # k3s Deployment Playbook
-# Deploys k3s without Traefik (HAProxy will be the ingress controller)
+# Deploys k3s for hybrid cluster (Traefik and servicelb disabled)
+# Uses Tailscale for L3 mesh networking and Cloudflared for HTTP/S ingress
 #
 # IMPORTANT: This playbook uses encrypted secrets from group_vars/all/vault.yml
 # Ensure you have:

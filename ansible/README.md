@@ -59,6 +59,7 @@ ansible-playbook -i inventory.ini playbooks/setup-tailscale.yaml
 
 # 5. Deploy k3s cluster
 # Control plane will be tainted automatically
+# Traefik and servicelb disabled for hybrid cluster
 # Secrets are loaded from encrypted vault.yml
 ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
 
@@ -97,7 +98,7 @@ ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass ansible-playbook playbooks/deploy-k3s.ya
 - **k3s**: Deploys k3s with hybrid cluster support
   - Server mode: Installs control plane with optional NoSchedule taint
   - Agent mode: Installs worker node, connects via Tailscale
-  - Traefik disabled
+  - Traefik and servicelb disabled
 - **tailscale**: Installs Tailscale VPN on all nodes (required for hybrid setup)
 - **hostname**: Configures system hostnames
 
@@ -107,6 +108,9 @@ The following secrets are stored encrypted in `group_vars/all/vault.yml`:
 
 - `vault_k3s_token`: K3s cluster token for agent nodes
 - `vault_tailscale_key`: Tailscale authentication key
+- `vault_tailscale_oauth_client_id`: Tailscale OAuth client ID (for Kubernetes operator)
+- `vault_tailscale_oauth_client_secret`: Tailscale OAuth client secret (for Kubernetes operator)
+- `vault_cloudflare_tunnel_token`: Cloudflare tunnel token
 
 These are automatically referenced by the roles:
 - K3s role uses `k3s_token: "{{ vault_k3s_token }}"`
@@ -129,74 +133,56 @@ After Ansible deployment:
    # Control plane should show NoSchedule taint
    # Worker nodes should be Ready
    
-   kubectl describe node <control-plane-name> | grep Taints
-   # Should show: node-role.kubernetes.io/control-plane:NoSchedule
+   kubectl describe node <control-plane-name>
+   # Should show Taints: node-role.kubernetes.io/control-plane:NoSchedule
    ```
 
 3. **Deploy services via Helmfile**:
    ```bash
    cd ../helmfile
-   helmfile apply  # Deploys Prometheus, Grafana
+   helmfile apply
    ```
 
-4. **Configure Cloudflared for ingress** (on worker nodes):
-   - See [Cloudflared Setup Guide](../helmfile/CLOUDFLARED_SETUP.md)
+4. **Configure Kubernetes secrets with SOPS**:
+   ```bash
+   # Follow SECRETS.md guide for SOPS/age setup
+   ```
 
-5. **Deploy workloads**:
-   - Use templates from `kubernetes-examples/` directory
-   - All workloads automatically schedule on worker nodes
-   - See [Kubernetes Examples README](../kubernetes-examples/README.md)
+## Troubleshooting
 
-## Hybrid Cluster Configuration
+### Tailscale Connectivity Issues
 
-### Inventory Example
-```ini
-[k3s_servers]
-k3s-control ansible_host=100.64.1.10 ansible_user=ubuntu k3s_node_taint=true
+If nodes can't communicate via Tailscale:
 
-[k3s_agents]
-k3s-worker-01 ansible_host=1.2.3.4 ansible_user=ubuntu k3s_node_label="node-role=worker"
-```
-
-### Important Variables
-
-**Control Plane Node**:
-- `k3s_node_taint=true`: Applies NoSchedule taint to prevent workload scheduling
-- `ansible_host`: Should be Tailscale IP (100.64.x.x) for secure communication
-
-**Worker Nodes**:
-- `k3s_node_label`: Custom labels for node selection (optional)
-- `ansible_host`: Can be public IP or Tailscale IP
-
-**All Nodes**:
-- `vault_tailscale_key`: Tailscale auth key (in encrypted vault.yml)
-- `vault_k3s_token`: K3s cluster token (in encrypted vault.yml)
-
-### Tailscale Configuration
-
-Tailscale is **required** for hybrid cluster networking:
-- Control plane behind CGNAT uses Tailscale IP for API server
-- Workers connect to control plane via Tailscale network
-- Provides encrypted, authenticated cluster communication
-
-**ACL Recommendations**:
-```json
-{
-  "acls": [
-    {
-      "action": "accept",
-      "src": ["tag:k3s-node"],
-      "dst": ["tag:k3s-node:*"]
-    }
-  ],
-  "tagOwners": {
-    "tag:k3s-node": ["your-email@example.com"]
-  }
-}
-```
-
-Apply tags when creating Tailscale auth key:
 ```bash
-# Use --advertise-tags when setting up nodes
-tailscale_args: "--accept-routes --advertise-tags=tag:k3s-node"
+# Check Tailscale status on each node
+sudo tailscale status
+
+# Test connectivity between nodes
+ping 100.64.x.x  # Tailscale IP of other node
+
+# Check Tailscale logs
+sudo journalctl -u tailscaled -f
 ```
+
+### K3s Join Failures
+
+If worker nodes fail to join the cluster:
+
+```bash
+# On worker node, check k3s logs
+sudo journalctl -u k3s -f
+
+# Verify control plane is reachable via Tailscale
+telnet 100.64.x.x 6443  # Control plane Tailscale IP
+
+# Check k3s token matches between control plane and worker
+```
+
+## Security Notes
+
+- Always use Ansible Vault to encrypt sensitive data
+- Use strong, unique passwords for vault encryption
+- Keep `.vault_pass` file secure and never commit it to git
+- Regularly rotate K3s tokens and Tailscale keys
+- Use Tailscale ACLs to restrict node-to-node communication

@@ -11,6 +11,7 @@ This repository provides a **minimalist, modular framework** for deploying a hyb
   - Tainted to prevent workload scheduling
   - Secured with Tailscale for cluster communication
   - No public exposure required
+  - Uses Cloudflared for HTTP/S ingress
 
 - **Worker Node(s)** (Netcup VPS/Public IP):
   - Runs all application workloads
@@ -20,16 +21,25 @@ This repository provides a **minimalist, modular framework** for deploying a hyb
 
 ## Stack
 
-- **k3s**: Lightweight Kubernetes (Traefik disabled)
+- **k3s**: Lightweight Kubernetes (Traefik and servicelb disabled)
 - **Cloudflared**: Secure tunnel to Cloudflare edge, routes directly to Kubernetes services
 - **Tailscale**: VPN for secure inter-node communication
+- **Tailscale Operator**: Manages Tailscale connectivity in Kubernetes (optional)
 - **Prometheus/Grafana**: Monitoring stack (optional)
 - **SOPS/age**: Secret encryption
 - **Ansible Vault**: Infrastructure secret management
 
+## Key Features
+
+- **No HAProxy/MetalLB**: Simplified networking with Cloudflared for HTTP/S and direct TCP exposure
+- **Tailscale Mesh**: Secure L3 networking between cluster nodes
+- **Workload Placement**: Control plane behind CGNAT, workers with public IPs
+- **Stateful Workloads**: PVC-based persistent storage with failover support
+- **Hybrid Architecture**: Minimal and scalable design for distributed deployments
+
 ## Quick Setup
 
-### 1. Deploy Hybrid K3s Cluster
+### 1. Deploy k3s Cluster
 
 ```bash
 cd ansible
@@ -43,46 +53,26 @@ cp group_vars/all/vault.yml.example group_vars/all/vault.yml
 vim group_vars/all/vault.yml  # Add your K3s token and Tailscale key
 ansible-vault encrypt group_vars/all/vault.yml
 
-# Setup inventory for hybrid cluster
+# Setup inventory
 cp inventory.ini.example inventory.ini
-vim inventory.ini  # Configure control plane and worker nodes
+vim inventory.ini  # Edit with your servers
 
-# Deploy Tailscale on all nodes (required for hybrid cluster)
+# Deploy Tailscale first (required for hybrid cluster)
 ansible-playbook -i inventory.ini playbooks/setup-tailscale.yaml
 
-# Deploy k3s cluster
-# Control plane: Tainted, no workloads
-# Workers: Run all workloads
+# Deploy k3s cluster (secrets loaded from vault)
 ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
 
 # Get kubeconfig
-scp user@k3s-control:/etc/rancher/k3s/k3s.yaml ~/.kube/config
+scp user@k3s-server:/etc/rancher/k3s/k3s.yaml ~/.kube/config
 # Update server URL to use Tailscale IP of control plane
-sed -i 's/127.0.0.1/100.64.x.x/' ~/.kube/config
+sed -i 's/127.0.0.1/TAILSCALE_IP/' ~/.kube/config
 ```
 
 ### 2. Deploy Services via Helmfile
 
 ```bash
 cd helmfile
-
-# Deploy monitoring stack (Prometheus and Grafana)
-helmfile apply
-
-# Enable Cloudflared for worker node ingress
-# 1. Create Cloudflare tunnel and get credentials
-# 2. Create Kubernetes secret with tunnel credentials
-kubectl create namespace cloudflare
-kubectl create secret generic cloudflared-credentials \
-  --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json \
-  -n cloudflare
-
-# 3. Enable Cloudflared in config
-vim config/enabled.yaml  # Set cloudflared: true
-
-# 4. Configure ingress routes in values/cloudflared-values.yaml
-# Route directly to your Kubernetes services
-# 5. Apply changes
 helmfile apply
 ```
 
@@ -110,29 +100,22 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 
 ### Ansible
 - K3s deployment with hybrid cluster support
-  - Control plane: Tainted to prevent workload scheduling
-  - Worker nodes: Labeled for workload placement
-- Tailscale VPN on all nodes (required for cluster communication)
-- Ansible Vault for encrypted secrets (K3s token, Tailscale key)
+  - Control plane tainted to prevent workload scheduling
+  - Worker nodes for all workloads
+  - Traefik and servicelb disabled
+- Tailscale VPN on all nodes for secure inter-node communication
+- Ansible Vault for encrypted secrets (K3s token, Tailscale keys, OAuth credentials)
 
 ### Helmfile
-- Cloudflared tunnels (disabled by default - enable when configured)
-- Tailscale Kubernetes Operator (optional)
-- Prometheus & Grafana monitoring
-- Environment configs (dev/staging/prod)
-
-### Kubernetes Examples
-- Modular deployment templates
-- Service definitions (ClusterIP, NodePort, Headless)
-- Ingress configurations for direct service routing via Cloudflared
-- ConfigMaps and Secrets with SOPS encryption
-- See `kubernetes-examples/` directory
+- Cloudflared tunnels (HTTP/S ingress, routes directly to services)
+- Tailscale Kubernetes Operator (L3 mesh networking, optional)
+- Prometheus & Grafana (monitoring)
+- External Secrets (optional)
 
 ### GitHub Actions
 - `helmfile-diff.yaml`: Preview changes on PRs
-- `helmfile-apply.yaml`: Manual deployment to environments
-- `cloudflared-setup.yaml`: Cloudflared tunnel setup automation
-- SOPS integration for secret decryption
+- `helmfile-apply.yaml`: Manual Helmfile deployment with SOPS/age integration
+- `cloudflared-setup.yaml`: Cloudflared tunnel configuration
 
 ## Environment Management
 
@@ -146,28 +129,30 @@ helmfile -e prod apply
 
 ## Documentation
 
-- [Ansible README](ansible/README.md) - Infrastructure provisioning
-- [Helmfile README](helmfile/README.md) - Service deployment
-- [Kubernetes Examples](kubernetes-examples/README.md) - Workload templates
-- [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md) - Tunnel configuration
-- [Secrets Management](SECRETS.md) - SOPS and Ansible Vault
-- [Testing Guide](TESTING.md) - Validation procedures
+- [Ansible README](ansible/README.md)
+- [Helmfile README](helmfile/README.md)
+- [Tailscale Setup](TAILSCALE_SETUP.md)
+- [Hybrid Cluster Setup](HYBRID_CLUSTER_SETUP.md)
+- [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md)
+- [Secrets Management](SECRETS.md)
+- [Testing Guide](TESTING.md)
+- [Kubernetes Examples](kubernetes-examples/README.md)
 
 ## Traffic Flow
 
-### HTTP/HTTPS Traffic
 ```
-Internet → Cloudflare → Cloudflared (worker) → Kubernetes Services → Pods
+HTTP/S Traffic:
+Internet → Cloudflare → Cloudflared (tunnel) → Services
+
+TCP Traffic:
+Internet → Worker Public IP:NodePort → Application Pods
+
+Internal Cluster:
+Nodes ↔ Tailscale Mesh (L3) ↔ Kubernetes Services
 ```
 
-### Cluster Communication
-```
-Control Plane (CGNAT) ←→ Tailscale VPN ←→ Worker Nodes (Public IP)
-```
+Tailscale provides secure L3 mesh networking for inter-node communication.
 
-### Key Features
-- **No port forwarding required**: Cloudflared handles ingress
-- **Direct service routing**: Cloudflared routes to services without intermediate load balancers
-- **Secure cluster networking**: Tailscale VPN for inter-node communication
-- **Workload isolation**: Control plane tainted to run only K3s components
-- **Scalable architecture**: Add workers as needed without infrastructure changes
+## License
+
+MIT
