@@ -30,7 +30,6 @@ k3s_node_labels: []
 # k3s_node_labels:
 #   - "node-role.kubernetes.io/worker=true"
 #   - "topology.kubernetes.io/zone=netcup"
-#   - "workload.kubernetes.io/cardano=true"
 
 # k3s token for agent nodes (generate with: openssl rand -hex 32)
 # This references the encrypted vault variable

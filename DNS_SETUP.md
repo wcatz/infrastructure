@@ -23,8 +23,8 @@ This guide explains how to configure DNS for services exposed through Cloudflare
               |                                 |
               v                                 v
     ┌──────────────────┐            ┌──────────────────┐
-    |  app.example.com |            | cardano.example.com |
-    |  api.example.com |            | node.example.com  |
+    |  app.example.com |            | tcp.example.com  |
+    |  api.example.com |            | service.example.com |
     | *.apps.example.com|            └──────────────────┘
     └──────────────────┘                       |
               |                                 v
@@ -42,7 +42,7 @@ This guide explains how to configure DNS for services exposed through Cloudflare
                                                |
                                                v
                                     ┌──────────────────┐
-                                    | Cardano Node Pod |
+                                    | Application Pods |
                                     | (stateful)       |
                                     └──────────────────┘
 ```
@@ -144,7 +144,7 @@ resource "cloudflare_record" "wildcard_apps" {
 
 ## DNS Records for TCP Services
 
-TCP services (like Cardano node P2P) are exposed via NodePort on worker nodes with public IPs. Use A records pointing directly to the worker node's public IP.
+TCP services (like Application P2P) are exposed via NodePort on worker nodes with public IPs. Use A records pointing directly to the worker node's public IP.
 
 ### Creating TCP Service DNS Records
 
@@ -156,7 +156,7 @@ TCP services (like Cardano node P2P) are exposed via NodePort on worker nodes wi
 4. Click **Add record**
 5. Configure:
    - **Type**: A
-   - **Name**: subdomain (e.g., `cardano`, `node`)
+   - **Name**: subdomain (e.g., `tcp`, `service`)
    - **IPv4 address**: Worker node public IP (e.g., `YOUR_WORKER_PUBLIC_IP`)
    - **Proxy status**: DNS only (grey cloud) - **Important!**
    - **TTL**: 300 (5 minutes) or Auto
@@ -164,8 +164,8 @@ TCP services (like Cardano node P2P) are exposed via NodePort on worker nodes wi
 Example records:
 ```
 Type    Name      Target          Proxy  TTL
-A       cardano   YOUR_WORKER_PUBLIC_IP    ✗      300
-A       node      YOUR_WORKER_PUBLIC_IP    ✗      300
+A       tcp       YOUR_WORKER_PUBLIC_IP    ✗      300
+A       service   YOUR_WORKER_PUBLIC_IP    ✗      300
 ```
 
 **Important**: TCP/UDP services MUST have proxy disabled (grey cloud) as Cloudflare's proxy only supports HTTP/HTTPS traffic.
@@ -223,16 +223,16 @@ create_record() {
 }
 
 # Create records for TCP services
-create_record "cardano" "${WORKER_IP}"
-create_record "node" "${WORKER_IP}"
+create_record "tcp" "${WORKER_IP}"
+create_record "service" "${WORKER_IP}"
 ```
 
 ### TCP Service Examples
 
 | Service Type | Port | DNS Record | Points To | Access Method |
 |-------------|------|------------|-----------|---------------|
-| Cardano P2P | 3001 | `cardano.example.com` | Worker IP | Direct NodePort 30001 |
-| Custom TCP | varies | `node.example.com` | Worker IP | Direct NodePort |
+| TCP Service | 30001 | `tcp.example.com` | Worker IP | Direct NodePort 30001 |
+| Custom TCP | varies | `service.example.com` | Worker IP | Direct NodePort |
 
 ## Complete Setup Example
 
@@ -241,7 +241,7 @@ create_record "node" "${WORKER_IP}"
 **Requirements:**
 - Web application (HTTP/HTTPS) - runs on any node
 - REST API (HTTP/HTTPS) - runs on any node
-- Cardano node P2P (TCP) - runs on worker with public IP
+- TCP service (TCP) - runs on worker with public IP
 - Monitoring dashboards (HTTP/HTTPS) - runs on any node
 
 ### Step 1: DNS Records Setup
@@ -251,8 +251,8 @@ create_record "node" "${WORKER_IP}"
 | 1 | CNAME | `app` | `abc123.cfargotunnel.com` | ✓ | Web application |
 | 2 | CNAME | `api` | `abc123.cfargotunnel.com` | ✓ | REST API |
 | 3 | CNAME | `monitoring` | `abc123.cfargotunnel.com` | ✓ | Grafana dashboard |
-| 4 | A | `cardano` | `YOUR_WORKER_PUBLIC_IP` | ✗ | Cardano P2P node |
-| 5 | A | `node` | `YOUR_WORKER_PUBLIC_IP` | ✗ | Worker node access |
+| 4 | A | `tcp` | `YOUR_WORKER_PUBLIC_IP` | ✗ | TCP service |
+| 5 | A | `service` | `YOUR_WORKER_PUBLIC_IP` | ✗ | Worker node access |
 
 **Note**: `YOUR_WORKER_PUBLIC_IP` is the Netcup worker node's public IP.
 
@@ -278,16 +278,18 @@ ingress:
   - service: http_status:404
 ```
 
-### Step 3: Cardano Node Configuration
+### Step 3: Verify Configuration
 
-The Cardano node is deployed as a workload on the worker node with public IP.
+Verify services are accessible:
 
-See `helmfile/manifests/workloads/cardano-node.yaml` for full configuration.
+```bash
+# Test HTTP/S services
+curl https://app.example.com
+curl https://api.example.com
 
-Key points:
-- NodePort 30001 exposes Cardano P2P on worker public IP
-- `hostNetwork: true` allows direct binding to port 3001
-- Node affinity ensures scheduling on worker with public IP
+# Test TCP service
+telnet tcp.example.com 30001
+```
 
 ### Step 4: Testing Connectivity
 
@@ -307,14 +309,14 @@ curl https://monitoring.example.com
 #### TCP Services (Direct to Worker)
 
 ```bash
-# Test Cardano node P2P (via DNS)
-telnet cardano.example.com 30001
+# Test TCP service (via DNS)
+telnet tcp.example.com 30001
 
 # Or using worker IP directly
 telnet YOUR_WORKER_PUBLIC_IP 30001
 
 # Check if NodePort is accessible
-nc -zv cardano.example.com 30001
+nc -zv tcp.example.com 30001
 ```
 
 ## Multi-Environment DNS
@@ -327,7 +329,7 @@ nc -zv cardano.example.com 30001
 |---------|-----------|--------|-------|
 | Web App | `app.dev.example.com` | Dev Tunnel | Cloudflare Tunnel |
 | API | `api.dev.example.com` | Dev Tunnel | Cloudflare Tunnel |
-| Cardano | `cardano.dev.example.com` | Dev Worker IP | Direct NodePort |
+| TCP Service | `tcp.dev.example.com` | Dev Worker IP | Direct NodePort |
 
 ### Staging Environment
 
@@ -337,7 +339,7 @@ nc -zv cardano.example.com 30001
 |---------|-----------|--------|-------|
 | Web App | `app.staging.example.com` | Staging Tunnel | Cloudflare Tunnel |
 | API | `api.staging.example.com` | Staging Tunnel | Cloudflare Tunnel |
-| Cardano | `cardano.staging.example.com` | Staging Worker IP | Direct NodePort |
+| TCP Service | `tcp.staging.example.com` | Staging Worker IP | Direct NodePort |
 
 ### Production Environment
 
@@ -347,7 +349,7 @@ nc -zv cardano.example.com 30001
 |---------|-----------|--------|-------|
 | Web App | `app.example.com` | Prod Tunnel | Cloudflare Tunnel |
 | API | `api.example.com` | Prod Tunnel | Cloudflare Tunnel |
-| Cardano | `cardano.example.com` | Prod Worker IP | Direct NodePort |
+| TCP Service | `tcp.example.com` | Prod Worker IP | Direct NodePort |
 
 ## Troubleshooting
 
@@ -389,8 +391,8 @@ dig db.example.com
 
 **For TCP services:**
 1. Verify worker node is reachable: `ping YOUR_WORKER_PUBLIC_IP`
-2. Test connectivity: `nc -zv cardano.example.com 30001`
-3. Check pod is running on worker: `kubectl get pods -n cardano -o wide`
+2. Test connectivity: `nc -zv tcp.example.com 30001`
+3. Check pod is running on worker: `kubectl get pods -o wide`
 4. Verify firewall rules allow traffic on NodePort
 
 ### Wrong IP Resolution

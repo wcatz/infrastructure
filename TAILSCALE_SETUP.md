@@ -21,7 +21,7 @@ Tailscale provides:
 │  │  (Home/CGNAT)    │◄────────────►│  (Netcup)        │    │
 │  │                  │   Tailscale  │  Public IP       │    │
 │  │  - K3s Server    │     Mesh     │  - K3s Agent     │    │
-│  │  - Cloudflared   │              │  - Cardano Node  │    │
+│  │  - Cloudflared   │              │  - Workloads     │    │
 │  └──────────────────┘              └──────────────────┘    │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
@@ -249,7 +249,6 @@ kubectl get nodes --show-labels
 # Expected labels:
 # - topology.kubernetes.io/zone=home (control node)
 # - topology.kubernetes.io/zone=netcup (worker node)
-# - workload.kubernetes.io/cardano=true (for Cardano workload)
 ```
 
 ## Part 4: Testing Tailscale Connectivity

@@ -6,7 +6,7 @@ GitOps-based infrastructure for hybrid k3s cluster with Cloudflare tunnels and T
 
 This infrastructure implements a hybrid Kubernetes cluster designed for:
 - **Control Node (Home)**: Behind CGNAT, acts as Kubernetes control plane, uses Cloudflared for HTTP/S ingress
-- **Worker Node (Netcup)**: Public IP exposed, hosts stateful workloads (e.g., Cardano node), exposes TCP ports via NodePort/hostNetwork
+- **Worker Node (Netcup)**: Public IP exposed, hosts stateful workloads, exposes TCP ports via NodePort/hostNetwork
 
 ## Stack
 
@@ -93,12 +93,11 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 - Prometheus & Grafana (monitoring)
 - External Secrets (optional)
 - Environment configs (dev/staging/prod)
-- Workload manifests (Cardano node, etc.)
+- Workload manifests for stateful applications
 
 ### GitHub Actions
 - `helmfile-diff.yaml`: Preview changes on PRs
 - `helmfile-apply.yaml`: Manual Helmfile deployment with SOPS/age integration
-- `deploy-workloads.yaml`: Deploy stateful workloads (Cardano node, etc.)
 
 ## Environment Management
 
@@ -115,7 +114,6 @@ helmfile -e prod apply
 - [Ansible README](ansible/README.md)
 - [Helmfile README](helmfile/README.md)
 - [Tailscale Setup](TAILSCALE_SETUP.md)
-- [Workload Deployment](WORKLOAD_DEPLOYMENT.md)
 - [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md)
 - [Secrets Management](SECRETS.md)
 - [Testing Guide](TESTING.md)
@@ -126,8 +124,8 @@ helmfile -e prod apply
 HTTP/S Traffic:
 Internet → Cloudflare → Cloudflared (tunnel) → Services
 
-TCP Traffic (Cardano P2P):
-Internet → Worker Public IP:30001 (NodePort) → Cardano Node Pod
+TCP Traffic:
+Internet → Worker Public IP:NodePort → Application Pods
 
 Internal Cluster:
 Nodes ↔ Tailscale Mesh (L3) ↔ Kubernetes Services
