@@ -3,7 +3,8 @@
 
 # Tailscale auth key (required)
 # Get this from https://login.tailscale.com/admin/settings/keys
-# tailscale_auth_key: "tskey-auth-xxxxx"
+# This references the encrypted vault variable
+tailscale_auth_key: "{{ vault_tailscale_key }}"
 
 # Tailscale version (optional, default is latest)
 tailscale_version: "latest"

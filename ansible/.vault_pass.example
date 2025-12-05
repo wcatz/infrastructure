@@ -1,0 +1,5 @@
+# Example vault password file
+# Copy this file to .vault_pass and replace with your actual vault password
+# The .vault_pass file is ignored by git for security
+
+your-vault-password-here
