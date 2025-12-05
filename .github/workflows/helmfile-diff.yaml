@@ -145,7 +145,7 @@ jobs:
         run: |
           echo "Running helmfile diff for default environment..."
           helmfile diff --suppress-secrets 2>&1 | tee diff-default.txt || true
-          
+
           # Capture the diff output for PR comment
           DIFF_OUTPUT=$(cat diff-default.txt)
           echo "diff-output-default<<EOF" >> $GITHUB_OUTPUT
@@ -166,39 +166,39 @@ jobs:
           script: |
             const diffOutput = `${{ steps.helmfile-diff-default.outputs.diff-output-default }}`;
             const comment = `## Helmfile Diff Output
-            
+
             ### Default Environment
-            
+
             \`\`\`diff
             ${diffOutput}
             \`\`\`
-            
+
             This shows the changes that would be applied to the Kubernetes cluster.
-            
+
             ---
-            
+
             ### ✅ Validation Checks Passed
-            
+
             - YAML linting
             - Helm chart validation
             - Security scanning
             - Template rendering
-            
+
             ### Next Steps
-            
+
             1. **Review the diff** to ensure changes are as expected
             2. **Merge the PR** after approval
             3. **Deploy changes** using the \`helmfile-apply\` workflow
-            
+
             ### Environment-Specific Deployments
-            
+
             To deploy to specific environments, use:
             - Development: \`helmfile -e dev apply\`
             - Staging: \`helmfile -e staging apply\`
             - Production: \`helmfile -e prod apply\`
-            
+
             See [helmfile/README.md](helmfile/README.md) for detailed deployment instructions.`;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

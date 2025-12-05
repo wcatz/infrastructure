@@ -1,0 +1,87 @@
+---
+# Example Kubernetes Service
+#
+# This template provides examples for different service types in the hybrid cluster.
+# Choose the appropriate service type based on your needs.
+
+---
+# ClusterIP Service (Internal only)
+# Used for internal cluster communication between services
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app
+  namespace: default
+  labels:
+    app: example-app
+spec:
+  type: ClusterIP
+  selector:
+    app: example-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+
+---
+# NodePort Service (For direct node access or external LB)
+# Useful for exposing services on worker nodes with public IPs
+# Access via: http://<worker-node-ip>:<nodePort>
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app-nodeport
+  namespace: default
+  labels:
+    app: example-app
+spec:
+  type: NodePort
+  selector:
+    app: example-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+      nodePort: 30080  # Range: 30000-32767
+  # Route traffic only to the node that received it
+  externalTrafficPolicy: Local
+
+---
+# LoadBalancer Service (Not typically used in this setup)
+# Cloudflared provides ingress directly to services
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: example-app-lb
+#   namespace: default
+# spec:
+#   type: LoadBalancer
+#   selector:
+#     app: example-app
+#   ports:
+#     - name: http
+#       port: 80
+#       targetPort: http
+
+---
+# Headless Service (For StatefulSets)
+# Used for stateful applications requiring stable network identities
+# DNS returns pod IPs directly instead of service IP
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app-headless
+  namespace: default
+  labels:
+    app: example-app
+spec:
+  clusterIP: None  # Makes this a headless service
+  selector:
+    app: example-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
