@@ -39,7 +39,6 @@ Disaster recovery (DR) ensures business continuity in the event of catastrophic 
 | Component | RTO Target | Notes |
 |-----------|------------|-------|
 | k3s Control Plane | 30 minutes | Time to rebuild control plane from scratch |
-| Cloudflared Tunnels | 10 minutes | Fast recovery with existing credentials |
 | Stateless Workloads | 20 minutes | Time to redeploy via Helmfile |
 | Stateful Workloads (with PV) | 1-2 hours | Includes volume restore from backup |
 | MySQL Database | 1-2 hours | Includes restore and validation |
@@ -62,6 +61,7 @@ Disaster recovery (DR) ensures business continuity in the event of catastrophic 
 
 **Priority 1 (Critical)**: Must be restored within 1 hour
 - k3s control plane
+- MySQL databases
 - Cloudflared tunnels
 - MySQL databases
 - cert-manager (for TLS certificates)
@@ -147,6 +147,48 @@ helmfile apply
 **How**: Application-native backup mechanisms
 **Frequency**: Varies by application
 **Storage**: Application-specific
+
+#### Layer 5: Worker Node Critical Services
+
+**What**: Critical services and data on worker nodes
+**How**: Combination of PVC snapshots, application backups, and configuration in Git
+**Frequency**: Daily for PVCs, continuous for configs
+**Storage**: Velero backend (S3/Azure/GCS)
+**RPO**: 24 hours for data, zero for configs
+**RTO**: 1-2 hours
+
+**Critical Worker Services to Backup**:
+1. **Persistent Volume Claims (PVCs)**:
+   - All stateful workloads use PVCs
+   - Velero automatically backs up PVCs with snapshots
+   - Ensure PVC storage class supports snapshots
+
+2. **Application Databases**:
+   - MySQL/PostgreSQL running on workers
+   - Use native database backup tools (mysqldump, pg_dump)
+   - Automated CronJobs for regular dumps to S3/Azure
+
+3. **Service Configurations**:
+   - All Kubernetes manifests in Git (zero RPO)
+   - Cloudflared tunnel credentials in Kubernetes secrets
+   - Back up secrets with Velero (encrypted)
+
+4. **P2P/Direct TCP Services**:
+   - Document NodePort configurations
+   - Back up service data via PVCs
+   - Configuration stored in Git/Helmfile
+
+**Worker Node Backup Verification**:
+```bash
+# Verify PVC backups exist
+velero backup get | grep -E "daily|worker"
+
+# List all PVCs on worker nodes
+kubectl get pvc -A -o wide
+
+# Check backup schedules for critical namespaces
+kubectl get schedule -n velero -o yaml
+```
 
 ## Velero Backup Solution
 
@@ -447,9 +489,8 @@ spec:
 
 **Recovery**:
 1. k3s automatically reschedules pods to healthy nodes
-2. HAProxy load balancer marks failed node as down
-3. Traffic automatically routes to healthy nodes
-4. Replace failed node when convenient
+2. Traffic automatically routes to healthy nodes via Cloudflared or direct service access
+3. Replace failed node when convenient
 
 **Prevention**:
 - Multiple worker nodes for redundancy
@@ -492,11 +533,10 @@ kubectl get nodes
 **Recovery**:
 1. Rebuild infrastructure servers
 2. Deploy k3s via Ansible
-3. Deploy HAProxy load balancer
-4. Restore from Velero backup
-5. Restore databases from backups
-6. Redeploy applications via Helmfile
-7. Validate all services
+3. Restore from Velero backup
+4. Restore databases from backups
+5. Redeploy applications via Helmfile
+6. Validate all services
 
 **Detailed steps**: See [Complete Cluster Restore](#complete-cluster-restore) runbook
 
@@ -577,7 +617,7 @@ kubectl get nodes
 export KUBECONFIG=/path/to/kubeconfig
 kubectl cluster-info
 
-# Deploy HAProxy Ingress Controller and other services via Helmfile
+# Deploy Cloudflared and other services via Helmfile
 cd helmfile
 helmfile apply
 ```
@@ -652,10 +692,6 @@ helmfile apply
 #### Step 9: Validate Functionality
 
 ```bash
-# Test HAProxy Ingress Controller
-kubectl get pods -n haproxy-ingress
-kubectl get svc -n haproxy-ingress
-
 # Test Cloudflared tunnels
 curl https://app.example.com
 

@@ -11,13 +11,13 @@ cloudflare:
 
 # Production ingress rules
 ingress:
-  # Example production services
+  # Example production services - route directly to Kubernetes services
   # - hostname: app.example.com
-  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  #   service: http://my-app-service.default.svc.cluster.local:80
   # - hostname: api.example.com
   #   service: http://api-service.default.svc.cluster.local:8080
   # - hostname: www.example.com
-  #   service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  #   service: http://frontend-service.default.svc.cluster.local:80
   # - hostname: monitoring.example.com
   #   service: http://prometheus-server.monitoring.svc.cluster.local:80
   #   originRequest:
