@@ -74,10 +74,12 @@ dashboards:
       revision: 2
       datasource: Prometheus
 
-# Ingress configuration for external access
+# Ingress configuration
+# Note: In hybrid cluster, Grafana is accessed via Cloudflared tunnel
+# Ingress can be disabled or configured for internal access only
 ingress:
-  enabled: false  # Enable via environment-specific overrides
-  ingressClassName: haproxy
+  enabled: false  # Use Cloudflared tunnel instead
+  # ingressClassName: ""  # Not needed with Cloudflared
   annotations: {}
   hosts:
     - grafana.example.com  # Change to your domain

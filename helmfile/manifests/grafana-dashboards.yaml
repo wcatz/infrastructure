@@ -5,26 +5,6 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: haproxy-dashboard
-  namespace: monitoring
-  labels:
-    grafana_dashboard: "1"
-data:
-  haproxy-dashboard.json: |-
-    {
-      "dashboard": {
-        "title": "HAProxy Monitoring",
-        "tags": ["haproxy", "load-balancer"],
-        "timezone": "browser",
-        "panels": [],
-        "schemaVersion": 16,
-        "version": 0
-      }
-    }
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
   name: cloudflared-dashboard
   namespace: monitoring
   labels:
@@ -55,6 +35,26 @@ data:
       "dashboard": {
         "title": "k3s Cluster Monitoring",
         "tags": ["k3s", "kubernetes"],
+        "timezone": "browser",
+        "panels": [],
+        "schemaVersion": 16,
+        "version": 0
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cardano-node-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  cardano-node-dashboard.json: |-
+    {
+      "dashboard": {
+        "title": "Cardano Node Monitoring",
+        "tags": ["cardano", "blockchain"],
         "timezone": "browser",
         "panels": [],
         "schemaVersion": 16,

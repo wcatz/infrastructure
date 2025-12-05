@@ -122,24 +122,24 @@ serverFiles:
               summary: "Disk space low on {{ $labels.instance }}"
               description: "Disk usage is above 85% on {{ $labels.mountpoint }}"
 
-          # HAProxy alerts
-          - alert: HAProxyBackendDown
-            expr: haproxy_backend_up == 0
+          # Cloudflared tunnel alerts
+          - alert: CloudflaredTunnelDown
+            expr: up{job="cloudflared"} == 0
             for: 2m
             labels:
               severity: critical
             annotations:
-              summary: "HAProxy backend {{ $labels.backend }} is down"
-              description: "HAProxy backend {{ $labels.backend }} has been down for more than 2 minutes"
+              summary: "Cloudflared tunnel is down"
+              description: "Cloudflared tunnel has been down for more than 2 minutes"
 
-          - alert: HAProxyHighErrorRate
-            expr: rate(haproxy_frontend_http_responses_total{code="5xx"}[5m]) > 10
+          - alert: CloudflaredHighErrorRate
+            expr: rate(cloudflared_tunnel_response_errors_total[5m]) > 10
             for: 5m
             labels:
               severity: warning
             annotations:
-              summary: "High error rate on HAProxy frontend {{ $labels.frontend }}"
-              description: "5xx error rate is {{ $value }} req/s"
+              summary: "High error rate on Cloudflared tunnel"
+              description: "Cloudflared tunnel has high error rate for 5 minutes"
 
           # Velero backup alerts
           - alert: VeleroBackupFailed
