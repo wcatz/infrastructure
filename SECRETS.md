@@ -1,4 +1,70 @@
-# Secret Management with SOPS
+# Secret Management
+
+This repository uses two different secret management systems:
+- **Ansible Vault**: For Ansible playbook secrets (K3s token, Tailscale key)
+- **SOPS with age**: For Kubernetes secrets and Helmfile values
+
+## Ansible Vault (for Ansible Playbooks)
+
+### Setup
+
+1. **Create vault password file**:
+```bash
+cd ansible
+cp .vault_pass.example .vault_pass
+vim .vault_pass  # Add your vault password (keep this secure!)
+```
+
+2. **Create vault variables**:
+```bash
+# Copy example file
+cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+
+# Edit with your secrets
+vim group_vars/all/vault.yml
+```
+
+3. **Encrypt the vault file**:
+```bash
+ansible-vault encrypt group_vars/all/vault.yml
+```
+
+### Usage
+
+The vault contains the following encrypted variables:
+- `vault_k3s_token`: K3s cluster token (generate with `openssl rand -hex 32`)
+- `vault_tailscale_key`: Tailscale authentication key
+
+These are automatically decrypted when running playbooks if `.vault_pass` exists.
+
+### Common Commands
+
+```bash
+# Edit encrypted vault
+ansible-vault edit group_vars/all/vault.yml
+
+# View encrypted vault
+ansible-vault view group_vars/all/vault.yml
+
+# Change vault password
+ansible-vault rekey group_vars/all/vault.yml
+
+# Run playbook with specific vault password file
+ansible-playbook playbooks/deploy-k3s.yaml --vault-password-file=.vault_pass
+```
+
+### CI/CD Integration
+
+For GitHub Actions or other CI/CD systems:
+
+1. Store vault password as a repository secret: `ANSIBLE_VAULT_PASSWORD`
+2. In workflow, write it to a file:
+   ```yaml
+   - name: Setup Ansible Vault
+     run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/.vault_pass
+   ```
+
+## SOPS with age (for Kubernetes Secrets)
 
 Simple secret encryption using SOPS with age.
 

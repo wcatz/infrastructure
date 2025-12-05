@@ -17,12 +17,22 @@ GitOps-based infrastructure for k3s clusters with Cloudflare tunnels, Tailscale 
 
 ```bash
 cd ansible
-cp inventory.ini.example inventory.ini
-# Edit inventory.ini with your servers
 
-# Generate token and deploy
-openssl rand -hex 32
-ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml -e "k3s_token=YOUR_TOKEN"
+# Setup Ansible Vault for secrets
+cp .vault_pass.example .vault_pass
+vim .vault_pass  # Add your vault password
+
+# Configure encrypted secrets
+cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+vim group_vars/all/vault.yml  # Add your K3s token and Tailscale key
+ansible-vault encrypt group_vars/all/vault.yml
+
+# Setup inventory
+cp inventory.ini.example inventory.ini
+vim inventory.ini  # Edit with your servers
+
+# Deploy k3s cluster (secrets loaded from vault)
+ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
 
 # Get kubeconfig
 scp user@k3s-server:/etc/rancher/k3s/k3s.yaml ~/.kube/config
@@ -61,6 +71,7 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 ### Ansible
 - k3s deployment (Traefik disabled)
 - Tailscale VPN on hosts
+- Ansible Vault for encrypted secrets (K3s token, Tailscale key)
 
 ### Helmfile
 - HAProxy Ingress (NodePort 30080/30443)

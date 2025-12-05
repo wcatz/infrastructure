@@ -1,6 +1,13 @@
 ---
 # k3s Deployment Playbook
 # Deploys k3s without Traefik (HAProxy will be the ingress controller)
+#
+# IMPORTANT: This playbook uses encrypted secrets from group_vars/all/vault.yml
+# Ensure you have:
+# 1. Created and encrypted vault.yml with your k3s_token
+# 2. Set up .vault_pass file with your vault password
+#
+# Run with: ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
 
 - name: Deploy k3s Server
   hosts: k3s_servers
