@@ -1,0 +1,191 @@
+---
+# Cardano Node Workload
+# Stateful workload deployed on Netcup worker node with public IP
+# Exposes Cardano P2P port 3001 via NodePort for direct TCP access
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cardano
+  labels:
+    name: cardano
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cardano-data
+  namespace: cardano
+  labels:
+    app: cardano-node
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi  # Adjust based on blockchain data size
+  # storageClassName: local-path  # Use appropriate storage class for your cluster
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cardano-node-config
+  namespace: cardano
+data:
+  # Cardano node configuration
+  # These are example values - replace with actual configuration
+  network: "mainnet"  # or "preprod", "preview"
+  # Add additional configuration as needed
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cardano-node
+  namespace: cardano
+  labels:
+    app: cardano-node
+    workload: stateful
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Only one replica can access PVC at a time
+  selector:
+    matchLabels:
+      app: cardano-node
+  template:
+    metadata:
+      labels:
+        app: cardano-node
+        workload: stateful
+    spec:
+      # Node affinity to schedule on Netcup worker node
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # Schedule on nodes with public IP and cardano workload label
+                  - key: workload.kubernetes.io/cardano
+                    operator: In
+                    values:
+                      - "true"
+                  - key: topology.kubernetes.io/zone
+                    operator: In
+                    values:
+                      - "netcup"
+          # Prefer nodes that are workers (not control plane)
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/worker
+                    operator: In
+                    values:
+                      - "true"
+
+      # Use hostNetwork for direct TCP exposure
+      # This allows the Cardano P2P port to be accessible on the node's public IP
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+
+      containers:
+        - name: cardano-node
+          # Replace with official Cardano node image
+          # Example: inputoutput/cardano-node:latest
+          image: inputoutput/cardano-node:8.7.3
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: p2p
+              containerPort: 3001
+              protocol: TCP
+              hostPort: 3001  # Bind to host port for direct access
+
+          env:
+            - name: NETWORK
+              valueFrom:
+                configMapKeyRef:
+                  name: cardano-node-config
+                  key: network
+
+          volumeMounts:
+            - name: cardano-data
+              mountPath: /data
+            # Add additional volume mounts for configuration files as needed
+
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 8Gi
+            limits:
+              cpu: 4000m
+              memory: 16Gi
+
+          # Liveness probe to check if node is responsive
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "cardano-cli query tip --mainnet || exit 1"
+            initialDelaySeconds: 300
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+
+          # Readiness probe to check if node is synced
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "cardano-cli query tip --mainnet || exit 1"
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 5
+
+      volumes:
+        - name: cardano-data
+          persistentVolumeClaim:
+            claimName: cardano-data
+
+      # Restart policy
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cardano-node
+  namespace: cardano
+  labels:
+    app: cardano-node
+spec:
+  type: NodePort
+  selector:
+    app: cardano-node
+  ports:
+    - name: p2p
+      port: 3001
+      targetPort: 3001
+      nodePort: 30001  # Expose on NodePort 30001 for external access
+      protocol: TCP
+  # External traffic policy to preserve source IP
+  externalTrafficPolicy: Local
+---
+# Optional: Service for internal cluster communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: cardano-node-internal
+  namespace: cardano
+  labels:
+    app: cardano-node
+spec:
+  type: ClusterIP
+  selector:
+    app: cardano-node
+  ports:
+    - name: p2p
+      port: 3001
+      targetPort: 3001
+      protocol: TCP

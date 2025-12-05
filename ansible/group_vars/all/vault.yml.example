@@ -10,6 +10,18 @@
 # K3s token - generate with: openssl rand -hex 32
 vault_k3s_token: "REPLACE_WITH_ACTUAL_K3S_TOKEN"
 
-# Tailscale authentication key
+# Tailscale authentication key for host VPN
 # Get from: https://login.tailscale.com/admin/settings/keys
 vault_tailscale_key: "REPLACE_WITH_ACTUAL_TAILSCALE_KEY"
+
+# Tailscale OAuth credentials for Kubernetes operator
+# Create OAuth client at: https://login.tailscale.com/admin/settings/oauth
+# Required scopes: devices:read, devices:write
+vault_tailscale_oauth_client_id: "REPLACE_WITH_OAUTH_CLIENT_ID"
+vault_tailscale_oauth_client_secret: "REPLACE_WITH_OAUTH_CLIENT_SECRET"
+
+# Cloudflare tunnel credentials (optional - can also be managed via SOPS)
+# Create tunnel at: https://one.dash.cloudflare.com/
+vault_cloudflare_tunnel_id: "REPLACE_WITH_TUNNEL_ID"
+vault_cloudflare_tunnel_secret: "REPLACE_WITH_TUNNEL_SECRET"
+vault_cloudflare_account_tag: "REPLACE_WITH_ACCOUNT_TAG"

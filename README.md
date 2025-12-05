@@ -1,15 +1,29 @@
 # Infrastructure Management
 
-GitOps-based infrastructure for k3s clusters with Cloudflare tunnels, Tailscale VPN, and HAProxy ingress.
+GitOps-based infrastructure for hybrid k3s cluster with Cloudflare tunnels and Tailscale mesh networking.
+
+## Architecture
+
+This infrastructure implements a hybrid Kubernetes cluster designed for:
+- **Control Node (Home)**: Behind CGNAT, acts as Kubernetes control plane, uses Cloudflared for HTTP/S ingress
+- **Worker Node (Netcup)**: Public IP exposed, hosts stateful workloads (e.g., Cardano node), exposes TCP ports via NodePort/hostNetwork
 
 ## Stack
 
-- **k3s**: Lightweight Kubernetes
-- **HAProxy Ingress**: HTTP/HTTPS via NodePort (ports 30080/30443)
-- **Cloudflared**: Secure tunnel to Cloudflare
-- **Tailscale**: VPN on hosts + Kubernetes operator
+- **k3s**: Lightweight Kubernetes (Traefik and servicelb disabled)
+- **Tailscale**: L3 mesh networking for secure inter-node communication
+- **Cloudflared**: HTTP/HTTPS ingress via Cloudflare tunnels
+- **Tailscale Operator**: Manages Tailscale connectivity in Kubernetes
 - **Prometheus/Grafana**: Monitoring
 - **SOPS**: Secret encryption (age-based)
+
+## Key Features
+
+- **No HAProxy/MetalLB**: Simplified networking with Cloudflared for HTTP/S and direct TCP exposure
+- **Tailscale Mesh**: Secure L3 networking between cluster nodes
+- **Workload Placement**: Control plane behind CGNAT, workers with public IPs
+- **Stateful Workloads**: PVC-based persistent storage with failover support
+- **Hybrid Architecture**: Minimal and scalable design for distributed deployments
 
 ## Quick Setup
 
@@ -69,20 +83,22 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 ## Components
 
 ### Ansible
-- k3s deployment (Traefik disabled)
-- Tailscale VPN on hosts
-- Ansible Vault for encrypted secrets (K3s token, Tailscale key)
+- k3s deployment (Traefik and servicelb disabled for hybrid setup)
+- Tailscale VPN on hosts for secure inter-node communication
+- Ansible Vault for encrypted secrets (K3s token, Tailscale keys, OAuth credentials)
 
 ### Helmfile
-- HAProxy Ingress (NodePort 30080/30443)
-- Cloudflared tunnels
-- Tailscale Kubernetes Operator
-- Prometheus & Grafana
+- Cloudflared tunnels (HTTP/S ingress)
+- Tailscale Kubernetes Operator (L3 mesh networking)
+- Prometheus & Grafana (monitoring)
+- External Secrets (optional)
 - Environment configs (dev/staging/prod)
+- Workload manifests (Cardano node, etc.)
 
 ### GitHub Actions
 - `helmfile-diff.yaml`: Preview changes on PRs
-- `helmfile-apply.yaml`: Manual deployment
+- `helmfile-apply.yaml`: Manual Helmfile deployment with SOPS/age integration
+- `deploy-workloads.yaml`: Deploy stateful workloads (Cardano node, etc.)
 
 ## Environment Management
 
@@ -98,6 +114,8 @@ helmfile -e prod apply
 
 - [Ansible README](ansible/README.md)
 - [Helmfile README](helmfile/README.md)
+- [Tailscale Setup](TAILSCALE_SETUP.md)
+- [Workload Deployment](WORKLOAD_DEPLOYMENT.md)
 - [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md)
 - [Secrets Management](SECRETS.md)
 - [Testing Guide](TESTING.md)
@@ -105,7 +123,14 @@ helmfile -e prod apply
 ## Traffic Flow
 
 ```
-Internet → External LB → NodePort 30080/30443 → HAProxy Ingress → Services
+HTTP/S Traffic:
+Internet → Cloudflare → Cloudflared (tunnel) → Services
+
+TCP Traffic (Cardano P2P):
+Internet → Worker Public IP:30001 (NodePort) → Cardano Node Pod
+
+Internal Cluster:
+Nodes ↔ Tailscale Mesh (L3) ↔ Kubernetes Services
 ```
 
-Tailscale provides VPN access to infrastructure.
+Tailscale provides secure L3 mesh networking for inter-node communication.

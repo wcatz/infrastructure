@@ -6,16 +6,31 @@
 k3s_version: "v1.28.5+k3s1"
 k3s_install_url: "https://get.k3s.io"
 
-# Disable Traefik to use HAProxy as ingress controller
+# Disable Traefik and servicelb for hybrid cluster with Tailscale networking
 k3s_server_args:
   - "--disable=traefik"
+  - "--disable=servicelb"
   - "--write-kubeconfig-mode=644"
+  - "--flannel-backend=none"
+  - "--disable-network-policy"
 
-# Optional: Disable other components if needed
-# k3s_disable_components:
-#   - traefik
-#   - servicelb
-#   - metrics-server
+# Components disabled for hybrid cluster:
+# - traefik: Using Cloudflared for HTTP/S ingress
+# - servicelb: Using NodePort/hostNetwork for TCP exposure
+# - flannel: Using Tailscale for node-to-node networking
+# - network-policy: Tailscale handles network security
+
+# Node labels for workload placement
+k3s_node_labels: []
+# Example for control plane at home (behind CGNAT):
+# k3s_node_labels:
+#   - "node-role.kubernetes.io/control-plane=true"
+#   - "topology.kubernetes.io/zone=home"
+# Example for worker at Netcup (public IP):
+# k3s_node_labels:
+#   - "node-role.kubernetes.io/worker=true"
+#   - "topology.kubernetes.io/zone=netcup"
+#   - "workload.kubernetes.io/cardano=true"
 
 # k3s token for agent nodes (generate with: openssl rand -hex 32)
 # This references the encrypted vault variable

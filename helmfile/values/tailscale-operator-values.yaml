@@ -1,0 +1,91 @@
+# Tailscale Operator Helm Chart Values
+# Manages Tailscale connectivity for Kubernetes cluster
+# Enables L3 mesh networking for secure inter-node communication
+
+# OAuth Client credentials for Tailscale operator
+# Create OAuth client at: https://login.tailscale.com/admin/settings/oauth
+# Required scopes: devices:read, devices:write
+#
+# To create the required secret:
+#   kubectl create namespace tailscale
+#   kubectl create secret generic operator-oauth \
+#     --from-literal=client_id=<oauth-client-id> \
+#     --from-literal=client_secret=<oauth-client-secret> \
+#     -n tailscale
+#
+# Alternatively, use SOPS to encrypt and manage the secret:
+#   See SECRETS.md for SOPS setup instructions
+
+oauth:
+  # Use existing secret created manually or via SOPS
+  # Secret must contain: client_id and client_secret
+  clientId: ""  # Set if not using secret
+  clientSecret: ""  # Set if not using secret
+
+# Operator configuration
+operatorConfig:
+  # Hostname for the operator
+  hostname: "k3s-operator"
+
+  # Enable logging
+  logging: "info"
+
+  # Default tags to apply to all Tailscale resources created by operator
+  defaultTags:
+    - "tag:k8s"
+    - "tag:operator"
+
+# API server proxy configuration
+# Enables access to Kubernetes API server over Tailscale
+apiServerProxyConfig:
+  # Set to 'true' to enable API server proxy
+  mode: "true"
+
+# Resource limits and requests
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: tailscale-operator
+
+# Pod annotations
+podAnnotations: {}
+
+# Security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Node selector and tolerations
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Enable proxy for outbound connections (if needed)
+proxyConfig:
+  enabled: false
+  # http_proxy: "http://proxy.example.com:8080"
+  # https_proxy: "http://proxy.example.com:8080"
+  # no_proxy: "localhost,127.0.0.1,.svc,.cluster.local"

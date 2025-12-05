@@ -2,8 +2,8 @@
 
 enabled:
   prometheus: true
-  haproxyIngress: true
-  cloudflared: false  # Enable when tunnel credentials are configured
+  haproxyIngress: false  # Disabled for hybrid cluster - using Cloudflared for HTTP/S
+  cloudflared: true  # Enabled for HTTP/S ingress through Cloudflare tunnels
   grafana: true
   externalSecrets: true
-  tailscaleOperator: false  # Enable for Tailscale Kubernetes operator
+  tailscaleOperator: true  # Enabled for Tailscale mesh networking
