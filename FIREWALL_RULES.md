@@ -469,8 +469,9 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 # Backup existing rules
-BACKUP_FILE="/tmp/iptables-backup-control-plane-$(date +%s).rules"
+BACKUP_FILE="/var/backups/iptables-backup-control-plane-$(date +%s).rules"
 echo "Backing up existing iptables rules to $BACKUP_FILE"
+mkdir -p /var/backups
 iptables-save > "$BACKUP_FILE"
 
 # Flush existing rules
@@ -557,8 +558,9 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 # Backup existing rules
-BACKUP_FILE="/tmp/iptables-backup-worker-$(date +%s).rules"
+BACKUP_FILE="/var/backups/iptables-backup-worker-$(date +%s).rules"
 echo "Backing up existing iptables rules to $BACKUP_FILE"
+mkdir -p /var/backups
 iptables-save > "$BACKUP_FILE"
 
 # Flush existing rules
@@ -594,8 +596,11 @@ iptables -A INPUT -p udp --dport 41641 -j ACCEPT
 # iptables -A INPUT -p udp --dport 30303 -j ACCEPT
 
 # Rate limiting for public NodePorts (example)
-# Limits to 25 connections/minute with burst of 100 to prevent DoS
-# Adjust values based on your service's expected legitimate traffic
+# Limits to 25 connections/minute per source IP with burst of 100 to prevent DoS
+# Adjust values based on your service's expected legitimate traffic:
+# - Web apps: 25-60/minute, burst 100-200
+# - APIs: 60-120/minute, burst 200-500
+# - Game servers: Higher values may be needed
 # iptables -A INPUT -p tcp --dport 30080 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
 
 # Save rules
@@ -722,9 +727,12 @@ Protect public NodePorts from DoS attacks:
 # UFW rate limiting (allows 6 connections per 30 seconds from same IP)
 sudo ufw limit 30080/tcp
 
-# iptables rate limiting (more configurable)
-# Limits to 25 connections/minute with burst of 100 to prevent DoS
-# Adjust values based on your service's expected legitimate traffic
+# iptables rate limiting (more configurable, per source IP)
+# Limits to 25 connections/minute per source IP with burst of 100 to prevent DoS
+# Adjust values based on your service's expected legitimate traffic:
+# - Web apps: 25-60/minute, burst 100-200
+# - APIs: 60-120/minute, burst 200-500
+# - Game servers: Higher values may be needed
 sudo iptables -A INPUT -p tcp --dport 30080 \
   -m limit --limit 25/minute --limit-burst 100 \
   -j ACCEPT
