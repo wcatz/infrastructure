@@ -469,7 +469,7 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 # Backup existing rules
-BACKUP_FILE="/tmp/iptables-backup-$(date +%s).rules"
+BACKUP_FILE="/tmp/iptables-backup-control-plane-$(date +%s).rules"
 echo "Backing up existing iptables rules to $BACKUP_FILE"
 iptables-save > "$BACKUP_FILE"
 
@@ -557,7 +557,7 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 # Backup existing rules
-BACKUP_FILE="/tmp/iptables-backup-$(date +%s).rules"
+BACKUP_FILE="/tmp/iptables-backup-worker-$(date +%s).rules"
 echo "Backing up existing iptables rules to $BACKUP_FILE"
 iptables-save > "$BACKUP_FILE"
 
@@ -594,6 +594,8 @@ iptables -A INPUT -p udp --dport 41641 -j ACCEPT
 # iptables -A INPUT -p udp --dport 30303 -j ACCEPT
 
 # Rate limiting for public NodePorts (example)
+# Limits to 25 connections/minute with burst of 100 to prevent DoS
+# Adjust values based on your service's expected legitimate traffic
 # iptables -A INPUT -p tcp --dport 30080 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
 
 # Save rules
@@ -721,6 +723,8 @@ Protect public NodePorts from DoS attacks:
 sudo ufw limit 30080/tcp
 
 # iptables rate limiting (more configurable)
+# Limits to 25 connections/minute with burst of 100 to prevent DoS
+# Adjust values based on your service's expected legitimate traffic
 sudo iptables -A INPUT -p tcp --dport 30080 \
   -m limit --limit 25/minute --limit-burst 100 \
   -j ACCEPT
