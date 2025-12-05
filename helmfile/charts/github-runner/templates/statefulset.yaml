@@ -57,10 +57,10 @@ spec:
             {{- end }}
             - name: TS_HOSTNAME
               value: "{{ .Values.tailscale.hostname }}-$(POD_NAME)"
-          envFrom:
-            - fieldRef:
-                fieldPath: metadata.name
-              prefix: POD_
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           volumeMounts:
             - name: tailscale-state
               mountPath: /var/lib/tailscale
@@ -254,7 +254,12 @@ spec:
               - key: {{ .Values.clusterAccess.kubeconfigSecretKey }}
                 path: config
         {{- end }}
-      
+        {{- if not .Values.storage.enabled }}
+        # Use emptyDir if persistent storage is disabled
+        - name: work
+          emptyDir: {}
+        {{- end }}
+
       {{- with .Values.kubernetes.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -267,7 +272,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-  
+
   {{- if .Values.storage.enabled }}
   volumeClaimTemplates:
     - metadata:
@@ -281,9 +286,4 @@ spec:
         resources:
           requests:
             storage: {{ .Values.storage.size }}
-  {{- else }}
-  # Use emptyDir if persistent storage is disabled
-  volumes:
-    - name: work
-      emptyDir: {}
   {{- end }}
