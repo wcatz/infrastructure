@@ -1,0 +1,41 @@
+# Grafana Production Environment Overrides
+# Higher resource requirements for production
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClassName: local-path
+
+# High availability
+replicas: 2
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server.monitoring.svc.cluster.local
+        access: proxy
+        isDefault: true
+
+# Production security settings
+grafana.ini:
+  server:
+    root_url: https://grafana.example.com
+  security:
+    disable_initial_admin_creation: false
+    admin_user: admin
+    # admin_password should be set via secret
+  users:
+    allow_sign_up: false
+    auto_assign_org: true
+    auto_assign_org_role: Viewer

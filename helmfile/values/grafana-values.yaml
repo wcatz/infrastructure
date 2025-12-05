@@ -55,19 +55,19 @@ dashboards:
       gnetId: 7249
       revision: 1
       datasource: Prometheus
-    
+
     # Node exporter full
     node-exporter:
       gnetId: 1860
       revision: 31
       datasource: Prometheus
-    
+
     # Kubernetes deployment metrics
     kubernetes-deployment:
       gnetId: 8588
       revision: 1
       datasource: Prometheus
-    
+
     # Prometheus stats
     prometheus-stats:
       gnetId: 2
@@ -107,14 +107,14 @@ grafana.ini:
   auth.anonymous:
     enabled: false
     org_role: Viewer
-  
+
   security:
     admin_user: admin
     # admin_password should be set via secret
-  
+
   server:
     root_url: "%(protocol)s://%(domain)s/"
-  
+
   analytics:
     reporting_enabled: false
     check_for_updates: true
@@ -151,7 +151,7 @@ sidecar:
     folder: /tmp/dashboards
     defaultFolderName: null
     searchNamespace: ALL
-  
+
   datasources:
     enabled: true
     label: grafana_datasource

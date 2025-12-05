@@ -1,5 +1,5 @@
-# HAProxy Ingress Controller Helm Chart Values
-# These values configure the HAProxy Ingress Controller
+# HAProxy Ingress Controller - NodePort Configuration
+# Exposes HAProxy on each node for external load balancing
 
 controller:
   replicaCount: 2
@@ -12,9 +12,7 @@ controller:
       cpu: 200m
       memory: 256Mi
 
-  # HAProxy-specific configuration
   config:
-    # Timeout configurations
     timeout-client: "50s"
     timeout-client-fin: "50s"
     timeout-connect: "5s"
@@ -24,20 +22,17 @@ controller:
     timeout-server: "50s"
     timeout-server-fin: "50s"
     timeout-tunnel: "1h"
-
-    # Keep-alive settings
     backend-check-interval: "2s"
     forwardfor: "add"
     maxconn-server: "1000"
-
-    # SSL/TLS settings
     ssl-redirect: "true"
 
   service:
-    type: ClusterIP  # Only accessible from within cluster (via Cloudflared)
-    # externalTrafficPolicy: Local  # Not needed for ClusterIP
-    annotations: {}
-    # Cloudflared tunnel connects directly to this ClusterIP service
+    type: NodePort
+    nodePorts:
+      http: 30080
+      https: 30443
+    externalTrafficPolicy: Local
 
   metrics:
     enabled: true
