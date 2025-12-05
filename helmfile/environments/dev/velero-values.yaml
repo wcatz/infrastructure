@@ -9,7 +9,7 @@ configuration:
       bucket: dev-k3s-backups
       config:
         region: us-west-2
-  
+
   volumeSnapshotLocation:
     - name: default
       provider: aws

@@ -37,7 +37,7 @@ credentials:
 configuration:
   # Provider: aws, azure, gcp, etc.
   provider: ""  # Set in environment-specific values
-  
+
   # Backup storage location (BSL)
   backupStorageLocation:
     - name: default
@@ -51,14 +51,14 @@ configuration:
       # config:
       #   region: us-west-2
       #   s3ForcePathStyle: "false"
-      # 
+      #
       # Azure Blob example:
       # provider: azure
       # bucket: velero
       # config:
       #   resourceGroup: my-rg
       #   storageAccount: velerobackups
-      
+
   # Volume snapshot location (VSL)
   volumeSnapshotLocation:
     - name: default
@@ -71,22 +71,22 @@ configuration:
 
   # Default backup TTL (30 days)
   defaultBackupTTL: 720h
-  
+
   # Default volume snapshot locations
   defaultVolumesToFsBackup: false
-  
+
   # Features to enable
   features: ""
-  
+
   # Log level: debug, info, warning, error, fatal, panic
   logLevel: info
-  
+
   # Log format: text, json
   logFormat: text
-  
+
   # Restore resource priorities
   defaultItemOperationTimeout: 4h
-  
+
   # Default restic maintenance mode
   defaultResticMaintenanceFrequency: 168h  # Weekly
 

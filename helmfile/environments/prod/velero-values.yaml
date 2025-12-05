@@ -10,7 +10,7 @@ configuration:
         region: us-west-2
         # Use server-side encryption
         serverSideEncryption: AES256
-  
+
   volumeSnapshotLocation:
     - name: default
       provider: aws
@@ -28,14 +28,14 @@ schedules:
       includedNamespaces:
         - production
         - databases
-  
+
   # Daily full backups
   daily:
     disabled: false
     schedule: "0 0 * * *"  # Midnight daily
     template:
       ttl: "720h"  # 30 days retention
-  
+
   # Weekly backups
   weekly:
     disabled: false

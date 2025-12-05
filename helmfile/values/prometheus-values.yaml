@@ -27,12 +27,12 @@ alertmanager:
     limits:
       cpu: 200m
       memory: 256Mi
-  
+
   # Alertmanager configuration
   config:
     global:
       resolve_timeout: 5m
-    
+
     route:
       group_by: ['alertname', 'cluster', 'service']
       group_wait: 10s
@@ -47,13 +47,13 @@ alertmanager:
         - match:
             severity: warning
           receiver: 'warning'
-    
+
     receivers:
       - name: 'default'
         # Configure your default notification channel
         # webhook_configs:
         #   - url: 'http://webhook-receiver/alerts'
-      
+
       - name: 'critical'
         # Configure critical alerts notification
         # email_configs:
@@ -62,7 +62,7 @@ alertmanager:
         # slack_configs:
         #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
         #     channel: '#alerts-critical'
-      
+
       - name: 'warning'
         # Configure warning alerts notification
         # slack_configs:
@@ -84,7 +84,7 @@ serverFiles:
             annotations:
               summary: "Node {{ $labels.instance }} is down"
               description: "Node {{ $labels.instance }} has been down for more than 5 minutes"
-          
+
           - alert: PodCrashLooping
             expr: rate(kube_pod_container_status_restarts_total[15m]) > 0.1
             for: 5m
@@ -93,7 +93,7 @@ serverFiles:
             annotations:
               summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
               description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently ({{ $value }} restarts/sec in last 15 minutes)"
-          
+
           # Resource alerts
           - alert: HighCPUUsage
             expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
@@ -103,7 +103,7 @@ serverFiles:
             annotations:
               summary: "High CPU usage on {{ $labels.instance }}"
               description: "CPU usage is above 80% for more than 10 minutes"
-          
+
           - alert: HighMemoryUsage
             expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
             for: 5m
@@ -112,7 +112,7 @@ serverFiles:
             annotations:
               summary: "High memory usage on {{ $labels.instance }}"
               description: "Memory usage is above 90%"
-          
+
           - alert: DiskSpaceLow
             expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 85
             for: 5m
@@ -121,7 +121,7 @@ serverFiles:
             annotations:
               summary: "Disk space low on {{ $labels.instance }}"
               description: "Disk usage is above 85% on {{ $labels.mountpoint }}"
-          
+
           # HAProxy alerts
           - alert: HAProxyBackendDown
             expr: haproxy_backend_up == 0
@@ -131,7 +131,7 @@ serverFiles:
             annotations:
               summary: "HAProxy backend {{ $labels.backend }} is down"
               description: "HAProxy backend {{ $labels.backend }} has been down for more than 2 minutes"
-          
+
           - alert: HAProxyHighErrorRate
             expr: rate(haproxy_frontend_http_responses_total{code="5xx"}[5m]) > 10
             for: 5m
@@ -140,7 +140,7 @@ serverFiles:
             annotations:
               summary: "High error rate on HAProxy frontend {{ $labels.frontend }}"
               description: "5xx error rate is {{ $value }} req/s"
-          
+
           # Velero backup alerts
           - alert: VeleroBackupFailed
             expr: velero_backup_failure_total > 0
@@ -150,7 +150,7 @@ serverFiles:
             annotations:
               summary: "Velero backup failed"
               description: "Backup {{ $labels.schedule }} has failed"
-          
+
           - alert: VeleroBackupTooOld
             expr: time() - velero_backup_last_successful_timestamp{schedule!=""} > 86400
             for: 5m
@@ -159,7 +159,7 @@ serverFiles:
             annotations:
               summary: "Velero backup is too old"
               description: "Last successful backup for schedule {{ $labels.schedule }} was more than 24 hours ago"
-          
+
           # Kubernetes alerts
           - alert: KubernetesPersistentVolumeFull
             expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes * 100 < 10
@@ -169,7 +169,7 @@ serverFiles:
             annotations:
               summary: "Kubernetes PersistentVolume is almost full"
               description: "PersistentVolume {{ $labels.persistentvolumeclaim }} is {{ $value }}% full"
-          
+
           - alert: KubernetesDeploymentReplicasMismatch
             expr: kube_deployment_spec_replicas != kube_deployment_status_replicas_available
             for: 10m

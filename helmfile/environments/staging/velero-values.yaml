@@ -8,7 +8,7 @@ configuration:
       bucket: staging-k3s-backups
       config:
         region: us-west-2
-  
+
   volumeSnapshotLocation:
     - name: default
       provider: aws
@@ -22,7 +22,7 @@ schedules:
     schedule: "0 1 * * *"  # 1 AM daily
     template:
       ttl: "336h"  # 14 days retention
-  
+
   weekly:
     disabled: false
     schedule: "0 0 * * 0"  # Sunday midnight

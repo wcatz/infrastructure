@@ -176,6 +176,208 @@ This loads:
 - `values/cloudflared-values.yaml` (base)
 - `environments/prod/cloudflared-values.yaml` (prod overrides)
 
+### Environment Override Patterns
+
+#### Pattern 1: Resource Scaling
+
+**Base values** (`values/haproxy-ingress.yaml`):
+```yaml
+controller:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+```
+
+**Development override** (`environments/dev/haproxy-ingress.yaml`):
+```yaml
+controller:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+```
+
+**Production override** (`environments/prod/haproxy-ingress.yaml`):
+```yaml
+controller:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+```
+
+#### Pattern 2: Feature Flags
+
+Enable experimental features in dev/staging, disable in production:
+
+**Base values** (`values/grafana-values.yaml`):
+```yaml
+adminPassword: "admin"
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server.monitoring.svc.cluster.local
+```
+
+**Development override** (`environments/dev/grafana-values.yaml`):
+```yaml
+# Development-specific settings
+persistence:
+  enabled: false  # Use in-memory for faster iteration
+
+# Allow self-registration for dev
+grafana.ini:
+  users:
+    allow_sign_up: true
+    auto_assign_org_role: Editor
+```
+
+**Production override** (`environments/prod/grafana-values.yaml`):
+```yaml
+# Production security
+persistence:
+  enabled: true
+  size: 10Gi
+
+replicas: 2  # High availability
+
+grafana.ini:
+  server:
+    root_url: https://grafana.example.com
+  security:
+    disable_initial_admin_creation: false
+  users:
+    allow_sign_up: false
+    auto_assign_org_role: Viewer
+```
+
+#### Pattern 3: Service Endpoints
+
+Different endpoints per environment:
+
+**Staging** (`environments/staging/cloudflared-values.yaml`):
+```yaml
+cloudflare:
+  tunnelName: "infrastructure-staging-tunnel"
+  tunnelId: "staging-tunnel-id"
+
+ingress:
+  - hostname: staging.app.example.com
+    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  - hostname: staging.grafana.example.com
+    service: http://grafana.monitoring.svc.cluster.local:80
+```
+
+**Production** (`environments/prod/cloudflared-values.yaml`):
+```yaml
+cloudflare:
+  tunnelName: "infrastructure-prod-tunnel"
+  tunnelId: "prod-tunnel-id"
+
+ingress:
+  - hostname: app.example.com
+    service: http://haproxy-ingress-controller.haproxy-ingress.svc.cluster.local:80
+  - hostname: grafana.example.com
+    service: http://grafana.monitoring.svc.cluster.local:80
+```
+
+#### Pattern 4: Backup Schedules
+
+**Development** (`environments/dev/velero-values.yaml`):
+```yaml
+schedules:
+  daily:
+    schedule: "0 2 * * *"  # 2 AM daily
+    template:
+      ttl: "168h"  # 7 days retention
+```
+
+**Production** (`environments/prod/velero-values.yaml`):
+```yaml
+schedules:
+  hourly-critical:
+    schedule: "0 * * * *"  # Every hour for critical namespaces
+    template:
+      ttl: "72h"
+      includedNamespaces:
+        - production
+        - databases
+  
+  daily:
+    schedule: "0 0 * * *"  # Daily full backup
+    template:
+      ttl: "720h"  # 30 days retention
+  
+  weekly:
+    schedule: "0 0 * * 0"  # Weekly backup
+    template:
+      ttl: "2160h"  # 90 days retention
+```
+
+### Creating Environment Overrides
+
+1. **Identify environment-specific settings**:
+   - Resource requirements
+   - Replica counts
+   - Storage sizes
+   - URLs/endpoints
+   - Feature flags
+   - Security settings
+
+2. **Create override file**:
+   ```bash
+   # Create environment-specific values
+   touch environments/dev/my-app-values.yaml
+   ```
+
+3. **Add overrides** (only the values that differ):
+   ```yaml
+   # environments/dev/my-app-values.yaml
+   replicaCount: 1
+   
+   resources:
+     limits:
+       cpu: 100m
+       memory: 128Mi
+   ```
+
+4. **Reference in releases.yaml.gotmpl**:
+   ```yaml
+   - name: my-app
+     values:
+       - values/my-app-values.yaml
+       {{- if eq $env "dev" }}
+       - environments/dev/my-app-values.yaml
+       {{- else if eq $env "staging" }}
+       - environments/staging/my-app-values.yaml
+       {{- else if eq $env "prod" }}
+       - environments/prod/my-app-values.yaml
+       {{- end }}
+   ```
+
 ### Parameterization Best Practices
 
 1. **Keep base values generic** - suitable for all environments
