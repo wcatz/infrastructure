@@ -1,6 +1,13 @@
 ---
 # Setup Tailscale VPN
 # This playbook installs and configures Tailscale
+#
+# IMPORTANT: This playbook uses encrypted secrets from group_vars/all/vault.yml
+# Ensure you have:
+# 1. Created and encrypted vault.yml with your tailscale_auth_key
+# 2. Set up .vault_pass file with your vault password
+#
+# Run with: ansible-playbook -i inventory.ini playbooks/setup-tailscale.yaml
 
 - name: Setup Tailscale
   hosts: all
@@ -9,13 +16,9 @@
   roles:
     - tailscale
 
-  vars:
-    # REQUIRED: Set your Tailscale auth key
-    # Get it from: https://login.tailscale.com/admin/settings/keys
-    # tailscale_auth_key: "tskey-auth-xxxxx"
-
-    # Optional overrides:
-    # tailscale_args: "--accept-routes --advertise-exit-node=false"
-    # tailscale_enable_ssh: false
-    # tailscale_accept_dns: true
-    # tailscale_advertise_tags: ["tag:server"]
+  # Optional: Override default variables if needed
+  # vars:
+  #   tailscale_args: "--accept-routes --advertise-exit-node=false"
+  #   tailscale_enable_ssh: false
+  #   tailscale_accept_dns: true
+  #   tailscale_advertise_tags: ["tag:server"]
