@@ -54,7 +54,7 @@ This repository provides a **minimalist, modular framework** for deploying a hyb
 
 ## Key Features
 
-- **No Load Balancers**: Simplified networking without HAProxy/MetalLB - uses Cloudflared for HTTP/S and direct TCP exposure via public IPs
+- **No Load Balancers**: Simplified networking without external load balancers - uses Cloudflared for HTTP/S and direct TCP exposure via public IPs
 - **Tailscale Mesh**: Secure L3 networking between cluster nodes for internal communication
 - **Workload Placement**: Control plane behind CGNAT, workers with public IPs
 - **Stateful Workloads**: PVC-based persistent storage with failover support
@@ -182,15 +182,19 @@ sops -d secrets/example.enc.yaml | kubectl apply -f -
 - Tailscale Kubernetes Operator (L3 mesh networking, optional)
 - Prometheus & Grafana (monitoring)
 - External Secrets (optional)
-- HAProxy Ingress (legacy/optional - disabled by default)
 
 ### GitHub Actions
-- `helmfile-diff.yaml`: Preview changes on PRs
-- `helmfile-apply.yaml`: Manual Helmfile deployment with SOPS/age integration
-- `helmfile-apply-self-hosted.yaml`: Deployment using self-hosted runner with Tailscale
-- `test-self-hosted-runner.yaml`: Test and validate self-hosted runner connectivity
-- `cloudflared-setup.yaml`: Cloudflared tunnel configuration
-- **Self-Hosted Runner**: GitHub Actions runner with Tailscale access to control plane behind CGNAT
+
+Active workflows for CI/CD and deployment automation:
+
+- **helmfile-diff.yaml**: Preview Helmfile changes on pull requests
+- **helmfile-apply.yaml**: Manual Helmfile deployment with SOPS/age integration
+- **helmfile-apply-self-hosted.yaml**: Deployment using self-hosted runner with Tailscale access
+- **deploy-staging.yaml**: Automated staging environment deployment
+- **deploy-production.yaml**: Production deployment workflow
+- **cloudflared-setup.yaml**: Cloudflare tunnel configuration and management
+- **test-self-hosted-runner.yaml**: Validate self-hosted runner connectivity
+- **secret-expiration-check.yaml**: Monitor and alert on secret expiration
 
 ## Environment Management
 
@@ -227,18 +231,71 @@ helmfile -e prod apply
 
 ## Traffic Flow
 
+### HTTP/HTTPS Traffic (via Cloudflare Tunnels)
+
 ```
-HTTP/S Traffic:
-Internet → Cloudflare → Cloudflared Tunnel (worker) → Kubernetes Services → Pods
-
-TCP Traffic (P2P/Direct Services):
-Internet → Worker Public IP:NodePort → Application Pods
-
-Internal Cluster Communication:
-Control Plane ↔ Tailscale Mesh (L3) ↔ Worker Nodes
+┌──────────┐
+│ Internet │
+└────┬─────┘
+     │
+     ▼
+┌─────────────┐
+│  Cloudflare │ (Edge Network)
+│   Tunnel    │
+└─────┬───────┘
+      │
+      │ Secure Tunnel
+      ▼
+┌──────────────────┐
+│ Cloudflared Pod  │ (Worker Node)
+└────┬─────────────┘
+     │
+     ▼
+┌──────────────────┐
+│ Kubernetes Svc   │
+└────┬─────────────┘
+     │
+     ▼
+┌──────────────────┐
+│ Application Pods │
+└──────────────────┘
 ```
 
-**Network Model**: Tailscale mesh for secure inter-node communication + public IPs on workers for direct service access. No load balancers (HAProxy/MetalLB) required.
+### TCP/UDP Traffic (Direct Services)
+
+```
+┌──────────┐
+│ Internet │
+└────┬─────┘
+     │
+     │ Direct Connection
+     ▼
+┌─────────────────────┐
+│ Worker Public IP    │
+│ (NodePort/HostNet)  │
+└────┬────────────────┘
+     │
+     ▼
+┌──────────────────┐
+│ Application Pods │
+└──────────────────┘
+```
+
+### Internal Cluster Communication (via Tailscale)
+
+```
+┌──────────────────┐          ┌──────────────────┐
+│  Control Plane   │          │   Worker Node    │
+│   (Home/CGNAT)   │          │  (Public VPS)    │
+└────┬─────────────┘          └────┬─────────────┘
+     │                              │
+     │    ┌─────────────────┐      │
+     └────► Tailscale Mesh  ◄──────┘
+          │  (L3 Network)   │
+          └─────────────────┘
+```
+
+**Network Model**: Tailscale mesh for secure inter-node communication + public IPs on workers for direct service access. No external load balancers required.
 
 ## Contributing
 

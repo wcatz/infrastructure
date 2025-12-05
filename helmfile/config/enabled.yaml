@@ -1,9 +1,9 @@
 # Enabled applications
 #
-# Architecture: Tailscale mesh + public IPs (no load balancer, no MetalLB/HAProxy)
+# Architecture: Tailscale mesh + public IPs (no external load balancer)
 # - Control-plane: internal-only (Tailscale, no public exposure)
 # - Worker: Public-IP, workloads deployed with Cloudflared for ingress, and direct TCP for P2P/services
-# - Network Model: Tailscale mesh + public IPs (no load balancer)
+# - Network Model: Tailscale mesh + public IPs (no external load balancer)
 
 enabled:
   prometheus: true
@@ -12,8 +12,3 @@ enabled:
   externalSecrets: true
   tailscaleOperator: true  # Tailscale mesh networking
   githubRunner: false  # GitHub Actions self-hosted runner with Tailscale (disabled by default)
-
-  # LEGACY/OPTIONAL: HAProxy Ingress Controller
-  # Disabled by default - current architecture uses Cloudflared for HTTP/S ingress
-  # Enable only if you need traditional Kubernetes Ingress resources or legacy support
-  haproxyIngress: false
