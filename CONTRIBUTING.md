@@ -265,7 +265,7 @@ Example:
    curl http://service-endpoint
    ```
 
-See [TESTING.md](TESTING.md) for comprehensive testing procedures.
+See [docs/operate.md](docs/operate.md#testing-and-validation) for comprehensive testing procedures.
 
 ## Documentation
 

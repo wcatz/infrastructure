@@ -147,7 +147,7 @@ After Ansible deployment:
 
 4. **Configure Kubernetes secrets with SOPS**:
    ```bash
-   # Follow SECRETS.md guide for SOPS/age setup
+   # Follow docs/setup.md guide for SOPS/age setup
    ```
 
 ## Troubleshooting

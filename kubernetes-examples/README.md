@@ -83,7 +83,7 @@ Secrets should be encrypted using SOPS before committing to Git:
    sops -d my-app-secret.enc.yaml | kubectl apply -f -
    ```
 
-See [SECRETS.md](../SECRETS.md) for detailed secret management instructions.
+See [docs/setup.md#3-secret-management](../docs/setup.md#3-secret-management) for detailed secret management instructions.
 
 ### Exposing Services
 
@@ -186,7 +186,6 @@ annotations:
 ## Further Reading
 
 - [Kubernetes Documentation](https://kubernetes.io/docs/)
-- [Cloudflared Setup](../helmfile/CLOUDFLARED_SETUP.md)
-- [Secrets Management](../SECRETS.md)
-- [Testing Guide](../TESTING.md)
-- [Hybrid Cluster Setup](../HYBRID_CLUSTER_SETUP.md)
+- [Setup Guide](../docs/setup.md) - Complete setup including Cloudflared and secrets
+- [Operations Guide](../docs/operate.md) - Testing, monitoring, and workload examples
+- [Helmfile Guide](../docs/helmfile.md) - Service deployment and configuration

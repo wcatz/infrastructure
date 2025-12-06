@@ -152,29 +152,6 @@ helmfile apply
 - **[Changelog](CHANGELOG.md)** - Version history and changes
 - **[Validation Scripts](scripts/)** - Prerequisite and deployment validation
 
-### 📝 Legacy Documentation
-
-The following docs are being consolidated into the new [`docs/`](docs/) structure:
-
-<details>
-<summary>Show legacy documentation (deprecated)</summary>
-
-- [TAILSCALE_SETUP.md](TAILSCALE_SETUP.md) → See [docs/setup.md#1-tailscale-setup](docs/setup.md#1-tailscale-setup)
-- [HYBRID_CLUSTER_SETUP.md](HYBRID_CLUSTER_SETUP.md) → See [docs/setup.md](docs/setup.md)
-- [FIREWALL_RULES.md](FIREWALL_RULES.md) → See [docs/setup.md#5-firewall-configuration](docs/setup.md#5-firewall-configuration)
-- [SECRETS.md](SECRETS.md) → See [docs/setup.md#3-secret-management](docs/setup.md#3-secret-management)
-- [GITHUB_RUNNER_SETUP.md](GITHUB_RUNNER_SETUP.md) → See [docs/setup.md#7-github-actions-runner-setup](docs/setup.md#7-github-actions-runner-setup)
-- [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md) → See [docs/setup.md#6-cloudflared-tunnel-setup](docs/setup.md#6-cloudflared-tunnel-setup)
-- [DEPLOYMENT_AUDIT.md](DEPLOYMENT_AUDIT.md) → See [docs/operate.md#deployment-audit](docs/operate.md#deployment-audit)
-- [TESTING.md](TESTING.md) → See [docs/operate.md#testing-and-validation](docs/operate.md#testing-and-validation)
-- [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) → See [docs/operate.md#disaster-recovery](docs/operate.md#disaster-recovery)
-- [WORKER_BACKUP_RECOVERY.md](WORKER_BACKUP_RECOVERY.md) → See [docs/operate.md#worker-backup-recovery](docs/operate.md#worker-backup-recovery)
-- [kubernetes-examples/README.md](kubernetes-examples/README.md) → See [docs/operate.md#kubernetes-workload-examples](docs/operate.md#kubernetes-workload-examples)
-- [ansible/README.md](ansible/README.md) → See [docs/ansible.md](docs/ansible.md)
-- [helmfile/README.md](helmfile/README.md) → See [docs/helmfile.md](docs/helmfile.md)
-
-</details>
-
 ## What You Get
 
 ### Infrastructure Services
