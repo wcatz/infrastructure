@@ -265,7 +265,7 @@ Example:
    curl http://service-endpoint
    ```
 
-See [TESTING.md](TESTING.md) for comprehensive testing procedures.
+See [docs/operate.md](docs/operate.md#testing-and-validation) for comprehensive testing procedures.
 
 ## Documentation
 
@@ -286,14 +286,39 @@ See [TESTING.md](TESTING.md) for comprehensive testing procedures.
 - Link to related documentation
 - Keep documentation up-to-date with code changes
 
+### Documentation Structure
+
+All documentation is organized in the `docs/` directory:
+
+- **[docs/setup.md](docs/setup.md)** - Complete setup guide (Tailscale, K3s, secrets, Cloudflared, GitHub runners)
+- **[docs/operate.md](docs/operate.md)** - Operations, testing, monitoring, disaster recovery, backups
+- **[docs/ansible.md](docs/ansible.md)** - Ansible playbooks, roles, and automation
+- **[docs/helmfile.md](docs/helmfile.md)** - Helmfile configuration and service management
+
 ### Files to Update
 
 When making changes, consider updating:
-- `README.md`: Main documentation and architecture
-- `helmfile/README.md`: Helmfile-specific documentation
-- `ansible/README.md`: Ansible-specific documentation
-- `CHANGELOG.md`: Record of all notable changes
-- Component-specific docs (e.g., `CLOUDFLARED_SETUP.md`)
+
+- **README.md**: Main documentation and quick start guide
+- **docs/setup.md**: Setup and configuration steps
+- **docs/operate.md**: Operational procedures and testing
+- **docs/ansible.md**: Ansible-specific documentation
+- **docs/helmfile.md**: Helmfile-specific documentation
+- **CHANGELOG.md**: Record of all notable changes
+- Component-specific docs (only if major changes)
+
+### Adding New Documentation
+
+1. Determine the appropriate location:
+   - **Setup-related**: Add to `docs/setup.md`
+   - **Operations-related**: Add to `docs/operate.md`
+   - **Ansible-related**: Add to `docs/ansible.md`
+   - **Helmfile-related**: Add to `docs/helmfile.md`
+
+2. Follow the existing structure and format
+3. Add navigation links at the bottom of the document
+4. Update table of contents if adding major sections
+5. Reference the new content from README.md if appropriate
 
 ## Security Best Practices
 

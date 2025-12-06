@@ -54,7 +54,7 @@ k3s_node_label: "node-role=worker"  # Custom labels
 ### 3. Documentation
 
 #### Created Files:
-- `HYBRID_CLUSTER_SETUP.md` - Complete deployment guide (13,977 chars)
+- `docs/setup.md` - Complete deployment guide
   - Step-by-step setup instructions
   - Architecture diagrams
   - Troubleshooting guide
@@ -197,7 +197,7 @@ Control Plane ←→ Tailscale VPN ←→ Workers
 4. `kubernetes-examples/ingress.yaml`
 5. `kubernetes-examples/configmap.yaml`
 6. `kubernetes-examples/secret.yaml`
-7. `HYBRID_CLUSTER_SETUP.md`
+7. `docs/setup.md`
 8. `.github/workflows/cloudflared-setup.yaml`
 9. `scripts/validate.sh`
 
@@ -277,21 +277,21 @@ Control Plane ←→ Tailscale VPN ←→ Workers
 
 ### For New Users
 
-Follow the complete guide in `HYBRID_CLUSTER_SETUP.md`
+Follow the complete guide in `docs/setup.md`
 
 ## Next Steps
 
 Recommended follow-up tasks:
 1. Set up monitoring dashboards in Grafana
 2. Configure Cloudflare Access for zero-trust security
-3. Implement backup strategy (see DISASTER_RECOVERY.md)
+3. Implement backup strategy (see docs/operate.md#disaster-recovery)
 4. Add more worker nodes as needed
 5. Deploy applications using Kubernetes examples
 6. Configure Tailscale ACLs for production
 
 ## Support
 
-- **Documentation**: See README.md and HYBRID_CLUSTER_SETUP.md
+- **Documentation**: See README.md and docs/
 - **Examples**: Check kubernetes-examples/ directory
 - **Validation**: Run `scripts/validate.sh`
 - **Issues**: Report in GitHub Issues

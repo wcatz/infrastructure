@@ -6,7 +6,7 @@ This guide explains how to integrate Ansible Vault encrypted secrets into CI/CD 
 
 ### Prerequisites
 
-1. **Encrypt your secrets** using Ansible Vault (see [SECRETS.md](SECRETS.md))
+1. **Encrypt your secrets** using Ansible Vault (see [docs/setup.md#3-secret-management](../docs/setup.md#3-secret-management))
 2. **Store vault password** as a GitHub repository secret
 
 ### Setup Repository Secrets

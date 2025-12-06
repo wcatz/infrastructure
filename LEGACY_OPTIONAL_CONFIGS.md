@@ -344,8 +344,8 @@ Control Plane ←→ K3s Network ←→ Worker Nodes
 
 For questions about:
 - **Current architecture**: See main [README.md](README.md)
-- **Cloudflared setup**: See [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md)
-- **Tailscale setup**: See [TAILSCALE_SETUP.md](TAILSCALE_SETUP.md)
+- **Setup and deployment**: See [docs/setup.md](docs/setup.md)
+- **Operations and testing**: See [docs/operate.md](docs/operate.md)
 - **Legacy components**: Open an issue with `legacy` tag
 
 ## Updates
