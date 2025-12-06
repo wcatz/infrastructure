@@ -4,7 +4,7 @@
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-k3s-326CE5?logo=kubernetes)](https://k3s.io/)
 [![Helm](https://img.shields.io/badge/Helm-v3-0F1689?logo=helm)](https://helm.sh/)
 [![Ansible](https://img.shields.io/badge/Ansible-2.10+-EE0000?logo=ansible)](https://www.ansible.com/)
-[![Clone](https://img.shields.io/badge/Clone-Repository-green?logo=github)](https://github.com/wcatz/infrastructure.git)
+[![Clone](https://img.shields.io/badge/Clone-Repository-green?logo=github)](https://github.com/wcatz/infrastructure)
 
 **Production-ready hybrid Kubernetes infrastructure with secure Tailscale mesh networking and Cloudflare tunnel ingress.**
 
