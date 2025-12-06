@@ -181,13 +181,19 @@ if [ ! -f "$HOME/.config/sops/age/keys.txt" ]; then
     
     # Extract public key
     PUBLIC_KEY=$(cat "$HOME/.config/sops/age/keys.txt" | grep "public key:" | cut -d ":" -f2 | tr -d ' ')
-    print_info "Your public key: $PUBLIC_KEY"
     
-    # Update .sops.yaml if it exists
-    if [ -f ".sops.yaml" ]; then
-        print_info "Updating .sops.yaml with your public key..."
-        sed -i.bak "s/YOUR_PUBLIC_KEY_HERE/$PUBLIC_KEY/" .sops.yaml
-        print_success ".sops.yaml updated"
+    if [ -z "$PUBLIC_KEY" ]; then
+        print_error "Failed to extract public key from age key file"
+        print_warning "Please manually update .sops.yaml with your public key"
+    else
+        print_info "Your public key: $PUBLIC_KEY"
+        
+        # Update .sops.yaml if it exists
+        if [ -f ".sops.yaml" ]; then
+            print_info "Updating .sops.yaml with your public key..."
+            sed -i.bak "s/YOUR_PUBLIC_KEY_HERE/$PUBLIC_KEY/" .sops.yaml
+            print_success ".sops.yaml updated"
+        fi
     fi
 fi
 
@@ -239,14 +245,15 @@ if [ -z "$CONTROL_PLANE" ]; then
     print_warning "Please manually copy kubeconfig:"
     print_info "  scp user@control-plane:/etc/rancher/k3s/k3s.yaml ~/.kube/config"
     print_info "  sed -i 's/127.0.0.1/<TAILSCALE-IP>/' ~/.kube/config"
+    read -p "Press Enter to continue..."
 else
     print_info "Copying kubeconfig from $CONTROL_PLANE..."
     
-    # Get SSH user from inventory
-    SSH_USER=$(grep "ansible_user" ansible/inventory.ini | head -1 | cut -d'=' -f2 | tr -d ' ')
+    # Get SSH user from inventory with fallback to current user
+    SSH_USER=$(grep "ansible_user" ansible/inventory.ini | head -1 | cut -d'=' -f2 | tr -d ' ' 2>/dev/null || echo "")
     
     if [ -z "$SSH_USER" ]; then
-        print_warning "Could not determine SSH user, using current user"
+        print_warning "Could not determine SSH user from inventory, using current user"
         SSH_USER=$USER
     fi
     

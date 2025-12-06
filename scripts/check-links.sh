@@ -1,6 +1,9 @@
 #!/bin/bash
 # check-links.sh - Validate markdown links in documentation
 # This script checks for broken internal links in markdown files
+# Note: Uses simple regex for link extraction which may not catch all edge cases
+# (e.g., escaped brackets, nested parentheses). For comprehensive validation,
+# consider using a dedicated markdown linting tool.
 
 set -e
 
