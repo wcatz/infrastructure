@@ -1,5 +1,7 @@
 # Kubernetes Examples
 
+> **📚 Complete Documentation**: See [docs/operate.md#kubernetes-workload-examples](../docs/operate.md#kubernetes-workload-examples) for comprehensive workload examples.
+
 This directory contains modular YAML templates for deploying applications to the hybrid Kubernetes cluster. These examples follow best practices and are designed to work with the control plane + worker node architecture.
 
 ## Architecture Overview

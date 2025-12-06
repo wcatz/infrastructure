@@ -1,5 +1,9 @@
 # Secret Management
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/setup.md](docs/setup.md#3-secret-management) guide.
+> 
+> **Please refer to**: [docs/setup.md - Secret Management](docs/setup.md#3-secret-management)
+
 This repository uses two different secret management systems:
 - **Ansible Vault**: For Ansible playbook secrets (K3s token, Tailscale key)
 - **SOPS with age**: For Kubernetes secrets and Helmfile values

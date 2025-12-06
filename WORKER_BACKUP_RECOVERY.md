@@ -1,5 +1,9 @@
 # Worker Node Backup and Recovery
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/operate.md](docs/operate.md#worker-backup-recovery) guide.
+> 
+> **Please refer to**: [docs/operate.md - Worker Backup Recovery](docs/operate.md#worker-backup-recovery)
+
 This document provides specific backup and recovery procedures for services and data hosted on worker nodes in the hybrid cluster architecture.
 
 ## Overview

@@ -1,5 +1,7 @@
 # Ansible Playbooks
 
+> **📚 Complete Documentation**: See [docs/ansible.md](../docs/ansible.md) for the comprehensive Ansible guide.
+
 Infrastructure automation for hybrid k3s cluster deployment.
 
 ## Architecture

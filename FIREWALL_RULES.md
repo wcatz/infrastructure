@@ -1,5 +1,9 @@
 # Firewall Rules Configuration Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/setup.md](docs/setup.md#5-firewall-configuration) guide.
+> 
+> **Please refer to**: [docs/setup.md - Firewall Configuration](docs/setup.md#5-firewall-configuration)
+
 This guide documents the expected firewall rules for each node type in the hybrid Kubernetes cluster architecture.
 
 ## Table of Contents

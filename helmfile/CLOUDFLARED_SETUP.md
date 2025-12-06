@@ -1,5 +1,9 @@
 # Cloudflared Tunnel Setup Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/setup.md](../docs/setup.md#6-cloudflared-tunnel-setup) guide.
+> 
+> **Please refer to**: [docs/setup.md - Cloudflared Tunnel Setup](../docs/setup.md#6-cloudflared-tunnel-setup)
+
 This guide explains how to set up Cloudflared tunnels for HTTP/HTTPS ingress traffic in the hybrid Kubernetes cluster.
 
 ## Overview

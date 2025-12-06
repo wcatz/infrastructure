@@ -1,5 +1,9 @@
 # Deployment Audit and Testing Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/operate.md](docs/operate.md#deployment-audit) guide.
+> 
+> **Please refer to**: [docs/operate.md - Deployment Audit](docs/operate.md#deployment-audit)
+
 This document provides a comprehensive procedure for auditing and testing infrastructure deployments on fresh bare-metal/VM instances.
 
 ## Table of Contents

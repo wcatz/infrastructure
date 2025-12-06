@@ -1,346 +1,224 @@
-# Infrastructure Management
+# Hybrid Kubernetes Infrastructure
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-k3s-326CE5?logo=kubernetes)](https://k3s.io/)
 [![Helm](https://img.shields.io/badge/Helm-v3-0F1689?logo=helm)](https://helm.sh/)
 [![Ansible](https://img.shields.io/badge/Ansible-2.10+-EE0000?logo=ansible)](https://www.ansible.com/)
 
-GitOps-based infrastructure for hybrid k3s clusters with Tailscale networking and Cloudflared tunnels.
+**Production-ready hybrid Kubernetes infrastructure with secure Tailscale mesh networking and Cloudflare tunnel ingress.**
+
+> **📚 Complete documentation available in [`docs/`](docs/)** - This README provides a quick overview and getting started guide.
+
+## Overview
+
+This repository provides infrastructure-as-code for deploying a **hybrid Kubernetes cluster** that:
+- Runs a **control plane behind CGNAT** with no public IP required
+- Deploys **workloads on public VPS workers** 
+- Uses **Tailscale** for secure inter-node mesh networking
+- Exposes services via **Cloudflared tunnels** (no load balancers)
+- Manages everything declaratively with **Ansible** and **Helmfile**
+
+**Perfect for home labs, edge computing, and cost-effective cloud deployments.**
 
 ## Table of Contents
 
 - [Architecture](#architecture)
-- [Stack](#stack)
-- [Key Features](#key-features)
-- [Prerequisites](#prerequisites)
-- [Quick Setup](#quick-setup)
-  - [1. Deploy k3s Cluster](#1-deploy-k3s-cluster)
-  - [2. Deploy Services via Helmfile](#2-deploy-services-via-helmfile)
-  - [3. Setup Secrets with SOPS](#3-setup-secrets-with-sops)
-- [Components](#components)
-- [Environment Management](#environment-management)
-- [Traffic Flow](#traffic-flow)
+- [Quick Start](#quick-start)
 - [Documentation](#documentation)
+- [What You Get](#what-you-get)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Architecture
 
-This repository provides a **minimalist, modular framework** for deploying a hybrid Kubernetes cluster:
+### High-Level Design
 
-- **Control Plane Node** (Home/CGNAT):
-  - Runs K3s server only (no workloads)
-  - Tainted to prevent workload scheduling
-  - Secured with Tailscale for cluster communication
-  - No public exposure required
-  - Internal-only access via Tailscale mesh
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Internet                                 │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                    ┌────▼─────┐
+                    │Cloudflare│ (Edge Network)
+                    └────┬─────┘
+                         │ Secure Tunnel
+            ┌────────────▼────────────┐
+            │  Cloudflared Pod        │ (Worker Node)
+            └────────────┬────────────┘
+                         │
+         ┌───────────────▼──────────────┐
+         │    Kubernetes Services       │
+         │         (Pods)               │
+         └──────────────────────────────┘
 
-- **Worker Node(s)** (VPS/Public IP):
-  - Runs all application workloads
-  - Cloudflared for HTTP/HTTPS ingress via Cloudflare tunnels
-  - Direct TCP exposure via NodePort or hostNetwork for P2P/services
-  - Tailscale for secure control plane communication
-  - Public IP for direct service access
-
-## Stack
-
-- **k3s**: Lightweight Kubernetes (Traefik and servicelb disabled)
-- **Cloudflared**: Secure tunnel to Cloudflare edge, routes directly to Kubernetes services
-- **Tailscale**: VPN for secure inter-node communication
-- **Tailscale Operator**: Manages Tailscale connectivity in Kubernetes (optional)
-- **Prometheus/Grafana**: Monitoring stack (optional)
-- **SOPS/age**: Secret encryption
-- **Ansible Vault**: Infrastructure secret management
-
-## Key Features
-
-- **No Load Balancers**: Simplified networking without external load balancers - uses Cloudflared for HTTP/S and direct TCP exposure via public IPs
-- **Tailscale Mesh**: Secure L3 networking between cluster nodes for internal communication
-- **Workload Placement**: Control plane behind CGNAT, workers with public IPs
-- **Stateful Workloads**: PVC-based persistent storage with failover support
-- **Hybrid Architecture**: Minimal and scalable design for distributed deployments
-- **Direct Service Access**: TCP services exposed directly via NodePort on worker public IPs
-
-## Prerequisites
-
-Before starting, ensure you have the following:
-
-### Required Tools
-
-- **Ansible** (>= 2.10): For infrastructure automation
-- **kubectl**: Kubernetes command-line tool
-- **Helm** (>= 3.x): Kubernetes package manager
-- **Helmfile**: Declarative Helm chart deployment
-- **SOPS** and **age**: For secret encryption
-- **Git**: Version control
-
-### Infrastructure Requirements
-
-- **Control Plane Node**: Server with SSH access (can be behind CGNAT/NAT)
-- **Worker Node(s)**: VPS or server with public IP address
-- **Tailscale Account**: For secure mesh networking ([tailscale.com](https://tailscale.com))
-- **Cloudflare Account** (optional): For HTTP/S ingress via tunnels
-
-### Installation
-
-```bash
-# macOS
-brew install ansible kubectl helm helmfile sops age
-
-# Linux (Debian/Ubuntu)
-sudo apt-get update
-sudo apt-get install -y ansible kubectl
-
-# Install Helm
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-# Detect architecture for Linux
-ARCH=$(uname -m)
-case $ARCH in
-  x86_64) HELMFILE_ARCH="amd64"; AGE_ARCH="amd64" ;;
-  aarch64|arm64) HELMFILE_ARCH="arm64"; AGE_ARCH="arm64" ;;
-  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-esac
-
-# Install Helmfile
-wget https://github.com/helmfile/helmfile/releases/latest/download/helmfile_linux_${HELMFILE_ARCH}
-chmod +x helmfile_linux_${HELMFILE_ARCH} && sudo mv helmfile_linux_${HELMFILE_ARCH} /usr/local/bin/helmfile
-
-# Install Helm diff plugin
-helm plugin install https://github.com/databus23/helm-diff
-
-# Install SOPS and age
-wget https://github.com/mozilla/sops/releases/latest/download/sops-latest.linux
-chmod +x sops-latest.linux && sudo mv sops-latest.linux /usr/local/bin/sops
-wget https://github.com/FiloSottile/age/releases/latest/download/age-latest-linux-${AGE_ARCH}.tar.gz
-tar xzf age-latest-linux-${AGE_ARCH}.tar.gz && sudo mv age/age* /usr/local/bin/
+Control Plane ←──→ Tailscale VPN ←──→ Worker Nodes
+ (CGNAT/Home)      (100.64.0.0/10)     (Public VPS)
 ```
 
-### Validate Prerequisites
+### Key Components
 
-After installing the required tools, validate your environment before proceeding:
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| **Control Plane** | K3s server (API, scheduler, etcd) | Home/CGNAT - no public IP needed |
+| **Worker Nodes** | Application workloads | Public VPS with direct internet access |
+| **Tailscale** | Secure L3 mesh network | All nodes - encrypted inter-node traffic |
+| **Cloudflared** | HTTP/S ingress tunnels | Worker nodes - no load balancer required |
+| **Ansible** | Infrastructure deployment | Local machine - automates k3s & Tailscale |
+| **Helmfile** | Service management | Local machine - deploys apps declaratively |
+
+### Why This Architecture?
+
+✅ **No Port Forwarding**: Control plane stays completely private  
+✅ **Cost Effective**: No cloud NAT gateways or load balancers  
+✅ **Secure by Default**: All traffic encrypted via Tailscale mesh  
+✅ **Scalable**: Add workers easily, control plane handles scheduling  
+✅ **GitOps Ready**: Everything version-controlled and reproducible
+
+## Quick Start
+
+### Prerequisites
+
+- **Local Machine**: Ansible, kubectl, Helm, Helmfile, SOPS, age, cloudflared
+- **Servers**: 1+ Ubuntu/Debian machines (control plane can be behind CGNAT)
+- **Accounts**: Tailscale, Cloudflare (both free tier OK)
+
+### One-Command Deployment
 
 ```bash
-# Run the prerequisite validation script
-./scripts/validate-prereqs.sh
+# Clone repository
+git clone https://github.com/wcatz/infrastructure.git
+cd infrastructure
+
+# Run unified deployment script
+./runme.sh
 ```
 
-The validation script checks:
-- **Required Tools**: Verifies installation of ansible, kubectl, helm, helmfile, sops, age, and other dependencies
-- **Credentials**: Checks for Ansible vault files, SOPS age keys, Cloudflare tokens, and Tailscale authentication
-- **Connectivity**: Tests access to Kubernetes cluster, Tailscale network, container registries, and external services
+The `runme.sh` script will:
+1. ✅ Validate prerequisites
+2. 🔐 Configure secrets (Ansible Vault + SOPS)
+3. 🔒 Deploy Tailscale VPN mesh
+4. ☸️  Deploy K3s cluster
+5. 📦 Deploy services (Prometheus, Grafana, etc.)
+6. 🌐 Configure Cloudflared tunnels
+7. ✔️  Validate deployment
 
-**Expected Output**:
-- ✅ Green checkmarks indicate successful checks
-- ⚠️  Yellow warnings indicate optional components or recommended configurations
-- ❌ Red errors indicate missing required components that must be resolved
+### Manual Setup
 
-If validation fails, follow the instructions in the output and refer to:
-- [DEPLOYMENT_AUDIT.md](DEPLOYMENT_AUDIT.md) - Tool installation steps
-- [SECRETS.md](SECRETS.md) - Credential and secret management
-- [TAILSCALE_SETUP.md](TAILSCALE_SETUP.md) - Tailscale configuration
-- [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md) - Cloudflare tunnel setup
-
-## Quick Setup
-
-### 1. Deploy k3s Cluster
+Prefer step-by-step? Follow the [**Complete Setup Guide**](docs/setup.md).
 
 ```bash
+# 1. Install prerequisites
+brew install ansible kubectl helm helmfile sops age cloudflared  # macOS
+# See docs/setup.md for Linux instructions
+
+# 2. Configure secrets
 cd ansible
-
-# Setup Ansible Vault for secrets
 cp .vault_pass.example .vault_pass
-vim .vault_pass  # Add your vault password
-
-# Configure encrypted secrets
 cp group_vars/all/vault.yml.example group_vars/all/vault.yml
-vim group_vars/all/vault.yml  # Add your K3s token and Tailscale key
+# Edit vault.yml with your secrets, then:
 ansible-vault encrypt group_vars/all/vault.yml
 
-# Setup inventory
+# 3. Configure inventory
 cp inventory.ini.example inventory.ini
-vim inventory.ini  # Edit with your servers
+# Edit inventory.ini with your server IPs
 
-# Deploy Tailscale first (required for hybrid cluster)
+# 4. Deploy infrastructure
 ansible-playbook -i inventory.ini playbooks/setup-tailscale.yaml
-
-# Deploy k3s cluster (secrets loaded from vault)
 ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
 
-# Get kubeconfig
-scp user@k3s-server:/etc/rancher/k3s/k3s.yaml ~/.kube/config
-# Update server URL to use Tailscale IP of control plane
-sed -i 's/127.0.0.1/TAILSCALE_IP/' ~/.kube/config
-```
+# 5. Get kubeconfig
+scp user@control-plane:/etc/rancher/k3s/k3s.yaml ~/.kube/config
+# Update server URL to Tailscale IP
 
-### 2. Deploy Services via Helmfile
-
-```bash
-cd helmfile
+# 6. Deploy services
+cd ../helmfile
 helmfile apply
-```
-
-### 3. Setup Secrets with SOPS
-
-```bash
-# Install tools
-brew install age sops
-
-# Generate age key
-age-keygen -o ~/.config/sops/age/keys.txt
-
-# Create .sops.yaml with your public key
-cat > .sops.yaml << EOY
-creation_rules:
-  - age: YOUR_PUBLIC_KEY
-EOY
-
-# Encrypt and deploy secrets
-sops -e secrets/example.yaml > secrets/example.enc.yaml
-sops -d secrets/example.enc.yaml | kubectl apply -f -
-```
-
-## Components
-
-### Ansible
-- K3s deployment with hybrid cluster support
-  - Control plane tainted to prevent workload scheduling
-  - Worker nodes for all workloads
-  - Traefik and servicelb disabled
-- Tailscale VPN on all nodes for secure inter-node communication
-- Ansible Vault for encrypted secrets (K3s token, Tailscale keys, OAuth credentials)
-
-### Helmfile
-- Cloudflared tunnels (HTTP/S ingress, routes directly to services)
-- Tailscale Kubernetes Operator (L3 mesh networking, optional)
-- Prometheus & Grafana (monitoring)
-- External Secrets (optional)
-
-### GitHub Actions
-
-Active workflows for CI/CD and deployment automation:
-
-- **helmfile-diff.yaml**: Preview Helmfile changes on pull requests
-- **helmfile-apply.yaml**: Manual Helmfile deployment with SOPS/age integration
-- **helmfile-apply-self-hosted.yaml**: Deployment using self-hosted runner with Tailscale access
-- **deploy-staging.yaml**: Automated staging environment deployment
-- **deploy-production.yaml**: Production deployment workflow
-- **cloudflared-setup.yaml**: Cloudflare tunnel configuration and management
-- **test-self-hosted-runner.yaml**: Validate self-hosted runner connectivity
-- **secret-expiration-check.yaml**: Monitor and alert on secret expiration
-
-## Environment Management
-
-Deploy to specific environments:
-
-```bash
-helmfile -e dev apply
-helmfile -e staging apply
-helmfile -e prod apply
 ```
 
 ## Documentation
 
-### Setup Guides
+### 📖 Complete Guides
 
-- [Tailscale Setup](TAILSCALE_SETUP.md) - Configure Tailscale VPN mesh networking
-- [Hybrid Cluster Setup](HYBRID_CLUSTER_SETUP.md) - Deploy hybrid k3s cluster architecture
-- [Firewall Rules](FIREWALL_RULES.md) - Firewall configuration for control plane, workers, and CI/CD
-- [Secrets Management](SECRETS.md) - SOPS/age and Ansible Vault configuration
-- [GitHub Actions Runner Setup](GITHUB_RUNNER_SETUP.md) - Self-hosted runner with Tailscale
-- [Cloudflared Setup](helmfile/CLOUDFLARED_SETUP.md) - Configure Cloudflare tunnels
+| Guide | Description |
+|-------|-------------|
+| **[Setup Guide](docs/setup.md)** | Complete setup from prerequisites to deployment |
+| **[Operations Guide](docs/operate.md)** | Testing, monitoring, backups, disaster recovery |
+| **[Ansible Guide](docs/ansible.md)** | Infrastructure automation and playbooks |
+| **[Helmfile Guide](docs/helmfile.md)** | Service deployment and configuration |
 
-### Component Documentation
+### 🚀 Quick References
 
-- [Ansible README](ansible/README.md) - Ansible playbooks and roles
-- [Helmfile README](helmfile/README.md) - Helmfile configuration and services
-- [Kubernetes Examples](kubernetes-examples/README.md) - Example workload configurations
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to this project
+- **[Changelog](CHANGELOG.md)** - Version history and changes
+- **[Validation Scripts](scripts/)** - Prerequisite and deployment validation
 
-### Operational Guides
+### 📝 Legacy Documentation
 
-- [Testing Guide](TESTING.md) - Testing procedures and validation
-- [Deployment Audit](DEPLOYMENT_AUDIT.md) - Deployment verification
-- [Disaster Recovery](DISASTER_RECOVERY.md) - Backup and recovery procedures
-- [Worker Backup Recovery](WORKER_BACKUP_RECOVERY.md) - Worker node recovery
+The following docs are being consolidated into the new [`docs/`](docs/) structure:
 
-## Traffic Flow
+<details>
+<summary>Show legacy documentation (deprecated)</summary>
 
-### HTTP/HTTPS Traffic (via Cloudflare Tunnels)
+- [TAILSCALE_SETUP.md](TAILSCALE_SETUP.md) → See [docs/setup.md#1-tailscale-setup](docs/setup.md#1-tailscale-setup)
+- [HYBRID_CLUSTER_SETUP.md](HYBRID_CLUSTER_SETUP.md) → See [docs/setup.md](docs/setup.md)
+- [FIREWALL_RULES.md](FIREWALL_RULES.md) → See [docs/setup.md#5-firewall-configuration](docs/setup.md#5-firewall-configuration)
+- [SECRETS.md](SECRETS.md) → See [docs/setup.md#3-secret-management](docs/setup.md#3-secret-management)
+- [GITHUB_RUNNER_SETUP.md](GITHUB_RUNNER_SETUP.md) → See [docs/setup.md#7-github-actions-runner-setup](docs/setup.md#7-github-actions-runner-setup)
+- [helmfile/CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md) → See [docs/setup.md#6-cloudflared-tunnel-setup](docs/setup.md#6-cloudflared-tunnel-setup)
+- [DEPLOYMENT_AUDIT.md](DEPLOYMENT_AUDIT.md) → See [docs/operate.md#deployment-audit](docs/operate.md#deployment-audit)
+- [TESTING.md](TESTING.md) → See [docs/operate.md#testing-and-validation](docs/operate.md#testing-and-validation)
+- [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) → See [docs/operate.md#disaster-recovery](docs/operate.md#disaster-recovery)
+- [WORKER_BACKUP_RECOVERY.md](WORKER_BACKUP_RECOVERY.md) → See [docs/operate.md#worker-backup-recovery](docs/operate.md#worker-backup-recovery)
+- [kubernetes-examples/README.md](kubernetes-examples/README.md) → See [docs/operate.md#kubernetes-workload-examples](docs/operate.md#kubernetes-workload-examples)
+- [ansible/README.md](ansible/README.md) → See [docs/ansible.md](docs/ansible.md)
+- [helmfile/README.md](helmfile/README.md) → See [docs/helmfile.md](docs/helmfile.md)
 
-```
-┌──────────┐
-│ Internet │
-└────┬─────┘
-     │
-     ▼
-┌─────────────┐
-│  Cloudflare │ (Edge Network)
-│   Tunnel    │
-└─────┬───────┘
-      │
-      │ Secure Tunnel
-      ▼
-┌──────────────────┐
-│ Cloudflared Pod  │ (Worker Node)
-└────┬─────────────┘
-     │
-     ▼
-┌──────────────────┐
-│ Kubernetes Svc   │
-└────┬─────────────┘
-     │
-     ▼
-┌──────────────────┐
-│ Application Pods │
-└──────────────────┘
-```
+</details>
 
-### TCP/UDP Traffic (Direct Services)
+## What You Get
 
-```
-┌──────────┐
-│ Internet │
-└────┬─────┘
-     │
-     │ Direct Connection
-     ▼
-┌─────────────────────┐
-│ Worker Public IP    │
-│ (NodePort/HostNet)  │
-└────┬────────────────┘
-     │
-     ▼
-┌──────────────────┐
-│ Application Pods │
-└──────────────────┘
-```
+### Infrastructure Services
 
-### Internal Cluster Communication (via Tailscale)
+Deployed automatically via Helmfile:
 
-```
-┌──────────────────┐          ┌──────────────────┐
-│  Control Plane   │          │   Worker Node    │
-│   (Home/CGNAT)   │          │  (Public VPS)    │
-└────┬─────────────┘          └────┬─────────────┘
-     │                              │
-     │    ┌─────────────────┐      │
-     └────► Tailscale Mesh  ◄──────┘
-          │  (L3 Network)   │
-          └─────────────────┘
-```
+- **🔍 Prometheus** - Metrics collection and alerting
+- **📊 Grafana** - Monitoring dashboards and visualization  
+- **🌐 Cloudflared** - HTTP/S ingress via Cloudflare tunnels
+- **🔐 Tailscale Operator** - Kubernetes Tailscale resource management
+- **📜 cert-manager** - Automatic TLS certificate management
+- **🔑 External Secrets** - Integration with Vault/AWS Secrets Manager
+- **💾 Velero** - Backup and disaster recovery
 
-**Network Model**: Tailscale mesh for secure inter-node communication + public IPs on workers for direct service access. No external load balancers required.
+### Automation & GitOps
+
+- **Ansible Playbooks**: Automated k3s and Tailscale deployment
+- **Helmfile Releases**: Declarative service management
+- **GitHub Actions**: CI/CD workflows for testing and deployment
+- **Secret Management**: SOPS encryption + Ansible Vault
+- **Validation Scripts**: Automated prerequisite and deployment checks
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+We welcome contributions! Please see our [**Contributing Guide**](CONTRIBUTING.md) for details on:
 
 - Code of conduct
 - Development workflow
 - Pull request process
-- Coding standards
+- Documentation standards
 - Testing guidelines
 
 ## License
 
-MIT
+[MIT License](LICENSE)
+
+---
+
+**Need Help?**
+- 📖 **Documentation**: Start with [docs/setup.md](docs/setup.md)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/wcatz/infrastructure/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/wcatz/infrastructure/discussions)
+
+**Quick Links**:
+- [Complete Setup Guide](docs/setup.md)
+- [Operations Manual](docs/operate.md)
+- [Troubleshooting](docs/operate.md#troubleshooting)

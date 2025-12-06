@@ -1,5 +1,7 @@
 # Helmfile Configuration
 
+> **📚 Complete Documentation**: See [docs/helmfile.md](../docs/helmfile.md) for the comprehensive Helmfile guide.
+
 Declarative Helm chart management for k3s infrastructure.
 
 ## Quick Start

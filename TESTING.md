@@ -1,5 +1,9 @@
 # Testing and Validation Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/operate.md](docs/operate.md#testing-and-validation) guide.
+> 
+> **Please refer to**: [docs/operate.md - Testing and Validation](docs/operate.md#testing-and-validation)
+
 This guide provides comprehensive testing procedures for validating infrastructure deployments.
 
 ## Table of Contents

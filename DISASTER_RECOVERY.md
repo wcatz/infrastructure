@@ -1,5 +1,9 @@
 # Disaster Recovery Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/operate.md](docs/operate.md#disaster-recovery) guide.
+> 
+> **Please refer to**: [docs/operate.md - Disaster Recovery](docs/operate.md#disaster-recovery)
+
 This document outlines the disaster recovery strategy, procedures, and best practices for the infrastructure stack.
 
 ## Table of Contents

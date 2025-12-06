@@ -1,5 +1,9 @@
 # Hybrid Cluster Deployment Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/setup.md](docs/setup.md) guide.
+> 
+> **Please refer to**: [Complete Setup Guide](docs/setup.md)
+
 This guide walks through deploying a production-ready hybrid Kubernetes cluster using the infrastructure framework.
 
 ## Table of Contents

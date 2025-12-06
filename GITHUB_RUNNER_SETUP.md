@@ -1,5 +1,9 @@
 # GitHub Actions Self-Hosted Runner Setup Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/setup.md](docs/setup.md#7-github-actions-runner-setup) guide.
+> 
+> **Please refer to**: [docs/setup.md - GitHub Actions Runner Setup](docs/setup.md#7-github-actions-runner-setup)
+
 This guide explains how to set up a self-hosted GitHub Actions runner with Tailscale connectivity to access the Kubernetes control plane behind CGNAT.
 
 **Two deployment options available:**

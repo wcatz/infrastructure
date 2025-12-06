@@ -1,5 +1,9 @@
 # Tailscale Setup Guide
 
+> **⚠️ DEPRECATED**: This documentation has been consolidated into the new [docs/setup.md](docs/setup.md#1-tailscale-setup) guide.
+> 
+> **Please refer to**: [docs/setup.md - Tailscale Setup](docs/setup.md#1-tailscale-setup)
+
 This guide explains how to set up Tailscale for secure L3 mesh networking in the hybrid Kubernetes cluster.
 
 ## Overview
