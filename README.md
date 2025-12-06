@@ -136,7 +136,7 @@ brew install ansible kubectl helm helmfile sops age cloudflared  # macOS
 cd ansible
 cp .vault_pass.example .vault_pass
 cp group_vars/all/vault.yml.example group_vars/all/vault.yml
-# Edit vault.yml with your secrets, then:
+# Edit vault.yml with your secrets (vault.yml is not in git), then:
 ansible-vault encrypt group_vars/all/vault.yml
 
 # 3. Configure inventory
