@@ -24,28 +24,40 @@ This guide will walk you through deploying a production-ready hybrid Kubernetes 
 - **Worker Nodes**: Public IPs for ingress and direct service access
 - **Tailscale**: Secure L3 mesh networking for inter-node communication
 - **Cloudflared**: HTTP/HTTPS ingress via Cloudflare tunnels (no load balancer required)
+- **NodePort**: Direct TCP/UDP service exposure on worker nodes
 - **K3s**: Lightweight Kubernetes distribution
 
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Internet                                 │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                    ┌────▼─────┐
-                    │Cloudflare│
-                    └────┬─────┘
-                         │
-            ┌────────────▼────────────┐
-            │  Cloudflared Tunnel     │
-            │  (Worker Node)          │
-            └────────────┬────────────┘
-                         │
-         ┌───────────────▼──────────────┐
-         │    Kubernetes Services       │
-         │         (Pods)               │
-         └──────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              Internet                                     │
+└─────────────────────────┬────────────────────────────┬───────────────────┘
+                          │                            │
+                  ┌───────▼────────┐          ┌────────▼─────────┐
+                  │  Cloudflare    │          │   Direct TCP/UDP │
+                  │  Edge Network  │          │   Connections    │
+                  └───────┬────────┘          └────────┬─────────┘
+                          │                            │
+                          │ Secure Tunnel              │ NodePort
+                          │ (HTTP/HTTPS)               │ (30000-32767)
+                          │                            │
+            ┌─────────────▼────────────┐   ┌───────────▼──────────────┐
+            │   Cloudflared Pod        │   │   Worker Public IP       │
+            │   (Worker Node)          │   │   e.g., 1.2.3.4:30001    │
+            └─────────────┬────────────┘   └───────────┬──────────────┘
+                          │                            │
+                          └────────────┬───────────────┘
+                                       │
+                          ┌────────────▼─────────────┐
+                          │   Kubernetes Services    │
+                          │   ClusterIP / NodePort   │
+                          └────────────┬─────────────┘
+                                       │
+                          ┌────────────▼─────────────┐
+                          │    Application Pods      │
+                          │  (HTTP/S + TCP/UDP)      │
+                          └──────────────────────────┘
 
 Control Plane ←──→ Tailscale VPN ←──→ Worker Nodes
  (CGNAT/Home)      (100.64.0.0/10)      (Public IP)

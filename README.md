@@ -15,7 +15,8 @@ This repository provides infrastructure-as-code for deploying a **hybrid Kuberne
 - Runs a **control plane behind CGNAT** with no public IP required
 - Deploys **workloads on public VPS workers** 
 - Uses **Tailscale** for secure inter-node mesh networking
-- Exposes services via **Cloudflared tunnels** (no load balancers)
+- Exposes services via **Cloudflared tunnels** for HTTP/HTTPS (no load balancers)
+- Exposes TCP/UDP services via **NodePorts** directly on worker nodes
 - Manages everything declaratively with **Ansible** and **Helmfile**
 
 **Perfect for home labs, edge computing, and cost-effective cloud deployments.**
@@ -34,25 +35,37 @@ This repository provides infrastructure-as-code for deploying a **hybrid Kuberne
 ### High-Level Design
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Internet                                 │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                    ┌────▼─────┐
-                    │Cloudflare│ (Edge Network)
-                    └────┬─────┘
-                         │ Secure Tunnel
-            ┌────────────▼────────────┐
-            │  Cloudflared Pod        │ (Worker Node)
-            └────────────┬────────────┘
-                         │
-         ┌───────────────▼──────────────┐
-         │    Kubernetes Services       │
-         │         (Pods)               │
-         └──────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              Internet                                     │
+└─────────────────────────┬────────────────────────────┬───────────────────┘
+                          │                            │
+                  ┌───────▼────────┐          ┌────────▼─────────┐
+                  │  Cloudflare    │          │   Direct TCP/UDP │
+                  │  Edge Network  │          │   Connections    │
+                  └───────┬────────┘          └────────┬─────────┘
+                          │                            │
+                          │ Secure Tunnel              │ NodePort
+                          │ (HTTP/HTTPS)               │ (30000-32767)
+                          │                            │
+            ┌─────────────▼────────────┐   ┌───────────▼──────────────┐
+            │   Cloudflared Pod        │   │   Worker Public IP       │
+            │   (Worker Node)          │   │   e.g., 1.2.3.4:30001    │
+            └─────────────┬────────────┘   └───────────┬──────────────┘
+                          │                            │
+                          └────────────┬───────────────┘
+                                       │
+                          ┌────────────▼─────────────┐
+                          │   Kubernetes Services    │
+                          │   ClusterIP / NodePort   │
+                          └────────────┬─────────────┘
+                                       │
+                          ┌────────────▼─────────────┐
+                          │    Application Pods      │
+                          │  (HTTP/S + TCP/UDP)      │
+                          └──────────────────────────┘
 
 Control Plane ←──→ Tailscale VPN ←──→ Worker Nodes
- (CGNAT/Home)      (100.64.0.0/10)     (Public VPS)
+ (CGNAT/Home)      (100.64.0.0/10)      (Public VPS)
 ```
 
 ### Key Components
@@ -63,8 +76,14 @@ Control Plane ←──→ Tailscale VPN ←──→ Worker Nodes
 | **Worker Nodes** | Application workloads | Public VPS with direct internet access |
 | **Tailscale** | Secure L3 mesh network | All nodes - encrypted inter-node traffic |
 | **Cloudflared** | HTTP/S ingress tunnels | Worker nodes - no load balancer required |
+| **NodePort** | Direct TCP/UDP service access | Worker nodes - port range 30000-32767 |
 | **Ansible** | Infrastructure deployment | Local machine - automates k3s & Tailscale |
 | **Helmfile** | Service management | Local machine - deploys apps declaratively |
+
+**Hybrid Ingress Approach:**
+- **HTTP/HTTPS Traffic**: Routed through Cloudflared tunnels (secure, no port exposure)
+- **TCP/UDP Services**: Exposed via NodePort on worker nodes' public IPs (e.g., `worker-ip:30001`)
+- NodePort services bypass Cloudflare Edge and connect directly to worker nodes for protocols not supported by Cloudflare tunnels
 
 ### Why This Architecture?
 
@@ -72,7 +91,8 @@ Control Plane ←──→ Tailscale VPN ←──→ Worker Nodes
 ✅ **Cost Effective**: No cloud NAT gateways or load balancers  
 ✅ **Secure by Default**: All traffic encrypted via Tailscale mesh  
 ✅ **Scalable**: Add workers easily, control plane handles scheduling  
-✅ **GitOps Ready**: Everything version-controlled and reproducible
+✅ **GitOps Ready**: Everything version-controlled and reproducible  
+✅ **Hybrid Traffic Handling**: Cloudflared for HTTP/S, NodePort for TCP/UDP services
 
 ## Quick Start
 
@@ -150,6 +170,7 @@ helmfile apply
 
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to this project
 - **[Changelog](CHANGELOG.md)** - Version history and changes
+- **[DNS Setup Guide](DNS_SETUP.md)** - Configure DNS for Cloudflared tunnels and NodePort services
 - **[Validation Scripts](scripts/)** - Prerequisite and deployment validation
 
 ## What You Get
