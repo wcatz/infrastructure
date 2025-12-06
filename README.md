@@ -15,7 +15,8 @@ This repository provides infrastructure-as-code for deploying a **hybrid Kuberne
 - Runs a **control plane behind CGNAT** with no public IP required
 - Deploys **workloads on public VPS workers** 
 - Uses **Tailscale** for secure inter-node mesh networking
-- Exposes services via **Cloudflared tunnels** (no load balancers)
+- Exposes services via **Cloudflared tunnels** for HTTP/HTTPS (no load balancers)
+- Exposes TCP/UDP services via **NodePorts** directly on worker nodes
 - Manages everything declaratively with **Ansible** and **Helmfile**
 
 **Perfect for home labs, edge computing, and cost-effective cloud deployments.**
@@ -169,6 +170,7 @@ helmfile apply
 
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to this project
 - **[Changelog](CHANGELOG.md)** - Version history and changes
+- **[DNS Setup Guide](DNS_SETUP.md)** - Configure DNS for Cloudflared tunnels and NodePort services
 - **[Validation Scripts](scripts/)** - Prerequisite and deployment validation
 
 ## What You Get
