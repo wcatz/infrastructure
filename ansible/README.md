@@ -24,6 +24,8 @@ This setup deploys a **hybrid Kubernetes cluster**:
 
 ### 1. Setup Secrets with Ansible Vault
 
+**Note:** The `vault.yml` file is not included in this repository for security reasons. You must create it from the provided example template.
+
 ```bash
 # 1. Create vault password file
 cp .vault_pass.example .vault_pass
