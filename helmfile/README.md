@@ -40,17 +40,72 @@ helmfile/
 
 ## Enabled Services
 
-Edit `config/enabled.yaml`:
+Control which services are deployed using the `enabled` configuration.
 
+### Configuration Files
+
+- **Base**: `config/enabled.yaml` - Default settings for all environments
+- **Environment-specific**: `environments/{env}/enabled.yaml` - Override defaults per environment
+
+### Example
+
+Base configuration (`config/enabled.yaml`):
+```yaml
+enabled:
+  prometheus: true      # Enabled by default
+  grafana: true
+  cloudflared: true
+  tailscaleOperator: true
+  externalSecrets: true
+  githubRunner: false   # Disabled by default
+  certManager: false
+  velero: false
+```
+
+Production override (`environments/prod/enabled.yaml`):
 ```yaml
 enabled:
   prometheus: true
-  haproxyIngress: false  # Disabled for hybrid cluster
-  cloudflared: true  # HTTP/S ingress via Cloudflare tunnels
   grafana: true
-  tailscaleOperator: true  # L3 mesh networking
+  cloudflared: true
+  tailscaleOperator: true
   externalSecrets: true
+  githubRunner: true    # Enable in production
+  certManager: true     # Enable in production
+  velero: true          # Enable in production
 ```
+
+### Adding New Services
+
+When adding a new Helm release:
+
+1. **Define in `config/releases.yaml.gotmpl`**:
+   ```yaml
+   {{- if $enabled.myService | default false }}
+     - name: my-service
+       namespace: my-namespace
+       chart: repo/chart-name
+   {{- end }}
+   ```
+
+2. **Add to `config/enabled.yaml`**:
+   ```yaml
+   enabled:
+     myService: false  # or true for default enabled
+   ```
+
+3. **Add to environment files** (`environments/{env}/enabled.yaml`):
+   ```yaml
+   enabled:
+     myService: true  # Enable for this environment
+   ```
+
+4. **Update the documentation** in `config/releases.yaml.gotmpl` header
+
+This ensures:
+- No parsing errors from missing keys
+- Clear default behavior
+- Environment-specific control
 
 ## Environment Overrides
 

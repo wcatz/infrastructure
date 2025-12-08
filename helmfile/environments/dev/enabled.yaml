@@ -1,0 +1,26 @@
+# Development environment - enabled services configuration
+#
+# This file overrides the default enabled.yaml for the dev environment.
+# Services are enabled/disabled based on development needs.
+#
+# Note: All keys should be explicitly defined to avoid parsing errors.
+# If a service is not listed here, the default from config/enabled.yaml applies.
+
+enabled:
+  # Monitoring stack
+  prometheus: true
+  grafana: true
+
+  # Networking
+  cloudflared: true
+  tailscaleOperator: true
+
+  # Secrets management
+  externalSecrets: true
+
+  # CI/CD
+  githubRunner: false  # Usually disabled in dev to save resources
+
+  # Additional services
+  certManager: false
+  velero: false  # Backups not needed in dev

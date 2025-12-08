@@ -1,0 +1,26 @@
+# Production environment - enabled services configuration
+#
+# This file overrides the default enabled.yaml for the production environment.
+# Production runs the full stack with all critical services enabled.
+#
+# Note: All keys should be explicitly defined to avoid parsing errors.
+# If a service is not listed here, the default from config/enabled.yaml applies.
+
+enabled:
+  # Monitoring stack
+  prometheus: true
+  grafana: true
+
+  # Networking
+  cloudflared: true
+  tailscaleOperator: true
+
+  # Secrets management
+  externalSecrets: true
+
+  # CI/CD
+  githubRunner: true  # Self-hosted runners for production deployments
+
+  # Additional services
+  certManager: true  # TLS certificate management
+  velero: true  # Backup and disaster recovery

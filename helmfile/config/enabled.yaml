@@ -1,16 +1,41 @@
-# Enabled applications
+# Enabled applications - Base Configuration
+#
+# This file defines which Helm releases are enabled by default across all environments.
+# Environment-specific overrides can be placed in:
+#   - environments/dev/enabled.yaml
+#   - environments/staging/enabled.yaml
+#   - environments/prod/enabled.yaml
 #
 # Architecture: Tailscale mesh + public IPs (no external load balancer)
 # - Control-plane: internal-only (Tailscale, no public exposure)
 # - Worker: Public-IP, workloads deployed with Cloudflared for ingress, and direct TCP for P2P/services
 # - Network Model: Tailscale mesh + public IPs (no external load balancer)
+#
+# IMPORTANT: When adding a new service:
+# 1. Add the key here with a sensible default (true/false)
+# 2. Add the key to all environment-specific enabled.yaml files
+# 3. Update the documentation in config/releases.yaml.gotmpl
+# 4. Define the default value in the template (e.g., | default false)
+#
+# This ensures Helmfile parsing never fails due to missing keys.
 
 enabled:
+  # Core monitoring (recommended for all environments)
   prometheus: true
+
+  # Ingress and networking
   cloudflared: true  # HTTP/S ingress through Cloudflare tunnels
-  grafana: true
-  externalSecrets: true
   tailscaleOperator: true  # Tailscale mesh networking
+
+  # Observability
+  grafana: true
+
+  # Secrets management
+  externalSecrets: true
+
+  # CI/CD
   githubRunner: false  # GitHub Actions self-hosted runner with Tailscale (disabled by default)
-  certManager: false  # TLS certificate management (disabled by default)
-  velero: false  # Backup and disaster recovery (disabled by default)
+
+  # Additional services (disabled by default, enable per environment as needed)
+  certManager: false  # TLS certificate management
+  velero: false  # Backup and disaster recovery

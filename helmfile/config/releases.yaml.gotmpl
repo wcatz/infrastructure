@@ -1,9 +1,30 @@
 {{- /*
 This template uses .Values.enabled to conditionally enable/disable releases.
-The enabled configuration is loaded from config/enabled.yaml in the main helmfile.
 
-Environment-specific values are loaded from environments/{env}/ directories.
-Supported environments: dev, staging, prod
+Configuration Loading:
+- Base configuration: config/enabled.yaml (required, defines all services)
+- Environment overrides: environments/{env}/enabled.yaml (optional, can override base)
+- Supported environments: default, dev, staging, prod
+
+Default Values:
+Each release has a default value that applies when the key is missing from enabled.yaml:
+- prometheus: true (core monitoring, always recommended)
+- grafana: false (optional visualization)
+- cloudflared: false (optional Cloudflare tunnel ingress)
+- externalSecrets: false (optional secrets management)
+- tailscaleOperator: false (optional Tailscale mesh networking)
+- velero: false (optional backup/DR)
+- certManager: false (optional TLS certificate management)
+- githubRunner: false (optional self-hosted GitHub Actions runner)
+
+Adding New Releases:
+When adding a new release to this file:
+1. Add the key to config/enabled.yaml with a default value (true/false)
+2. Add the key to all environment-specific enabled.yaml files
+3. Use the pattern: {{- if $enabled.yourKey | default false }}
+4. Document the default value in this header comment
+
+This ensures Helmfile parsing never fails due to missing keys.
 */ -}}
 {{ $enabled := .Values.enabled | default dict }}
 {{ $env := .Environment.Name | default "default" }}
