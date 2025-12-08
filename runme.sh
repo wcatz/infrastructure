@@ -396,7 +396,7 @@ cd helmfile
 
 # Detect Helmfile configuration file
 # Check for helmfile configuration files in order of precedence:
-# 1. helmfile.yaml.gotmpl (Go template format - current standard)
+# 1. helmfile.yaml.gotmpl (Go template format - used in this project)
 # 2. helmfile.gotmpl (legacy Go template format)
 # 3. helmfile.yaml (standard YAML format)
 HF_FILE=""
