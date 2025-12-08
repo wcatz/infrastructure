@@ -394,44 +394,32 @@ print_section "Step 5: Deploying Infrastructure Services via Helmfile"
 print_info "Deploying services with Helmfile..."
 cd helmfile
 
-HF_FILE="helmfile.gotmpl"
-if [ ! -f "$HF_FILE" ] && [ -f "helmfile.yaml" ]; then
-  print_info "Detected helmfile.yaml; checking for templates..."
-  if grep -q '{{' helmfile.yaml || grep -q '}}' helmfile.yaml; then
-    print_warning "Templates found in helmfile.yaml — creating helmfile.gotmpl for Helmfile v1 compatibility"
-    cp helmfile.yaml "$HF_FILE"
-    
-    # Validate template syntax before proceeding
-    print_info "Validating Helmfile template syntax..."
-    if helmfile -f "$HF_FILE" template &> /tmp/helmfile-template-validation.log; then
-      print_success "Helmfile template validation passed"
-    else
-      print_error "Helmfile template validation failed"
-      print_error "Template rendering errors detected:"
-      cat /tmp/helmfile-template-validation.log | head -20
-      print_info "Falling back to helmfile.yaml (if it exists without templates)"
-      
-      # Try to use helmfile.yaml as fallback
-      if [ -f "helmfile.yaml" ]; then
-        print_warning "Attempting to use helmfile.yaml as fallback"
-        HF_FILE="helmfile.yaml"
-      else
-        print_error "No valid Helmfile configuration found"
-        cd ..
-        exit 1
-      fi
-    fi
-  else
-    HF_FILE="helmfile.yaml"
-  fi
+# Detect Helmfile configuration file
+# Check for helmfile configuration files in order of precedence:
+# 1. helmfile.yaml.gotmpl (Go template format - used in this project)
+# 2. helmfile.gotmpl (legacy Go template format)
+# 3. helmfile.yaml (standard YAML format)
+HF_FILE=""
+if [ -f "helmfile.yaml.gotmpl" ]; then
+  HF_FILE="helmfile.yaml.gotmpl"
+  print_info "Found helmfile.yaml.gotmpl"
+elif [ -f "helmfile.gotmpl" ]; then
+  HF_FILE="helmfile.gotmpl"
+  print_info "Found helmfile.gotmpl"
+elif [ -f "helmfile.yaml" ]; then
+  HF_FILE="helmfile.yaml"
+  print_info "Found helmfile.yaml"
 fi
 
 # Verify the selected file exists
-if [ ! -f "$HF_FILE" ]; then
-  print_error "Helmfile configuration not found: $HF_FILE"
+if [ -z "$HF_FILE" ] || [ ! -f "$HF_FILE" ]; then
+  print_error "Helmfile configuration not found"
+  print_error "Expected one of: helmfile.yaml.gotmpl, helmfile.gotmpl, or helmfile.yaml"
   cd ..
   exit 1
 fi
+
+print_success "Using Helmfile configuration: $HF_FILE"
 
 # Preview changes using the chosen file
 print_info "Previewing Helmfile changes (file: $HF_FILE)..."
