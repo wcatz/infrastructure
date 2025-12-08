@@ -2,7 +2,7 @@
 # runme.sh - Unified deployment script for hybrid Kubernetes infrastructure
 # This script automates the complete setup from prerequisites validation to full deployment
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -49,7 +49,7 @@ confirm() {
     local response
     read -p "$prompt (y/n): " response
     case "$response" in
-        [yY][eE][sS]|[yY]) 
+        [yY][eE][sS]|[yY])
             return 0
             ;;
         *)
@@ -59,7 +59,7 @@ confirm() {
 }
 
 # Show banner
-echo "╔════════════════════════════════════════════════════════════════╗"
+echo "╔═══════════════════════════════════════════════════════════════"
 echo "║  Hybrid Kubernetes Infrastructure - Unified Deployment Script  ║"
 echo "║                                                                ║"
 echo "║  This script will:                                             ║"
@@ -70,7 +70,7 @@ echo "║  4. Deploy K3s control plane and workers                       ║"
 echo "║  5. Deploy infrastructure services via Helmfile                ║"
 echo "║  6. Configure Cloudflared tunnels                              ║"
 echo "║  7. Validate deployment                                        ║"
-echo "╚════════════════════════════════════════════════════════════════╝"
+echo "╚═══════════════════════════════════════════════════════════════"
 echo ""
 
 print_warning "This script will make changes to your infrastructure."
@@ -237,45 +237,80 @@ cd ..
 # Get kubeconfig
 print_info "Retrieving kubeconfig..."
 
-# Get control plane host from inventory
-CONTROL_PLANE=$(grep -A 1 "\[k3s_servers\]" ansible/inventory.ini | grep -v "\[k3s_servers\]" | grep -v "^#" | head -1 | awk '{print $2}' | cut -d'=' -f2)
+# Robust function to get the first non-comment host line for a given group
+get_first_host_line() {
+    local group="$1"
+    # Prints first non-blank, non-comment line after matching [group] and before next [othergroup]
+    awk -v grp="$group" '
+    $0 ~ /^\[.*\]/ {
+      if ($0 == "[" grp "]") { in_group = 1; next }
+      else if (in_group) exit
+    }
+    in_group == 1 {
+      if ($0 ~ /^\s*#/ || $0 ~ /^\s*$/) next
+      print; exit
+    }
+    ' ansible/inventory.ini || true
+}
 
-if [ -z "$CONTROL_PLANE" ]; then
-    print_error "Could not determine control plane host from inventory"
-    print_warning "Please manually copy kubeconfig:"
+# Parse the first k3s_servers host line
+FIRST_K3S_LINE=$(get_first_host_line "k3s_servers" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+if [ -z "$FIRST_K3S_LINE" ]; then
+    print_error "Could not find any hosts under [k3s_servers] in ansible/inventory.ini"
+    print_info "Inventory snippet (first 40 lines) for debugging:"
+    sed -n '1,40p' ansible/inventory.ini || true
+    print_warning "Please ensure [k3s_servers] group exists and contains at least one host"
+    print_info "Manual kubeconfig copy instructions:"
     print_info "  scp user@control-plane:/etc/rancher/k3s/k3s.yaml ~/.kube/config"
-    print_info "  sed -i 's/127.0.0.1/<TAILSCALE-IP>/' ~/.kube/config"
     read -p "Press Enter to continue..."
 else
-    print_info "Copying kubeconfig from $CONTROL_PLANE..."
-    
-    # Get SSH user from inventory with fallback to current user
-    SSH_USER=$(grep "ansible_user" ansible/inventory.ini | head -1 | cut -d'=' -f2 | tr -d ' ' 2>/dev/null || echo "")
-    
+    # Try to extract ansible_host if present; prefer that (likely Tailscale IP)
+    CONTROL_PLANE=$(echo "$FIRST_K3S_LINE" | grep -oE 'ansible_host=[^[:space:]]+' | cut -d'=' -f2 || true)
+    # Fallback to first token (inventory hostname)
+    if [ -z "$CONTROL_PLANE" ]; then
+        CONTROL_PLANE=$(echo "$FIRST_K3S_LINE" | awk '{print $1}')
+    fi
+
+    # Find SSH user: prefer per-host ansible_user, else first ansible_user found in inventory, else current user
+    SSH_USER=$(echo "$FIRST_K3S_LINE" | grep -oE 'ansible_user=[^[:space:]]+' | cut -d'=' -f2 || true)
     if [ -z "$SSH_USER" ]; then
-        print_warning "Could not determine SSH user from inventory, using current user"
+        SSH_USER=$(grep -m1 -oE 'ansible_user=[^[:space:]]+' ansible/inventory.ini | head -1 | cut -d'=' -f2 || true)
+    fi
+    if [ -z "$SSH_USER" ]; then
+        print_warning "Could not determine SSH user from inventory; falling back to current user: $USER"
         SSH_USER=$USER
     fi
-    
-    # Backup existing kubeconfig
-    if [ -f "$HOME/.kube/config" ]; then
-        print_info "Backing up existing kubeconfig..."
-        cp "$HOME/.kube/config" "$HOME/.kube/config.backup.$(date +%Y%m%d-%H%M%S)"
-    fi
-    
-    # Copy kubeconfig
-    mkdir -p "$HOME/.kube"
-    if scp "$SSH_USER@$CONTROL_PLANE:/etc/rancher/k3s/k3s.yaml" "$HOME/.kube/config"; then
-        # Update server URL to use Tailscale IP
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s/127.0.0.1/$CONTROL_PLANE/" "$HOME/.kube/config"
-        else
-            sed -i "s/127.0.0.1/$CONTROL_PLANE/" "$HOME/.kube/config"
-        fi
-        print_success "Kubeconfig configured successfully"
+
+    if [ -z "$CONTROL_PLANE" ]; then
+        print_error "Could not determine control plane host from inventory line: $FIRST_K3S_LINE"
+        print_info "Please set ansible_host= in ansible/inventory.ini for the control plane or ensure the host name is resolvable"
+        print_info "Manual kubeconfig copy instructions:"
+        print_info "  scp user@control-plane:/etc/rancher/k3s/k3s.yaml ~/.kube/config"
+        read -p "Press Enter to continue..."
     else
-        print_warning "Failed to copy kubeconfig automatically"
-        print_info "Please manually copy: scp $SSH_USER@$CONTROL_PLANE:/etc/rancher/k3s/k3s.yaml ~/.kube/config"
+        print_info "Copying kubeconfig from $CONTROL_PLANE (ssh user: $SSH_USER)..."
+
+        # Backup existing kubeconfig
+        if [ -f "$HOME/.kube/config" ]; then
+            print_info "Backing up existing kubeconfig..."
+            cp "$HOME/.kube/config" "$HOME/.kube/config.backup.$(date +%Y%m%d-%H%M%S)"
+        fi
+
+        # Copy kubeconfig
+        mkdir -p "$HOME/.kube"
+        if scp "$SSH_USER@$CONTROL_PLANE:/etc/rancher/k3s/k3s.yaml" "$HOME/.kube/config"; then
+            # Update server URL to use the control plane host/IP we determined (best-effort)
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/127.0.0.1/$CONTROL_PLANE/g" "$HOME/.kube/config" || true
+            else
+                sed -i "s/127.0.0.1/$CONTROL_PLANE/g" "$HOME/.kube/config" || true
+            fi
+            print_success "Kubeconfig configured successfully"
+        else
+            print_warning "Failed to copy kubeconfig automatically from $CONTROL_PLANE"
+            print_info "Please manually copy: scp $SSH_USER@$CONTROL_PLANE:/etc/rancher/k3s/k3s.yaml ~/.kube/config"
+        fi
     fi
 fi
 
@@ -296,9 +331,20 @@ print_section "Step 5: Deploying Infrastructure Services via Helmfile"
 print_info "Deploying services with Helmfile..."
 cd helmfile
 
-# Preview changes
-print_info "Previewing Helmfile changes..."
-if helmfile diff --suppress-secrets; then
+HF_FILE="helmfile.gotmpl"
+if [ ! -f "$HF_FILE" ] && [ -f "helmfile.yaml" ]; then
+  print_info "Detected helmfile.yaml; checking for templates..."
+  if grep -q '{{' helmfile.yaml || grep -q '}}' helmfile.yaml; then
+    print_warning "Templates found in helmfile.yaml — creating helmfile.gotmpl for Helmfile v1 compatibility"
+    cp helmfile.yaml "$HF_FILE"
+  else
+    HF_FILE="helmfile.yaml"
+  fi
+fi
+
+# Preview changes using the chosen file
+print_info "Previewing Helmfile changes (file: $HF_FILE)..."
+if helmfile -f "$HF_FILE" diff --suppress-secrets; then
     print_info "Helmfile diff completed"
 else
     print_warning "Helmfile diff failed, continuing..."
@@ -306,7 +352,7 @@ fi
 
 # Apply Helmfile
 if confirm "Deploy all enabled services?"; then
-    if helmfile apply; then
+    if helmfile -f "$HF_FILE" apply; then
         print_success "Infrastructure services deployed successfully"
     else
         print_error "Helmfile deployment failed"

@@ -1,5 +1,5 @@
 ---
-# Tasks for Tailscale role
+# roles/tailscale/tasks/main.yaml
 
 - name: Validate tailscale_auth_key is defined
   ansible.builtin.assert:
@@ -8,48 +8,24 @@
       - tailscale_auth_key | length > 0
     fail_msg: "tailscale_auth_key variable must be defined"
 
-- name: Add Tailscale GPG key (Debian/Ubuntu)
-  ansible.builtin.get_url:
-    url: https://pkgs.tailscale.com/stable/debian/{{ ansible_distribution_release }}.noarmor.gpg
-    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
-    mode: '0644'
-  become: true
-  when: ansible_os_family == "Debian"
+# Skip installation if Tailscale is already installed
+- name: Check if Tailscale is installed
+  ansible.builtin.command: tailscale version
+  register: tailscale_check
+  ignore_errors: true
+  changed_when: false
 
-- name: Add Tailscale repository (Debian/Ubuntu)
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian {{ ansible_distribution_release }} main"
-    state: present
-    filename: tailscale
-  become: true
-  when: ansible_os_family == "Debian"
+- name: Install Tailscale via official install script
+  ansible.builtin.shell: |
+    curl -fsSL https://tailscale.com/install.sh | sh
+  args:
+    warn: false
+  become: yes
+  when: tailscale_check.rc != 0
+  register: tailscale_install
+  changed_when: "'already installed' not in tailscale_install.stdout"
 
-- name: Install Tailscale (Debian/Ubuntu)
-  ansible.builtin.apt:
-    name: tailscale
-    state: "{% if tailscale_version == 'latest' %}latest{% else %}present{% endif %}"
-    update_cache: true
-  become: true
-  when: ansible_os_family == "Debian"
-
-- name: Add Tailscale repository (RedHat/CentOS)
-  ansible.builtin.yum_repository:
-    name: tailscale-stable
-    description: Tailscale stable
-    baseurl: https://pkgs.tailscale.com/stable/centos/$releasever/$basearch
-    enabled: true
-    gpgcheck: true
-    gpgkey: https://pkgs.tailscale.com/stable/centos/$releasever/repo.gpg
-  become: true
-  when: ansible_os_family == "RedHat"
-
-- name: Install Tailscale (RedHat/CentOS)
-  ansible.builtin.yum:
-    name: tailscale
-    state: "{% if tailscale_version == 'latest' %}latest{% else %}present{% endif %}"
-  become: true
-  when: ansible_os_family == "RedHat"
-
+# Ensure tailscaled service is enabled and running
 - name: Enable Tailscale service
   ansible.builtin.systemd:
     name: tailscaled
@@ -57,14 +33,17 @@
     state: started
   become: true
 
+# Build Tailscale up command
 - name: Build Tailscale up command
   ansible.builtin.set_fact:
     tailscale_up_cmd: >-
       tailscale up --authkey={{ tailscale_auth_key }}
-      {{ tailscale_args }}
-      {% if tailscale_enable_ssh %}--ssh{% endif %}
-      {% if not tailscale_accept_dns %}--accept-dns=false{% endif %}
-      {% if tailscale_advertise_tags | length > 0 %}--advertise-tags={{ tailscale_advertise_tags | join(',') }}{% endif %}
+      {{ tailscale_args | default('') }}
+      {% if tailscale_enable_ssh | default(false) %}--ssh{% endif %}
+      {% if not tailscale_accept_dns | default(true) %}--accept-dns=false{% endif %}
+      {% if tailscale_advertise_tags is defined and tailscale_advertise_tags | length > 0 %}
+      --advertise-tags={{ tailscale_advertise_tags | join(',') }}
+      {% endif %}
 
 - name: Connect to Tailscale
   ansible.builtin.command: "{{ tailscale_up_cmd }}"
@@ -73,6 +52,8 @@
   changed_when: "'Success' in tailscale_up_result.stdout or 'Success' in tailscale_up_result.stderr"
   notify: Restart tailscaled
 
+
+# Get Tailscale status
 - name: Get Tailscale status
   ansible.builtin.command: tailscale status
   register: tailscale_status

@@ -1,0 +1,41 @@
+---
+# ansible/playbooks/setup-tailscale-acls.yaml
+# Configure Tailscale ACLs and node tags for K3s cluster
+
+- name: Configure Tailscale ACLs for K3s
+  hosts: localhost
+  gather_facts: false
+  vars:
+    tailscale_oauth_client_id: "{{ vault_tailscale_oauth_client_id }}"
+    tailscale_oauth_client_secret: "{{ vault_tailscale_oauth_client_secret }}"
+    tailscale_tailnet: "wcatz.github"
+  tasks:
+    - name: Import ACL configuration tasks
+      ansible.builtin.include_tasks: ../roles/tailscale/tasks/configure-acls.yaml
+
+- name: Tag Tailscale nodes with K3s roles
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Import node tagging tasks
+      ansible.builtin.include_tasks: ../roles/tailscale/tasks/tag-nodes.yaml
+
+- name: Verify Tailscale connectivity
+  hosts: k3s_agents
+  gather_facts: false
+  tasks:
+    - name: Get control plane IP
+      ansible.builtin.set_fact:
+        control_plane_ip: "{{ hostvars[groups['k3s_servers'][0]]['ansible_host'] }}"
+
+    - name: Test connectivity to control plane
+      ansible.builtin.wait_for:
+        host: "{{ control_plane_ip }}"
+        port: 6443
+        timeout: 10
+      register: connectivity_test
+      ignore_errors: true
+
+    - name: Display connectivity status
+      ansible.builtin.debug:
+        msg: "{{ 'SUCCESS: Can reach control plane at ' + control_plane_ip + ':6443' if connectivity_test is succeeded else 'FAILED: Cannot reach control plane at ' + control_plane_ip + ':6443' }}"
