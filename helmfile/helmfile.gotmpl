@@ -21,6 +21,4 @@ environments:
 
 {{ tpl (readFile "config/repositories.yaml.gotmpl") . }}
 
-{{ readFile "config/enabled.yaml" }}
-
 {{ tpl (readFile "config/releases.yaml.gotmpl") . }}

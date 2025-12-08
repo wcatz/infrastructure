@@ -12,3 +12,5 @@ enabled:
   externalSecrets: true
   tailscaleOperator: true  # Tailscale mesh networking
   githubRunner: false  # GitHub Actions self-hosted runner with Tailscale (disabled by default)
+  certManager: false  # TLS certificate management (disabled by default)
+  velero: false  # Backup and disaster recovery (disabled by default)
