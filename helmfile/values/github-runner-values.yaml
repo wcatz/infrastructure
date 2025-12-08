@@ -1,5 +1,5 @@
 # GitHub Actions Runner Helm Values
-# 
+#
 # This configuration deploys a self-hosted GitHub Actions runner with Tailscale connectivity.
 # The runner runs as a Kubernetes pod and can access the control plane behind CGNAT via Tailscale.
 #
@@ -21,7 +21,7 @@ github:
   #   - https://github.com/yourorg/yourrepo (repository-level runner)
   #   - https://github.com/yourorg (organization-level runner)
   repository: "https://github.com/CHANGE_ME/CHANGE_ME"
-  
+
   # GitHub token secret (create this first!)
   # See charts/github-runner/secrets-example.yaml
   tokenSecretName: "github-runner-token"
@@ -31,11 +31,11 @@ github:
 runner:
   # Runner name (empty = auto-generated from pod name)
   name: ""
-  
+
   # Runner group (empty = default group)
   # For organization-level runners, you can specify a runner group
   group: ""
-  
+
   # Runner labels (used in workflow: runs-on: [self-hosted, kubernetes, tailscale])
   labels:
     - self-hosted
@@ -44,22 +44,22 @@ runner:
     - kubernetes
     - tailscale
     - k3s
-  
+
   # Number of runner replicas
   # For high availability, use multiple replicas
   replicas: 1
-  
+
   # Ephemeral mode (runner is deleted after one job)
   # Recommended for security and clean state
   # Set to true for production
   ephemeral: false
-  
+
   # Runner image
   image:
     repository: ghcr.io/actions/actions-runner
     tag: "2.311.0"
     pullPolicy: IfNotPresent
-  
+
   # Runner work directory
   workDir: /work
 
@@ -67,33 +67,33 @@ runner:
 tailscale:
   # Enable Tailscale sidecar
   enabled: true
-  
+
   # Tailscale image
   image:
     repository: tailscale/tailscale
     tag: v1.56.1
     pullPolicy: IfNotPresent
-  
+
   # Tailscale auth key secret (create this first!)
   # See charts/github-runner/secrets-example.yaml
   authKeySecretName: "tailscale-auth"
   authKeySecretKey: "authkey"
-  
+
   # Tailscale hostname prefix
   # Full hostname will be: {hostname}-{pod-name}
   hostname: "github-runner"
-  
+
   # Tailscale tags for ACL management
   # Configure matching ACLs in Tailscale admin console
   tags:
     - tag:k8s
     - tag:ci
     - tag:github-runner
-  
+
   # Accept routes from Tailscale
   # Set to true to access services on other Tailscale nodes
   acceptRoutes: true
-  
+
   # Enable userspace networking
   # Required for pods without NET_ADMIN capability
   userspace: true
@@ -102,27 +102,27 @@ tailscale:
 kubernetes:
   # Namespace
   namespace: github-runner
-  
+
   # Create namespace automatically
   createNamespace: true
-  
+
   # Service account
   serviceAccount:
     create: true
     name: github-runner
     annotations: {}
-  
+
   # RBAC configuration
   rbac:
     create: true
     # Use ClusterRole for cluster-wide deployments
     # Set to false for namespace-scoped deployments
     clusterRole: true
-  
+
   # Pod security context
   podSecurityContext:
     fsGroup: 1000
-  
+
   # Container security context
   securityContext:
     runAsNonRoot: true
@@ -131,7 +131,7 @@ kubernetes:
     capabilities:
       drop:
         - ALL
-  
+
   # Resource limits and requests
   resources:
     limits:
@@ -140,20 +140,20 @@ kubernetes:
     requests:
       cpu: 500m
       memory: 512Mi
-  
+
   # Node selector
   # Deploy runners only on specific nodes
   nodeSelector:
     # Uncomment to deploy only on worker nodes:
     # node-role.kubernetes.io/worker: "true"
-  
+
   # Tolerations
   # Allow scheduling on nodes with specific taints
   tolerations: []
     # - key: node-role.kubernetes.io/control-plane
     #   operator: Exists
     #   effect: NoSchedule
-  
+
   # Affinity rules
   affinity: {}
     # # Prefer worker nodes
@@ -164,7 +164,7 @@ kubernetes:
     #         matchExpressions:
     #           - key: node-role.kubernetes.io/worker
     #             operator: Exists
-  
+
   # Pod annotations
   podAnnotations: {}
     # # Example: Use Tailscale Operator instead of sidecar
@@ -176,13 +176,13 @@ storage:
   # Enable persistent storage
   # Recommended for caching and build artifacts
   enabled: true
-  
+
   # Storage class (empty = default storage class)
   storageClass: ""
-  
+
   # Storage size
   size: 10Gi
-  
+
   # Access mode
   accessMode: ReadWriteOnce
 
@@ -197,11 +197,11 @@ env: []
 clusterAccess:
   # Enable kubectl/helm access to cluster
   enabled: true
-  
+
   # Use service account token for authentication
   # This is the recommended approach for in-cluster runners
   useServiceAccount: true
-  
+
   # Alternative: Mount external kubeconfig from secret
   # Set useServiceAccount to false and provide kubeconfig secret
   kubeconfigSecret: ""

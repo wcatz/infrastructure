@@ -11,13 +11,13 @@
     # Repository URL should be provided via command line or inventory
     # Example: -e "github_runner_repository_url=https://github.com/owner/repo"
     # github_runner_repository_url: ""
-    
+
     # Runner token should be provided via command line or vault
     # Get token from: https://github.com/OWNER/REPO/settings/actions/runners/new
     # Or generate via GitHub API
     # Example: -e "github_runner_token=YOUR_TOKEN"
     # github_runner_token: ""
-    
+
     # Runner configuration
     github_runner_name: "{{ ansible_hostname }}-tailscale-runner"
     github_runner_labels: "self-hosted,linux,x64,tailscale,kubernetes,k3s"

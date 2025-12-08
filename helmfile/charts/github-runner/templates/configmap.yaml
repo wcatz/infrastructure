@@ -10,7 +10,7 @@ data:
     #!/bin/bash
     # GitHub Actions Runner configuration helper script
     set -e
-    
+
     echo "GitHub Actions Runner Configuration"
     echo "===================================="
     echo "Repository: {{ .Values.github.repository }}"

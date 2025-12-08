@@ -26,7 +26,7 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.kubernetes.podSecurityContext | nindent 8 }}
-      
+
       {{- if .Values.tailscale.enabled }}
       # Init container to set up Tailscale
       initContainers:
@@ -71,7 +71,7 @@ spec:
               add:
                 - NET_ADMIN
       {{- end }}
-      
+
       containers:
         {{- if .Values.tailscale.enabled }}
         # Tailscale sidecar container
@@ -93,7 +93,7 @@ spec:
                 --accept-routes \
                 {{- end }}
                 --accept-dns=false
-              
+
               # Keep container running
               sleep infinity
           env:
@@ -131,7 +131,7 @@ spec:
               cpu: 200m
               memory: 256Mi
         {{- end }}
-        
+
         # GitHub Actions Runner container
         - name: runner
           image: "{{ .Values.runner.image.repository }}:{{ .Values.runner.image.tag }}"
@@ -140,14 +140,14 @@ spec:
           args:
             - |
               set -e
-              
+
               # Wait for Tailscale to be ready
               {{- if .Values.tailscale.enabled }}
               echo "Waiting for Tailscale to be ready..."
               while [ ! -S /var/run/tailscale/tailscaled.sock ]; do
                 sleep 1
               done
-              
+
               # Wait for Tailscale to be connected
               timeout=60
               while ! tailscale status &>/dev/null && [ $timeout -gt 0 ]; do
@@ -155,30 +155,30 @@ spec:
                 sleep 2
                 timeout=$((timeout-2))
               done
-              
+
               if [ $timeout -le 0 ]; then
                 echo "ERROR: Tailscale did not connect in time"
                 exit 1
               fi
-              
+
               echo "✅ Tailscale connected"
               tailscale status
               {{- end }}
-              
+
               # Configure runner
               RUNNER_NAME="{{ .Values.runner.name }}"
               if [ -z "$RUNNER_NAME" ]; then
                 RUNNER_NAME="$(hostname)"
               fi
-              
+
               # Build labels
               LABELS="{{ include "github-runner.labels-string" . }}"
-              
+
               echo "Configuring GitHub Actions runner..."
               echo "  Name: $RUNNER_NAME"
               echo "  Repository: {{ .Values.github.repository }}"
               echo "  Labels: $LABELS"
-              
+
               # Configure the runner
               ./config.sh \
                 --url {{ .Values.github.repository }} \
@@ -194,9 +194,9 @@ spec:
                 {{- end }}
                 --unattended \
                 --replace
-              
+
               echo "✅ Runner configured successfully"
-              
+
               # Run the runner
               ./run.sh
           env:
@@ -228,7 +228,7 @@ spec:
             {{- toYaml .Values.kubernetes.securityContext | nindent 12 }}
           resources:
             {{- toYaml .Values.kubernetes.resources | nindent 12 }}
-      
+
       volumes:
         {{- if .Values.tailscale.enabled }}
         - name: tailscale-state
