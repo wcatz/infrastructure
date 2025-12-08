@@ -6,23 +6,26 @@ Configuration Loading:
 - Environment overrides: environments/{env}/enabled.yaml (optional, can override base)
 - Supported environments: default, dev, staging, prod
 
-Default Values:
-Each release has a default value that applies when the key is missing from enabled.yaml:
+Base Configuration Defaults (from config/enabled.yaml):
 - prometheus: true (core monitoring, always recommended)
-- grafana: false (optional visualization)
-- cloudflared: false (optional Cloudflare tunnel ingress)
-- externalSecrets: false (optional secrets management)
-- tailscaleOperator: false (optional Tailscale mesh networking)
-- velero: false (optional backup/DR)
-- certManager: false (optional TLS certificate management)
-- githubRunner: false (optional self-hosted GitHub Actions runner)
+- grafana: true (visualization and dashboards)
+- cloudflared: true (Cloudflare tunnel ingress)
+- externalSecrets: true (secrets management)
+- tailscaleOperator: true (Tailscale mesh networking)
+- velero: false (backup/DR, enable per environment as needed)
+- certManager: false (TLS certificate management, enable per environment as needed)
+- githubRunner: false (self-hosted GitHub Actions runner, enable per environment as needed)
+
+Template Fallback Defaults (when key is missing):
+The template uses `| default <value>` as a safety fallback if a key is missing entirely.
+These should match the base config but provide an extra safety layer.
 
 Adding New Releases:
 When adding a new release to this file:
 1. Add the key to config/enabled.yaml with a default value (true/false)
 2. Add the key to all environment-specific enabled.yaml files
 3. Use the pattern: {{- if $enabled.yourKey | default false }}
-4. Document the default value in this header comment
+4. Document the base default value in this header comment
 
 This ensures Helmfile parsing never fails due to missing keys.
 */ -}}
@@ -49,7 +52,7 @@ releases:
       # {{- end }}
 {{- end }}
 
-{{- if $enabled.grafana | default false }}
+{{- if $enabled.grafana | default true }}
   - name: grafana
     namespace: monitoring
     createNamespace: true
@@ -67,7 +70,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.cloudflared | default false }}
+{{- if $enabled.cloudflared | default true }}
   - name: cloudflared
     namespace: cloudflare
     createNamespace: true
@@ -85,7 +88,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.externalSecrets | default false }}
+{{- if $enabled.externalSecrets | default true }}
   - name: external-secrets
     namespace: external-secrets-system
     createNamespace: true
@@ -95,7 +98,7 @@ releases:
       - values/external-secrets-values.yaml
 {{- end }}
 
-{{- if $enabled.tailscaleOperator | default false }}
+{{- if $enabled.tailscaleOperator | default true }}
   - name: tailscale-operator
     namespace: tailscale
     createNamespace: true
