@@ -195,6 +195,84 @@ else
     print_success "No sensitive files found in repository"
 fi
 
+# Validate Helmfile templates
+echo ""
+echo "Validating Helmfile templates..."
+if [ -f "helmfile/helmfile.gotmpl" ]; then
+    print_info "Found helmfile.gotmpl, validating template syntax..."
+    cd helmfile
+    if command -v helmfile &> /dev/null; then
+        if helmfile -f helmfile.gotmpl template &> /tmp/helmfile-validation.log 2>&1; then
+            print_success "Helmfile template syntax is valid"
+        else
+            # Check if it's just missing values/secrets (acceptable in CI)
+            if grep -qiE "\bno such file\b|secret.*not found|value.*required" /tmp/helmfile-validation.log; then
+                print_warning "Helmfile template validation skipped (missing runtime values - expected in CI)"
+            else
+                print_error "Helmfile template has syntax errors"
+                head -10 /tmp/helmfile-validation.log
+            fi
+        fi
+    else
+        print_warning "helmfile not installed, skipping template validation"
+    fi
+    cd ..
+elif [ -f "helmfile/helmfile.yaml" ]; then
+    print_success "Found helmfile.yaml (standard format)"
+else
+    print_warning "No Helmfile configuration found"
+fi
+
+# Validate Kubernetes cluster health (if accessible)
+echo ""
+echo "Validating Kubernetes cluster health..."
+if command -v kubectl &> /dev/null && kubectl cluster-info &> /dev/null; then
+    print_info "Cluster is accessible, running health checks..."
+    
+    # Check node status - count nodes with Ready status
+    if kubectl get nodes &> /dev/null; then
+        TOTAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+        READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | awk '$2 == "Ready" {count++} END {print count+0}')
+        
+        if [ "$READY_NODES" -eq "$TOTAL_NODES" ] && [ "$TOTAL_NODES" -gt 0 ]; then
+            print_success "All cluster nodes are Ready ($READY_NODES/$TOTAL_NODES)"
+        else
+            print_warning "Not all nodes are Ready ($READY_NODES/$TOTAL_NODES)"
+        fi
+    fi
+    
+    # Check system pods
+    if kubectl get pods -n kube-system &> /dev/null; then
+        FAILING_PODS=$(kubectl get pods -n kube-system --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers 2>/dev/null | wc -l)
+        if [ "$FAILING_PODS" -eq 0 ]; then
+            print_success "All kube-system pods are healthy"
+        else
+            print_warning "$FAILING_PODS kube-system pod(s) not running"
+        fi
+    fi
+    
+    # Check CoreDNS
+    if kubectl get deployment -n kube-system coredns &> /dev/null; then
+        COREDNS_READY=$(kubectl get deployment -n kube-system coredns -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+        COREDNS_DESIRED=$(kubectl get deployment -n kube-system coredns -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+        if [ "$COREDNS_READY" = "$COREDNS_DESIRED" ] && [ "$COREDNS_READY" != "0" ]; then
+            print_success "CoreDNS is healthy ($COREDNS_READY/$COREDNS_DESIRED replicas)"
+        else
+            print_warning "CoreDNS may not be fully ready ($COREDNS_READY/$COREDNS_DESIRED)"
+        fi
+    fi
+    
+    # Check cluster API health
+    if kubectl get --raw='/readyz?verbose' &> /dev/null; then
+        print_success "Cluster API server is healthy"
+    else
+        print_warning "Cluster API health check returned warnings"
+    fi
+else
+    print_info "Kubernetes cluster not accessible - skipping runtime validation"
+    print_info "This is expected in CI or when cluster is not yet deployed"
+fi
+
 echo ""
 echo "======================================"
 echo "Validation Summary"

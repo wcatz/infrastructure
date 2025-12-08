@@ -58,6 +58,69 @@ confirm() {
     esac
 }
 
+# Function to validate cloudflared tunnel connectivity
+validate_cloudflared_tunnel() {
+    local namespace="${1:-cloudflare}"
+    local max_retries=30
+    local retry_interval=10
+    
+    print_info "Validating Cloudflared tunnel connectivity..."
+    
+    # Check if cloudflared namespace exists
+    if ! kubectl get namespace "$namespace" &> /dev/null; then
+        print_warning "Cloudflared namespace '$namespace' not found"
+        return 1
+    fi
+    
+    # Check if cloudflared pods are running
+    print_info "Checking cloudflared pod status..."
+    local pods_ready=false
+    for i in $(seq 1 $max_retries); do
+        local running_pods=$(kubectl get pods -n "$namespace" -l app.kubernetes.io/name=cloudflared --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+        local total_pods=$(kubectl get pods -n "$namespace" -l app.kubernetes.io/name=cloudflared --no-headers 2>/dev/null | wc -l)
+        
+        if [ "$total_pods" -eq 0 ]; then
+            print_warning "No cloudflared pods found (attempt $i/$max_retries)"
+        elif [ "$running_pods" -eq "$total_pods" ] && [ "$running_pods" -gt 0 ]; then
+            print_success "All cloudflared pods are running ($running_pods/$total_pods)"
+            pods_ready=true
+            break
+        else
+            print_info "Waiting for cloudflared pods to be ready ($running_pods/$total_pods ready) - attempt $i/$max_retries"
+        fi
+        
+        if [ $i -lt $max_retries ]; then
+            sleep $retry_interval
+        fi
+    done
+    
+    if [ "$pods_ready" = false ]; then
+        print_error "Cloudflared pods did not become ready within timeout"
+        kubectl get pods -n "$namespace" -l app.kubernetes.io/name=cloudflared 2>/dev/null || true
+        return 1
+    fi
+    
+    # Check for tunnel connection in logs
+    print_info "Verifying tunnel connection in pod logs..."
+    local pod_name=$(kubectl get pods -n "$namespace" -l app.kubernetes.io/name=cloudflared --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    
+    if [ -n "$pod_name" ]; then
+        # Look for connection success indicators in logs
+        if kubectl logs -n "$namespace" "$pod_name" --tail=100 2>/dev/null | grep -qi "connection.*registered\|registered tunnel connection\|connected to"; then
+            print_success "Cloudflared tunnel connection established successfully"
+            return 0
+        else
+            print_warning "Could not confirm tunnel connection from logs"
+            print_info "Recent cloudflared logs:"
+            kubectl logs -n "$namespace" "$pod_name" --tail=20 2>/dev/null || true
+            return 1
+        fi
+    else
+        print_warning "Could not find cloudflared pod for log validation"
+        return 1
+    fi
+}
+
 # Show banner
 echo "╔═══════════════════════════════════════════════════════════════"
 echo "║  Hybrid Kubernetes Infrastructure - Unified Deployment Script  ║"
@@ -337,9 +400,37 @@ if [ ! -f "$HF_FILE" ] && [ -f "helmfile.yaml" ]; then
   if grep -q '{{' helmfile.yaml || grep -q '}}' helmfile.yaml; then
     print_warning "Templates found in helmfile.yaml — creating helmfile.gotmpl for Helmfile v1 compatibility"
     cp helmfile.yaml "$HF_FILE"
+    
+    # Validate template syntax before proceeding
+    print_info "Validating Helmfile template syntax..."
+    if helmfile -f "$HF_FILE" template &> /tmp/helmfile-template-validation.log; then
+      print_success "Helmfile template validation passed"
+    else
+      print_error "Helmfile template validation failed"
+      print_error "Template rendering errors detected:"
+      cat /tmp/helmfile-template-validation.log | head -20
+      print_info "Falling back to helmfile.yaml (if it exists without templates)"
+      
+      # Try to use helmfile.yaml as fallback
+      if [ -f "helmfile.yaml" ]; then
+        print_warning "Attempting to use helmfile.yaml as fallback"
+        HF_FILE="helmfile.yaml"
+      else
+        print_error "No valid Helmfile configuration found"
+        cd ..
+        exit 1
+      fi
+    fi
   else
     HF_FILE="helmfile.yaml"
   fi
+fi
+
+# Verify the selected file exists
+if [ ! -f "$HF_FILE" ]; then
+  print_error "Helmfile configuration not found: $HF_FILE"
+  cd ..
+  exit 1
 fi
 
 # Preview changes using the chosen file
@@ -347,7 +438,8 @@ print_info "Previewing Helmfile changes (file: $HF_FILE)..."
 if helmfile -f "$HF_FILE" diff --suppress-secrets; then
     print_info "Helmfile diff completed"
 else
-    print_warning "Helmfile diff failed, continuing..."
+    print_warning "Helmfile diff failed or no changes detected"
+    print_info "This may be expected if this is the first deployment"
 fi
 
 # Apply Helmfile
@@ -379,7 +471,23 @@ if confirm "Do you want to configure Cloudflared tunnels now?"; then
     print_info "  6. Run: cd helmfile && helmfile apply"
     print_info ""
     print_info "See docs/setup.md#6-cloudflared-tunnel-setup for detailed instructions"
-    read -p "Press Enter to continue..."
+    read -p "Press Enter after completing Cloudflared setup to validate the connection..."
+    
+    # Validate cloudflared tunnel if deployed
+    if kubectl get namespace cloudflare &> /dev/null; then
+        if validate_cloudflared_tunnel "cloudflare"; then
+            print_success "Cloudflared tunnel validation passed"
+        else
+            print_warning "Cloudflared tunnel validation failed"
+            print_info "Check the troubleshooting section in docs/setup.md#6-cloudflared-tunnel-setup"
+            if ! confirm "Continue despite validation failure?"; then
+                exit 1
+            fi
+        fi
+    else
+        print_warning "Cloudflared namespace not found - skipping validation"
+        print_info "Deploy cloudflared via Helmfile and re-run this script to validate"
+    fi
 else
     print_info "Skipping Cloudflared configuration"
     print_info "You can configure it later by following docs/setup.md#6-cloudflared-tunnel-setup"
@@ -394,9 +502,43 @@ print_info "Running deployment validation..."
 print_info "Checking cluster nodes..."
 if kubectl get nodes &> /dev/null; then
     kubectl get nodes
-    print_success "Nodes are online"
+    
+    # Verify all nodes are Ready - count nodes with Ready status
+    TOTAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+    READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | awk '$2 == "Ready" {count++} END {print count+0}')
+    
+    if [ "$READY_NODES" -eq "$TOTAL_NODES" ] && [ "$TOTAL_NODES" -gt 0 ]; then
+        print_success "All nodes are Ready ($READY_NODES/$TOTAL_NODES)"
+    else
+        print_warning "Not all nodes are Ready ($READY_NODES/$TOTAL_NODES)"
+        kubectl get nodes --no-headers 2>/dev/null | awk '$2 != "Ready" {print}' || true
+    fi
 else
-    print_warning "Cannot query nodes"
+    print_error "Cannot query nodes - cluster may not be accessible"
+    print_info "Ensure kubeconfig is properly configured and cluster is running"
+    exit 1
+fi
+
+# Check cluster component health
+print_info "Checking cluster component health..."
+if kubectl get --raw='/readyz?verbose' &> /dev/null; then
+    print_success "Cluster API server is healthy"
+else
+    print_warning "Cluster health check failed"
+fi
+
+# Verify CoreDNS is running
+print_info "Checking CoreDNS..."
+if kubectl get deployment -n kube-system coredns &> /dev/null; then
+    COREDNS_READY=$(kubectl get deployment -n kube-system coredns -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+    COREDNS_DESIRED=$(kubectl get deployment -n kube-system coredns -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+    if [ "$COREDNS_READY" = "$COREDNS_DESIRED" ] && [ "$COREDNS_READY" != "0" ]; then
+        print_success "CoreDNS is running ($COREDNS_READY/$COREDNS_DESIRED replicas ready)"
+    else
+        print_warning "CoreDNS may not be fully ready ($COREDNS_READY/$COREDNS_DESIRED replicas)"
+    fi
+else
+    print_warning "CoreDNS deployment not found"
 fi
 
 # Check system pods
@@ -412,6 +554,23 @@ if kubectl get pods -n kube-system &> /dev/null; then
 else
     print_warning "Cannot query system pods"
 fi
+
+# Test DNS functionality
+print_info "Testing DNS resolution..."
+DNS_TEST_POD="dns-test-$(date +%s)"
+if kubectl run "$DNS_TEST_POD" --image=busybox:1.28 --rm -i --restart=Never --command -- nslookup kubernetes.default &> /tmp/dns-test.log 2>&1; then
+    print_success "DNS resolution is working"
+else
+    # Check if it's just because the pod already exists or other temporary issue
+    if grep -q "kubernetes.default.svc.cluster.local" /tmp/dns-test.log; then
+        print_success "DNS resolution is working"
+    else
+        print_warning "DNS resolution test failed"
+        print_info "DNS test output:"
+        cat /tmp/dns-test.log | head -10
+    fi
+fi
+rm -f /tmp/dns-test.log
 
 # Check monitoring pods (if enabled)
 if kubectl get namespace monitoring &> /dev/null; then
