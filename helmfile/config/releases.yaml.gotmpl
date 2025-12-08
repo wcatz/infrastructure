@@ -1,9 +1,38 @@
 {{- /*
 This template uses .Values.enabled to conditionally enable/disable releases.
-The enabled configuration is loaded from config/enabled.yaml in the main helmfile.
 
-Environment-specific values are loaded from environments/{env}/ directories.
-Supported environments: dev, staging, prod
+Configuration Loading:
+- Base configuration: config/enabled.yaml (required, defines all services)
+- Environment overrides: environments/{env}/enabled.yaml (optional, can override base)
+- Supported environments: default, dev, staging, prod
+
+Base Configuration Defaults (from config/enabled.yaml):
+These values are loaded as the base configuration for all environments.
+- prometheus: true (core monitoring, always recommended)
+- grafana: true (visualization and dashboards)
+- cloudflared: true (Cloudflare tunnel ingress)
+- externalSecrets: true (secrets management)
+- tailscaleOperator: true (Tailscale mesh networking)
+- velero: false (backup/DR, enable per environment as needed)
+- certManager: false (TLS certificate management, enable per environment as needed)
+- githubRunner: false (self-hosted GitHub Actions runner, enable per environment as needed)
+
+Template Fallback Defaults:
+The template uses `| default <value>` as a safety fallback if a key is missing entirely.
+These MUST match the base config values above to ensure consistent behavior.
+When a key exists in enabled.yaml, its value is used; when missing, the fallback applies.
+
+Adding New Releases:
+When adding a new release to this file:
+1. Add the key to config/enabled.yaml with a default value (true/false)
+2. Add the key to all environment-specific enabled.yaml files
+3. Use the pattern: {{- if $enabled.yourKey | default <base_default_value> }}
+   - Match the default value to what you set in config/enabled.yaml
+   - Example: If enabled.yaml has "myService: true", use "| default true"
+   - Example: If enabled.yaml has "myService: false", use "| default false"
+4. Document the base default value in this header comment
+
+This ensures Helmfile parsing never fails due to missing keys.
 */ -}}
 {{ $enabled := .Values.enabled | default dict }}
 {{ $env := .Environment.Name | default "default" }}
@@ -28,7 +57,7 @@ releases:
       # {{- end }}
 {{- end }}
 
-{{- if $enabled.grafana | default false }}
+{{- if $enabled.grafana | default true }}
   - name: grafana
     namespace: monitoring
     createNamespace: true
@@ -46,7 +75,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.cloudflared | default false }}
+{{- if $enabled.cloudflared | default true }}
   - name: cloudflared
     namespace: cloudflare
     createNamespace: true
@@ -64,7 +93,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.externalSecrets | default false }}
+{{- if $enabled.externalSecrets | default true }}
   - name: external-secrets
     namespace: external-secrets-system
     createNamespace: true
@@ -74,7 +103,7 @@ releases:
       - values/external-secrets-values.yaml
 {{- end }}
 
-{{- if $enabled.tailscaleOperator | default false }}
+{{- if $enabled.tailscaleOperator | default true }}
   - name: tailscale-operator
     namespace: tailscale
     createNamespace: true

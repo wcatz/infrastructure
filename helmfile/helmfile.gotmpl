@@ -5,6 +5,9 @@ helmDefaults:
   force: false
 
 # Environment definitions
+# Each environment loads:
+# 1. Base enabled.yaml (default configuration)
+# 2. Environment-specific enabled.yaml (optional overrides)
 environments:
   default:
     values:
@@ -12,12 +15,15 @@ environments:
   dev:
     values:
       - config/enabled.yaml
+      - environments/dev/enabled.yaml
   staging:
     values:
       - config/enabled.yaml
+      - environments/staging/enabled.yaml
   prod:
     values:
       - config/enabled.yaml
+      - environments/prod/enabled.yaml
 
 {{ tpl (readFile "config/repositories.yaml.gotmpl") . }}
 
