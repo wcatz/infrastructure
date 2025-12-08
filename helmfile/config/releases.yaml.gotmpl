@@ -26,7 +26,7 @@ Adding New Releases:
 When adding a new release to this file:
 1. Add the key to config/enabled.yaml with a default value (true/false)
 2. Add the key to all environment-specific enabled.yaml files
-3. Use the pattern: {{- if $enabled.yourKey | default <base_default_value> }}
+3. Use the pattern: {{- if index $enabled "yourKey" | default <base_default_value> }}
    - Match the default value to what you set in config/enabled.yaml
    - Example: If enabled.yaml has "myService: true", use "| default true"
    - Example: If enabled.yaml has "myService: false", use "| default false"
@@ -34,11 +34,12 @@ When adding a new release to this file:
 
 This ensures Helmfile parsing never fails due to missing keys.
 */ -}}
-{{ $enabled := .Values.enabled | default dict }}
+{{ $values := .Values | default dict }}
+{{ $enabled := index $values "enabled" | default dict }}
 {{ $env := .Environment.Name | default "default" }}
 
 releases:
-{{- if $enabled.prometheus | default true }}
+{{- if index $enabled "prometheus" | default true }}
   - name: prometheus
     namespace: monitoring
     createNamespace: true
@@ -57,7 +58,7 @@ releases:
       # {{- end }}
 {{- end }}
 
-{{- if $enabled.grafana | default true }}
+{{- if index $enabled "grafana" | default true }}
   - name: grafana
     namespace: monitoring
     createNamespace: true
@@ -75,7 +76,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.cloudflared | default true }}
+{{- if index $enabled "cloudflared" | default true }}
   - name: cloudflared
     namespace: cloudflare
     createNamespace: true
@@ -93,7 +94,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.externalSecrets | default true }}
+{{- if index $enabled "externalSecrets" | default true }}
   - name: external-secrets
     namespace: external-secrets-system
     createNamespace: true
@@ -103,7 +104,7 @@ releases:
       - values/external-secrets-values.yaml
 {{- end }}
 
-{{- if $enabled.tailscaleOperator | default true }}
+{{- if index $enabled "tailscaleOperator" | default true }}
   - name: tailscale-operator
     namespace: tailscale
     createNamespace: true
@@ -113,7 +114,7 @@ releases:
       - values/tailscale-operator-values.yaml
 {{- end }}
 
-{{- if $enabled.velero | default false }}
+{{- if index $enabled "velero" | default false }}
   - name: velero
     namespace: velero
     createNamespace: true
@@ -131,7 +132,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if $enabled.certManager | default false }}
+{{- if index $enabled "certManager" | default false }}
   - name: cert-manager
     namespace: cert-manager
     createNamespace: true
@@ -150,7 +151,7 @@ releases:
           - "https://github.com/cert-manager/cert-manager/releases/download/v1.13.3/cert-manager.crds.yaml"
 {{- end }}
 
-{{- if $enabled.githubRunner | default false }}
+{{- if index $enabled "githubRunner" | default false }}
   - name: github-runner
     namespace: github-runner
     createNamespace: true

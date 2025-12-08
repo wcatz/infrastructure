@@ -10,5 +10,5 @@ rules:
   trailing-spaces: enable
 
 ignore: |
-  helmfile/helmfile.yaml
+  helmfile/helmfile.yaml.gotmpl
   helmfile/config/*.gotmpl

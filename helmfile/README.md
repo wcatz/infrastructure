@@ -22,7 +22,7 @@ helmfile -e prod apply
 
 ```
 helmfile/
-├── helmfile.yaml              # Main configuration
+├── helmfile.yaml.gotmpl        # Main configuration
 ├── config/
 │   ├── enabled.yaml           # Enable/disable services
 │   ├── repositories.yaml.gotmpl
