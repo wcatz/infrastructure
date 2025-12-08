@@ -34,7 +34,8 @@ When adding a new release to this file:
 
 This ensures Helmfile parsing never fails due to missing keys.
 */ -}}
-{{ $enabled := index (.Values | default dict) "enabled" | default (dict) }}
+{{ $values := .Values | default dict }}
+{{ $enabled := index $values "enabled" | default dict }}
 {{ $env := .Environment.Name | default "default" }}
 
 releases:
