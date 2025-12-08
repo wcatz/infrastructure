@@ -19,7 +19,7 @@ enabled:
   externalSecrets: true
 
   # CI/CD
-  githubRunner: false  # Can be enabled for testing runner deployments
+  githubRunner: false  # Can be enabled to test GitHub Actions runner deployments in staging
 
   # Additional services
   certManager: true  # Enable to test certificate management

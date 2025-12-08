@@ -7,6 +7,7 @@ Configuration Loading:
 - Supported environments: default, dev, staging, prod
 
 Base Configuration Defaults (from config/enabled.yaml):
+These values are loaded as the base configuration for all environments.
 - prometheus: true (core monitoring, always recommended)
 - grafana: true (visualization and dashboards)
 - cloudflared: true (Cloudflare tunnel ingress)
@@ -16,15 +17,19 @@ Base Configuration Defaults (from config/enabled.yaml):
 - certManager: false (TLS certificate management, enable per environment as needed)
 - githubRunner: false (self-hosted GitHub Actions runner, enable per environment as needed)
 
-Template Fallback Defaults (when key is missing):
+Template Fallback Defaults:
 The template uses `| default <value>` as a safety fallback if a key is missing entirely.
-These should match the base config but provide an extra safety layer.
+These MUST match the base config values above to ensure consistent behavior.
+When a key exists in enabled.yaml, its value is used; when missing, the fallback applies.
 
 Adding New Releases:
 When adding a new release to this file:
 1. Add the key to config/enabled.yaml with a default value (true/false)
 2. Add the key to all environment-specific enabled.yaml files
-3. Use the pattern: {{- if $enabled.yourKey | default false }}
+3. Use the pattern: {{- if $enabled.yourKey | default <base_default_value> }}
+   - Match the default value to what you set in config/enabled.yaml
+   - Example: If enabled.yaml has "myService: true", use "| default true"
+   - Example: If enabled.yaml has "myService: false", use "| default false"
 4. Document the base default value in this header comment
 
 This ensures Helmfile parsing never fails due to missing keys.
