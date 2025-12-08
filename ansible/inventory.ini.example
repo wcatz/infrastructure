@@ -6,18 +6,22 @@
 #
 # The control plane runs only the K3s server with no workloads (taints applied).
 # Worker nodes handle all application workloads and ingress traffic.
+#
+# Hostname Naming Convention: [function]-[environment]-[sequence]
+# See: docs/HOSTNAME_NAMING_CONVENTION.md for details
 
 [k3s_servers]
 # k3s control plane node (home/CGNAT environment)
 # No workloads - only runs K3s control plane
 # Uses Tailscale for secure communication with workers
-# k3s-control ansible_host=100.64.x.x ansible_user=ubuntu k3s_node_taint=true
+# k3s-prod-01 ansible_host=100.64.1.10 ansible_user=ubuntu hostname=k3s-prod-01 k3s_node_taint=true
 
 [k3s_agents]
 # k3s worker nodes (public IP, e.g., Netcup VPS)
 # Runs all workloads and handles ingress via Cloudflared
 # Uses Tailscale for secure control plane communication
-# k3s-worker-01 ansible_host=x.x.x.x ansible_user=ubuntu k3s_node_label="node-role=worker"
+# k3s-prod-02 ansible_host=203.0.113.10 ansible_user=ubuntu hostname=k3s-prod-02 k3s_node_label="node-role=worker"
+# k3s-prod-03 ansible_host=203.0.113.11 ansible_user=ubuntu hostname=k3s-prod-03 k3s_node_label="node-role=worker"
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3

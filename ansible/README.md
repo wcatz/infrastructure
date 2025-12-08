@@ -105,6 +105,7 @@ ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass ansible-playbook playbooks/deploy-k3s.ya
   - Traefik and servicelb disabled
 - **tailscale**: Installs Tailscale VPN on all nodes (required for hybrid setup)
 - **hostname**: Configures system hostnames
+  - See [Hostname Naming Convention](../docs/HOSTNAME_NAMING_CONVENTION.md) for standardized naming format
 
 ## Encrypted Variables
 
