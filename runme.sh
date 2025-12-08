@@ -503,13 +503,15 @@ print_info "Checking cluster nodes..."
 if kubectl get nodes &> /dev/null; then
     kubectl get nodes
     
-    # Verify all nodes are Ready
-    NOT_READY=$(kubectl get nodes --no-headers 2>/dev/null | grep -v " Ready" | wc -l)
-    if [ "$NOT_READY" -eq 0 ]; then
-        print_success "All nodes are Ready"
+    # Verify all nodes are Ready - count nodes with Ready status
+    TOTAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+    READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | awk '$2 == "Ready" {count++} END {print count+0}')
+    
+    if [ "$READY_NODES" -eq "$TOTAL_NODES" ] && [ "$TOTAL_NODES" -gt 0 ]; then
+        print_success "All nodes are Ready ($READY_NODES/$TOTAL_NODES)"
     else
-        print_warning "$NOT_READY node(s) not in Ready state"
-        kubectl get nodes | grep -v " Ready " || true
+        print_warning "Not all nodes are Ready ($READY_NODES/$TOTAL_NODES)"
+        kubectl get nodes --no-headers 2>/dev/null | awk '$2 != "Ready" {print}' || true
     fi
 else
     print_error "Cannot query nodes - cluster may not be accessible"
@@ -555,7 +557,8 @@ fi
 
 # Test DNS functionality
 print_info "Testing DNS resolution..."
-if kubectl run dns-test --image=busybox:1.28 --rm -i --restart=Never --command -- nslookup kubernetes.default &> /tmp/dns-test.log 2>&1; then
+DNS_TEST_POD="dns-test-$(date +%s)"
+if kubectl run "$DNS_TEST_POD" --image=busybox:1.28 --rm -i --restart=Never --command -- nslookup kubernetes.default &> /tmp/dns-test.log 2>&1; then
     print_success "DNS resolution is working"
 else
     # Check if it's just because the pod already exists or other temporary issue
