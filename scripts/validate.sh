@@ -198,29 +198,50 @@ fi
 # Validate Helmfile templates
 echo ""
 echo "Validating Helmfile templates..."
-if [ -f "helmfile/helmfile.gotmpl" ]; then
-    print_info "Found helmfile.gotmpl, validating template syntax..."
-    cd helmfile
-    if command -v helmfile &> /dev/null; then
-        if helmfile -f helmfile.gotmpl template &> /tmp/helmfile-validation.log 2>&1; then
-            print_success "Helmfile template syntax is valid"
-        else
-            # Check if it's just missing values/secrets (acceptable in CI)
-            if grep -qiE "\bno such file\b|secret.*not found|value.*required" /tmp/helmfile-validation.log; then
-                print_warning "Helmfile template validation skipped (missing runtime values - expected in CI)"
-            else
-                print_error "Helmfile template has syntax errors"
-                head -10 /tmp/helmfile-validation.log
-            fi
-        fi
-    else
-        print_warning "helmfile not installed, skipping template validation"
-    fi
-    cd ..
+
+# Check for Helmfile configuration in order of precedence
+HF_FILE=""
+if [ -f "helmfile/helmfile.yaml.gotmpl" ]; then
+    HF_FILE="helmfile.yaml.gotmpl"
+    print_success "Found helmfile.yaml.gotmpl"
+elif [ -f "helmfile/helmfile.gotmpl" ]; then
+    HF_FILE="helmfile.gotmpl"
+    print_success "Found helmfile.gotmpl"
 elif [ -f "helmfile/helmfile.yaml" ]; then
+    HF_FILE="helmfile.yaml"
     print_success "Found helmfile.yaml (standard format)"
 else
     print_warning "No Helmfile configuration found"
+fi
+
+# Validate template syntax if file was found and contains templates
+if [ -n "$HF_FILE" ]; then
+    cd helmfile
+    
+    # Check if file contains Go templates
+    if grep -q '{{' "$HF_FILE" || grep -q '}}' "$HF_FILE"; then
+        print_info "Validating Helmfile template syntax..."
+        
+        if command -v helmfile &> /dev/null; then
+            if helmfile -f "$HF_FILE" template &> /tmp/helmfile-validation.log 2>&1; then
+                print_success "Helmfile template syntax is valid"
+            else
+                # Check if it's just missing values/secrets (acceptable in CI)
+                if grep -qiE "\bno such file\b|secret.*not found|value.*required" /tmp/helmfile-validation.log; then
+                    print_warning "Helmfile template validation skipped (missing runtime values - expected in CI)"
+                else
+                    print_error "Helmfile template has syntax errors"
+                    head -10 /tmp/helmfile-validation.log
+                fi
+            fi
+        else
+            print_warning "helmfile not installed, skipping template validation"
+        fi
+    else
+        print_info "No Go templates detected in $HF_FILE, skipping template validation"
+    fi
+    
+    cd ..
 fi
 
 # Validate Kubernetes cluster health (if accessible)
