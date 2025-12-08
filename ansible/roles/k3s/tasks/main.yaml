@@ -1,5 +1,5 @@
 ---
-# Tasks for k3s role
+# roles/k3s/tasks/main.yaml
 
 - name: Download k3s installation script
   ansible.builtin.get_url:
@@ -7,86 +7,97 @@
     dest: /tmp/k3s-install.sh
     mode: '0755'
 
-- name: Install k3s server
+- name: Check if K3s certificate includes Tailscale IP
+  ansible.builtin.shell: |
+    if [ -f /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.crt ]; then
+      openssl x509 -in /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.crt -text -noout | grep -q "{{ hostvars[inventory_hostname]['ansible_host'] }}"
+      echo $?
+    else
+      echo 1
+    fi
+  register: cert_check
+  become: true
+  when: k3s_server_enabled
+  changed_when: false
+
+- name: Uninstall K3s if certificate is missing Tailscale IP
+  ansible.builtin.command: /usr/local/bin/k3s-uninstall.sh
+  become: true
+  when: 
+    - k3s_server_enabled
+    - cert_check.stdout | int != 0
+  ignore_errors: true
+
+- name: Install K3s server
   ansible.builtin.shell: |
     INSTALL_K3S_VERSION={{ k3s_version }} \
     K3S_TOKEN={{ k3s_token | default('') }} \
     sh /tmp/k3s-install.sh server {{ k3s_server_args | join(' ') }} \
+    --node-name={{ inventory_hostname }} \
+    --tls-san={{ hostvars[inventory_hostname]['ansible_host'] }} \
     {% if k3s_node_labels | length > 0 %}{% for label in k3s_node_labels %}--node-label={{ label }} {% endfor %}{% endif %}
-  args:
-    creates: /usr/local/bin/k3s
-  when: k3s_server_enabled
-  notify: Restart k3s
-
-- name: Wait for k3s to be ready
-  ansible.builtin.wait_for:
-    path: /etc/rancher/k3s/k3s.yaml
-    state: present
-    timeout: 300
+  become: true
   when: k3s_server_enabled
 
-- name: Create .kube directory
-  ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.kube"
-    state: directory
-    mode: '0755'
-  when: k3s_server_enabled
-
-- name: Copy kubeconfig to .kube/config
-  ansible.builtin.copy:
-    src: /etc/rancher/k3s/k3s.yaml
-    dest: "{{ ansible_env.HOME }}/.kube/config"
-    remote_src: true
-    mode: '0600'
-  when: k3s_server_enabled
-
-- name: Validate k3s_token for agent installation
-  ansible.builtin.assert:
-    that:
-      - k3s_token is defined
-      - k3s_token | length > 0
-    fail_msg: "k3s_token must be set for agent nodes"
-  when: k3s_agent_enabled
-
-- name: Install k3s agent
+- name: Install K3s agent
   ansible.builtin.shell: |
     INSTALL_K3S_VERSION={{ k3s_version }} \
     K3S_URL=https://{{ hostvars[groups['k3s_servers'][0]]['ansible_host'] }}:6443 \
     K3S_TOKEN={{ k3s_token }} \
     sh /tmp/k3s-install.sh agent \
     {% if k3s_node_labels | length > 0 %}{% for label in k3s_node_labels %}--node-label={{ label }} {% endfor %}{% endif %}
-  args:
-    creates: /usr/local/bin/k3s
+  become: true
   when: k3s_agent_enabled
-  notify: Restart k3s
+
+- name: Wait for k3s.yaml to appear on server
+  ansible.builtin.wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    state: present
+    timeout: 300
+  when: k3s_server_enabled
+
+- name: Get local user home directory
+  ansible.builtin.set_fact:
+    local_home: "{{ lookup('env', 'HOME') }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Ensure local .kube directory exists
+  ansible.builtin.file:
+    path: "{{ local_home }}/.kube"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: Copy kubeconfig to local machine
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ local_home }}/.kube/k3s-{{ inventory_hostname }}.yaml"
+    flat: yes
+    fail_on_missing: yes
+  become: true
+  when: k3s_server_enabled
+
+- name: Patch kubeconfig to use Tailscale IP
+  ansible.builtin.lineinfile:
+    path: "{{ local_home }}/.kube/k3s-{{ inventory_hostname }}.yaml"
+    regexp: '^\s+server:\s+https://.*:6443'
+    line: "    server: https://{{ hostvars[inventory_hostname]['ansible_host'] }}:6443"
+  delegate_to: localhost
+  when: k3s_server_enabled
 
 - name: Wait for node to be ready
   ansible.builtin.shell: |
-    kubectl wait --for=condition=Ready node/$(hostname) --timeout=300s
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  when: k3s_server_enabled or k3s_agent_enabled
+    KUBECONFIG={{ local_home }}/.kube/k3s-{{ inventory_hostname }}.yaml \
+    kubectl wait --for=condition=Ready node --all --timeout=300s
+  delegate_to: localhost
+  retries: 10
+  delay: 15
   register: node_ready
   until: node_ready.rc == 0
-  retries: 5
-  delay: 10
   changed_when: false
-
-- name: Apply control plane taint (no workloads on control plane)
-  ansible.builtin.shell: |
-    kubectl taint nodes $(hostname) node-role.kubernetes.io/control-plane=:NoSchedule --overwrite
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  when: k3s_server_enabled and (k3s_node_taint | default(false))
-  changed_when: true
-
-- name: Label worker nodes
-  ansible.builtin.shell: |
-    kubectl label nodes $(hostname) {{ k3s_node_label }} --overwrite
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-  when: k3s_agent_enabled and k3s_node_label is defined
-  changed_when: true
+  when: k3s_server_enabled
 
 - name: Verify k3s installation
   ansible.builtin.command: k3s --version

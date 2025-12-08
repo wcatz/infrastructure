@@ -11,14 +11,14 @@ k3s_server_args:
   - "--disable=traefik"
   - "--disable=servicelb"
   - "--write-kubeconfig-mode=644"
-  - "--flannel-backend=none"
-  - "--disable-network-policy"
 
 # Components disabled for hybrid cluster:
 # - traefik: Using Cloudflared for HTTP/S ingress
 # - servicelb: Using NodePort/hostNetwork for TCP exposure
-# - flannel: Using Tailscale for node-to-node networking
-# - network-policy: Tailscale handles network security
+# 
+# Flannel CNI is ENABLED (default) for pod networking
+# Tailscale provides secure node-to-node communication (L3 VPN)
+# Both are needed: Flannel for pods, Tailscale for nodes
 
 # Node labels for workload placement
 k3s_node_labels: []
