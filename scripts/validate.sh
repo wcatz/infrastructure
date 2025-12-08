@@ -219,7 +219,8 @@ if [ -n "$HF_FILE" ]; then
     cd helmfile
     
     # Check if file contains Go templates
-    if grep -q '{{' "$HF_FILE" || grep -q '}}' "$HF_FILE"; then
+    # Use a more precise pattern to detect actual Go template syntax
+    if grep -qE '{{\s*[^}]*\s*}}' "$HF_FILE"; then
         print_info "Validating Helmfile template syntax..."
         
         if command -v helmfile &> /dev/null; then

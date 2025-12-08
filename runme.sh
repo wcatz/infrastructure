@@ -394,9 +394,11 @@ print_section "Step 5: Deploying Infrastructure Services via Helmfile"
 print_info "Deploying services with Helmfile..."
 cd helmfile
 
-# Auto-detect Helmfile configuration file
-# Helmfile automatically detects helmfile.yaml or helmfile.yaml.gotmpl
-# We'll check in order of precedence
+# Detect Helmfile configuration file
+# Check for helmfile configuration files in order of precedence:
+# 1. helmfile.yaml.gotmpl (Go template format - current standard)
+# 2. helmfile.gotmpl (legacy Go template format)
+# 3. helmfile.yaml (standard YAML format)
 HF_FILE=""
 if [ -f "helmfile.yaml.gotmpl" ]; then
   HF_FILE="helmfile.yaml.gotmpl"
