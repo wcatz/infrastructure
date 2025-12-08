@@ -23,7 +23,7 @@
 - name: Uninstall K3s if certificate is missing Tailscale IP
   ansible.builtin.command: /usr/local/bin/k3s-uninstall.sh
   become: true
-  when: 
+  when:
     - k3s_server_enabled
     - cert_check.stdout | int != 0
   ignore_errors: true

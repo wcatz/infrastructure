@@ -1,7 +1,9 @@
 # Ansible
 ansible/inventory.ini
+ansible/inventory-*.ini
 ansible/*.retry
 ansible/.vault_pass
+ansible/.vault_pass.tmp
 ansible/group_vars/all/vault.yml
 *.pyc
 __pycache__/
@@ -10,11 +12,21 @@ __pycache__/
 helmfile/secrets/
 *.dec
 *-dec.yaml
+*.enc
+
+# SOPS
+.sops.yaml
+*-secrets.yaml
 
 # Cloudflare credentials (should be in Kubernetes secrets, not in git)
 *.pem
+*.key
+*.crt
+*.p12
 credentials.json
 cert.pem
+*-key.json
+service-account*.json
 
 # OS files
 .DS_Store
@@ -34,3 +46,10 @@ Thumbs.db
 # Temporary files
 /tmp/
 *.tmp
+*.bak
+*.orig
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+.kube/

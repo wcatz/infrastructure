@@ -15,7 +15,7 @@ k3s_server_args:
 # Components disabled for hybrid cluster:
 # - traefik: Using Cloudflared for HTTP/S ingress
 # - servicelb: Using NodePort/hostNetwork for TCP exposure
-# 
+#
 # Flannel CNI is ENABLED (default) for pod networking
 # Tailscale provides secure node-to-node communication (L3 VPN)
 # Both are needed: Flannel for pods, Tailscale for nodes

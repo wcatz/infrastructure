@@ -12,3 +12,4 @@ rules:
 ignore: |
   helmfile/helmfile.yaml.gotmpl
   helmfile/config/*.gotmpl
+  helmfile/charts/*/templates/
