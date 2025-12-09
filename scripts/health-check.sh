@@ -105,6 +105,9 @@ echo ""
 echo "=== 5. Secret Exposure Scan ==="
 echo "Scanning for pods with exposed secrets in environment variables..."
 
+# Initialize variable
+EXPOSED_COUNT=0
+
 # Check if jq is available
 if ! command -v jq &> /dev/null; then
     echo -e "${YELLOW}⚠️  jq not installed, skipping secret exposure scan${NC}"
