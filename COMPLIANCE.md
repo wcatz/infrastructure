@@ -54,7 +54,7 @@ This infrastructure implements a comprehensive security and compliance framework
 
 **Purpose**: Scan for secrets in repository code and git history
 
-**Workflow**: `.github/workflows/trufflehog-secrets-scan.yaml`
+<!-- TruffleHog workflow not yet implemented; reference removed -->
 
 **Schedule**:
 - ✅ **Push to main/develop**: Immediate scan
