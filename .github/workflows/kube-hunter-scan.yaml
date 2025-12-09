@@ -135,7 +135,7 @@ jobs:
                 restartPolicy: Never
                 containers:
                   - name: kube-hunter
-                    image: aquasec/kube-hunter:latest
+                    image: aquasec/kube-hunter:v0.6.8
                     command: ["kube-hunter"]
                     args: ["--pod", "--report", "json"]
             backoffLimit: 0
