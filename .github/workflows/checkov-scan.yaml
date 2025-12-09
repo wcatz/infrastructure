@@ -1,0 +1,197 @@
+name: Checkov IaC Security Scan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    paths:
+      - 'helmfile/**'
+      - 'ansible/**'
+      - 'kubernetes-examples/**'
+      - '.github/workflows/checkov-scan.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  checkov:
+    runs-on: ubuntu-latest
+    name: IaC Security Scan with Checkov
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Checkov
+        run: |
+          pip install checkov
+
+      - name: Run Checkov on Helm Charts
+        id: checkov-helm
+        run: |
+          echo "## 📊 Scanning Helm Charts" >> $GITHUB_STEP_SUMMARY
+          checkov --directory helmfile/charts \
+            --framework helm \
+            --output cli \
+            --output json \
+            --output-file-path console,checkov-helm-results.json \
+            --soft-fail || true
+
+      - name: Run Checkov on Kubernetes Manifests
+        id: checkov-k8s
+        run: |
+          echo "## 📊 Scanning Kubernetes Manifests" >> $GITHUB_STEP_SUMMARY
+          checkov --directory helmfile/manifests \
+            --framework kubernetes \
+            --output cli \
+            --output json \
+            --output-file-path console,checkov-k8s-results.json \
+            --soft-fail || true
+
+      - name: Run Checkov on Helmfile Values
+        id: checkov-values
+        run: |
+          echo "## 📊 Scanning Helmfile Values" >> $GITHUB_STEP_SUMMARY
+          checkov --directory helmfile/values \
+            --framework kubernetes \
+            --output cli \
+            --output json \
+            --output-file-path console,checkov-values-results.json \
+            --soft-fail || true
+
+      - name: Run Checkov on Ansible Playbooks
+        id: checkov-ansible
+        run: |
+          echo "## 📊 Scanning Ansible Playbooks" >> $GITHUB_STEP_SUMMARY
+          checkov --directory ansible \
+            --framework ansible \
+            --output cli \
+            --output json \
+            --output-file-path console,checkov-ansible-results.json \
+            --soft-fail || true
+
+      - name: Run Checkov Full Scan with SARIF
+        run: |
+          checkov --directory . \
+            --framework helm,kubernetes,ansible \
+            --output sarif \
+            --output-file-path console,checkov-results.sarif \
+            --skip-path .git \
+            --skip-path node_modules \
+            --soft-fail || true
+
+      - name: Upload Checkov SARIF results to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: success() || failure()
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+
+      - name: Upload Checkov results as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkov-results
+          path: |
+            checkov-*.json
+            checkov-*.sarif
+          retention-days: 30
+
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          echo "## 🔒 Checkov IaC Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Parse results if available
+          if [ -f checkov-helm-results.json ]; then
+            echo "### Helm Charts Scan" >> $GITHUB_STEP_SUMMARY
+            HELM_PASSED=$(jq -r '.summary.passed' checkov-helm-results.json || echo "0")
+            HELM_FAILED=$(jq -r '.summary.failed' checkov-helm-results.json || echo "0")
+            echo "- ✅ Passed: $HELM_PASSED checks" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ Failed: $HELM_FAILED checks" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f checkov-k8s-results.json ]; then
+            echo "### Kubernetes Manifests Scan" >> $GITHUB_STEP_SUMMARY
+            K8S_PASSED=$(jq -r '.summary.passed' checkov-k8s-results.json || echo "0")
+            K8S_FAILED=$(jq -r '.summary.failed' checkov-k8s-results.json || echo "0")
+            echo "- ✅ Passed: $K8S_PASSED checks" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ Failed: $K8S_FAILED checks" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f checkov-ansible-results.json ]; then
+            echo "### Ansible Playbooks Scan" >> $GITHUB_STEP_SUMMARY
+            ANSIBLE_PASSED=$(jq -r '.summary.passed' checkov-ansible-results.json || echo "0")
+            ANSIBLE_FAILED=$(jq -r '.summary.failed' checkov-ansible-results.json || echo "0")
+            echo "- ✅ Passed: $ANSIBLE_PASSED checks" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ Failed: $ANSIBLE_FAILED checks" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "### 📚 Documentation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For detailed security guidelines, see:" >> $GITHUB_STEP_SUMMARY
+          echo "- [SECURITY.md](SECURITY.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [SECRETS.md](SECRETS.md)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Full results available in the Security tab and downloadable artifacts." >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment PR with Checkov Results
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request' && (success() || failure())
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            
+            let comment = '## 🔒 Checkov IaC Security Scan Results\n\n';
+            
+            const files = [
+              { name: 'Helm Charts', file: 'checkov-helm-results.json' },
+              { name: 'Kubernetes Manifests', file: 'checkov-k8s-results.json' },
+              { name: 'Helmfile Values', file: 'checkov-values-results.json' },
+              { name: 'Ansible Playbooks', file: 'checkov-ansible-results.json' }
+            ];
+            
+            for (const {name, file} of files) {
+              if (fs.existsSync(file)) {
+                try {
+                  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+                  const summary = data.summary || {};
+                  comment += `### ${name}\n`;
+                  comment += `- ✅ Passed: ${summary.passed || 0} checks\n`;
+                  comment += `- ❌ Failed: ${summary.failed || 0} checks\n`;
+                  comment += `- ⏭️ Skipped: ${summary.skipped || 0} checks\n\n`;
+                } catch (e) {
+                  comment += `### ${name}\n`;
+                  comment += `⚠️ Unable to parse results\n\n`;
+                }
+              }
+            }
+            
+            comment += '\n### 📋 Next Steps\n\n';
+            comment += '- Review failed checks in the Security tab\n';
+            comment += '- Address critical and high severity issues\n';
+            comment += '- Update `.checkov.yaml` to skip known false positives\n';
+            comment += '- See [SECURITY.md](SECURITY.md) for security best practices\n';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

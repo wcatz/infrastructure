@@ -1,0 +1,56 @@
+# TruffleHog Configuration
+# https://github.com/trufflesecurity/trufflehog
+
+# Enable verification of found secrets against their respective APIs
+verify: true
+
+# Exclude paths that are known to contain example/encrypted data
+exclude:
+  # Encrypted SOPS files are safe to commit
+  paths:
+    - '**/*.enc.yaml'
+    - '**/*.enc.yml'
+    - '**/vault.yml'  # Ansible vault encrypted
+    - '**/.sops.yaml'
+    - 'kubernetes-examples/**'  # Example manifests
+    - 'docs/**/*.md'  # Documentation examples
+    - 'SECRETS.md'  # Contains example secret patterns
+    - 'SECURITY.md'  # Contains security documentation
+    - '.git/**'
+
+  # Exclude specific detectors that may have false positives
+  detectors:
+    # Add specific detectors to exclude if needed
+    # Example: - 'AWS'
+
+# Allow specific secret patterns (for example secrets only)
+# Be very careful with this - only use for known safe patterns
+allowlist:
+  # Example patterns that are safe (use generic placeholders)
+  patterns:
+    - 'age1x{60}'  # Example age key format in docs (60 x's)
+    - 'ghp_x{36}'  # Example GitHub token format in docs  
+    - 'tskey-auth-kX{15}'  # Example Tailscale key format
+    - 'example\.com'
+    - 'changeme'
+    - 'change-me'
+    - 'placeholder'
+    - 'your-.*-here'
+    - 'password.*example'
+    - 'secret.*example'
+  
+  # Paths with known example secrets
+  paths:
+    - 'ansible/group_vars/all/vault.yml.example'
+    - 'ansible/.vault_pass.example'
+    - '**/README.md'
+    - 'SECRETS.md'
+    - 'kubernetes-examples/**'
+
+# Maximum depth to scan in git history (0 = unlimited)
+# Set to a reasonable number for performance
+max_depth: 1000
+
+# Ignore commits older than this date (format: YYYY-MM-DD)
+# Uncomment and set if you have a known-clean baseline
+# since: "2024-01-01"

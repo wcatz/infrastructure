@@ -168,9 +168,11 @@ helmfile apply
 | **[Ansible Guide](docs/ansible.md)** | Infrastructure automation and playbooks |
 | **[Helmfile Guide](docs/helmfile.md)** | Service deployment and configuration |
 | **[Security Policy](SECURITY.md)** | Security measures, incident response, and compliance |
+| **[Compliance Guide](COMPLIANCE.md)** | Audit procedures, compliance framework, and tool ownership |
 
 ### 🚀 Quick References
 
+- **[Compliance Framework](COMPLIANCE.md)** - Audit schedules, compliance procedures, and security tools
 - **[Secret Management Guide](SECRETS.md)** - Complete guide to SOPS, Ansible Vault, rotation, and audits
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to this project
 - **[Changelog](CHANGELOG.md)** - Version history and changes
@@ -199,6 +201,28 @@ Deployed automatically via Helmfile:
 - **GitHub Actions**: CI/CD workflows for testing and deployment
 - **Secret Management**: SOPS encryption + Ansible Vault
 - **Validation Scripts**: Automated prerequisite and deployment checks
+
+### 🔒 Security & Compliance
+
+Production-ready security with automated auditing and compliance:
+
+- **🔍 TruffleHog**: Daily secrets scanning in code and git history
+- **🛡️ Checkov**: IaC security scanning for Helm, K8s, and Ansible
+- **📦 Dependabot**: Automated dependency updates and vulnerability alerts
+- **⚙️ kube-bench**: Monthly CIS Kubernetes benchmark audits
+- **🦁 kube-hunter**: Monthly Kubernetes security scanning
+- **🔐 Ansible Hardening**: OS-level security hardening (SSH, firewall, kernel)
+- **📋 Compliance Framework**: Comprehensive audit schedules and procedures
+
+**Key Security Features**:
+- ✅ Encrypted secrets at rest and in transit
+- ✅ Automated vulnerability detection
+- ✅ Regular security audits
+- ✅ GitOps with mandatory PR reviews
+- ✅ Branch protection and automated testing
+- ✅ Comprehensive documentation
+
+See **[COMPLIANCE.md](COMPLIANCE.md)** for detailed audit procedures and **[SECURITY.md](SECURITY.md)** for security policies.
 
 ## Contributing
 

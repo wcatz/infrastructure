@@ -1,0 +1,261 @@
+name: kube-bench Security Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      node_type:
+        description: 'Node type to audit (control-plane, worker, or both)'
+        required: true
+        type: choice
+        options:
+          - both
+          - control-plane
+          - worker
+        default: 'both'
+  schedule:
+    # Run monthly on the 1st at 3 AM UTC
+    - cron: '0 3 1 * *'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  kube-bench-audit:
+    runs-on: ubuntu-latest
+    name: CIS Kubernetes Benchmark Audit
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure Kubernetes Context
+        env:
+          KUBECONFIG_PRODUCTION: ${{ secrets.KUBECONFIG_PRODUCTION }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Run kube-bench on Control Plane
+        if: |
+          github.event.inputs.node_type == 'both' || 
+          github.event.inputs.node_type == 'control-plane' || 
+          github.event_name == 'schedule'
+        run: |
+          echo "## 🔍 Running kube-bench on Control Plane Nodes" >> $GITHUB_STEP_SUMMARY
+          
+          # Run kube-bench as a Job on control plane nodes
+          kubectl apply -f - <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: kube-bench-control-plane-${{ github.run_id }}
+            namespace: default
+          spec:
+            template:
+              metadata:
+                labels:
+                  app: kube-bench
+                  scan-type: control-plane
+              spec:
+                hostPID: true
+                nodeSelector:
+                  node-role.kubernetes.io/control-plane: "true"
+                tolerations:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+                    effect: NoSchedule
+                containers:
+                  - name: kube-bench
+                    image: aquasec/kube-bench:v0.7.1
+                    command: ["kube-bench", "run", "--targets", "master", "--json"]
+                    volumeMounts:
+                      - name: var-lib-etcd
+                        mountPath: /var/lib/etcd
+                        readOnly: true
+                      - name: var-lib-kubelet
+                        mountPath: /var/lib/kubelet
+                        readOnly: true
+                      - name: etc-systemd
+                        mountPath: /etc/systemd
+                        readOnly: true
+                      - name: lib-systemd
+                        mountPath: /lib/systemd/
+                        readOnly: true
+                      - name: etc-kubernetes
+                        mountPath: /etc/kubernetes
+                        readOnly: true
+                      - name: usr-bin
+                        mountPath: /usr/local/mount-from-host/bin
+                        readOnly: true
+                restartPolicy: Never
+                volumes:
+                  - name: var-lib-etcd
+                    hostPath:
+                      path: "/var/lib/etcd"
+                  - name: var-lib-kubelet
+                    hostPath:
+                      path: "/var/lib/kubelet"
+                  - name: etc-systemd
+                    hostPath:
+                      path: "/etc/systemd"
+                  - name: lib-systemd
+                    hostPath:
+                      path: "/lib/systemd"
+                  - name: etc-kubernetes
+                    hostPath:
+                      path: "/etc/kubernetes"
+                  - name: usr-bin
+                    hostPath:
+                      path: "/usr/bin"
+            backoffLimit: 0
+          EOF
+          
+          # Wait for job to complete
+          kubectl wait --for=condition=complete --timeout=300s job/kube-bench-control-plane-${{ github.run_id }} || true
+          
+          # Get logs
+          kubectl logs job/kube-bench-control-plane-${{ github.run_id }} > kube-bench-control-plane.json || true
+          
+          # Clean up
+          kubectl delete job kube-bench-control-plane-${{ github.run_id }} || true
+
+      - name: Run kube-bench on Worker Nodes
+        if: |
+          github.event.inputs.node_type == 'both' || 
+          github.event.inputs.node_type == 'worker' || 
+          github.event_name == 'schedule'
+        run: |
+          echo "## 🔍 Running kube-bench on Worker Nodes" >> $GITHUB_STEP_SUMMARY
+          
+          # Run kube-bench as a DaemonSet on worker nodes
+          kubectl apply -f - <<EOF
+          apiVersion: apps/v1
+          kind: DaemonSet
+          metadata:
+            name: kube-bench-worker-${{ github.run_id }}
+            namespace: default
+          spec:
+            selector:
+              matchLabels:
+                app: kube-bench
+                scan-type: worker
+            template:
+              metadata:
+                labels:
+                  app: kube-bench
+                  scan-type: worker
+              spec:
+                hostPID: true
+                # K3s uses node-role.kubernetes.io/agent for worker nodes
+                # If this doesn't match, remove the nodeSelector to run on all nodes
+                nodeSelector:
+                  node-role.kubernetes.io/agent: "true"
+                containers:
+                  - name: kube-bench
+                    image: aquasec/kube-bench:v0.7.1
+                    command: ["kube-bench", "run", "--targets", "node", "--json"]
+                    volumeMounts:
+                      - name: var-lib-kubelet
+                        mountPath: /var/lib/kubelet
+                        readOnly: true
+                      - name: etc-systemd
+                        mountPath: /etc/systemd
+                        readOnly: true
+                      - name: lib-systemd
+                        mountPath: /lib/systemd/
+                        readOnly: true
+                      - name: etc-kubernetes
+                        mountPath: /etc/kubernetes
+                        readOnly: true
+                      - name: usr-bin
+                        mountPath: /usr/local/mount-from-host/bin
+                        readOnly: true
+                volumes:
+                  - name: var-lib-kubelet
+                    hostPath:
+                      path: "/var/lib/kubelet"
+                  - name: etc-systemd
+                    hostPath:
+                      path: "/etc/systemd"
+                  - name: lib-systemd
+                    hostPath:
+                      path: "/lib/systemd"
+                  - name: etc-kubernetes
+                    hostPath:
+                      path: "/etc/kubernetes"
+                  - name: usr-bin
+                    hostPath:
+                      path: "/usr/bin"
+          EOF
+          
+          # Wait for pods to be ready
+          sleep 30
+          
+          # Get logs from one worker node
+          WORKER_POD=$(kubectl get pods -l app=kube-bench,scan-type=worker -o jsonpath='{.items[0].metadata.name}')
+          if [ -n "$WORKER_POD" ]; then
+            kubectl logs $WORKER_POD > kube-bench-worker.json || true
+          fi
+          
+          # Clean up
+          kubectl delete daemonset kube-bench-worker-${{ github.run_id }} || true
+
+      - name: Parse and Upload Results
+        if: always()
+        run: |
+          echo "## 📊 kube-bench Audit Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Audit completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Parse control plane results if available
+          if [ -f kube-bench-control-plane.json ]; then
+            echo "### Control Plane Node Results" >> $GITHUB_STEP_SUMMARY
+            TOTAL=$(jq -r '.Totals.total_pass + .Totals.total_fail + .Totals.total_warn + .Totals.total_info' kube-bench-control-plane.json 2>/dev/null || echo "0")
+            PASS=$(jq -r '.Totals.total_pass' kube-bench-control-plane.json 2>/dev/null || echo "0")
+            FAIL=$(jq -r '.Totals.total_fail' kube-bench-control-plane.json 2>/dev/null || echo "0")
+            WARN=$(jq -r '.Totals.total_warn' kube-bench-control-plane.json 2>/dev/null || echo "0")
+            echo "- ✅ Pass: $PASS" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ Fail: $FAIL" >> $GITHUB_STEP_SUMMARY
+            echo "- ⚠️  Warn: $WARN" >> $GITHUB_STEP_SUMMARY
+            echo "- ℹ️  Total checks: $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Parse worker results if available
+          if [ -f kube-bench-worker.json ]; then
+            echo "### Worker Node Results" >> $GITHUB_STEP_SUMMARY
+            TOTAL=$(jq -r '.Totals.total_pass + .Totals.total_fail + .Totals.total_warn + .Totals.total_info' kube-bench-worker.json 2>/dev/null || echo "0")
+            PASS=$(jq -r '.Totals.total_pass' kube-bench-worker.json 2>/dev/null || echo "0")
+            FAIL=$(jq -r '.Totals.total_fail' kube-bench-worker.json 2>/dev/null || echo "0")
+            WARN=$(jq -r '.Totals.total_warn' kube-bench-worker.json 2>/dev/null || echo "0")
+            echo "- ✅ Pass: $PASS" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ Fail: $FAIL" >> $GITHUB_STEP_SUMMARY
+            echo "- ⚠️  Warn: $WARN" >> $GITHUB_STEP_SUMMARY
+            echo "- ℹ️  Total checks: $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "### 📚 Documentation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review the CIS Kubernetes Benchmark results and address any failures." >> $GITHUB_STEP_SUMMARY
+          echo "See detailed results in the downloaded artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For remediation guidance, see:" >> $GITHUB_STEP_SUMMARY
+          echo "- [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes)" >> $GITHUB_STEP_SUMMARY
+          echo "- [kube-bench Documentation](https://github.com/aquasecurity/kube-bench)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload kube-bench results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kube-bench-results
+          path: |
+            kube-bench-*.json
+          retention-days: 90
