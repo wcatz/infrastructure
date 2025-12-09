@@ -139,12 +139,11 @@ if [ -f "scripts/health-check.sh" ]; then
         WARNINGS=$((WARNINGS + 1))
     fi
     
-    # Check script syntax using absolute path
-    SCRIPT_PATH="$(pwd)/scripts/health-check.sh"
-    if bash -n "$SCRIPT_PATH" 2>/dev/null; then
+    # Check script syntax - use relative path since script validates from repo root
+    if [ -f "scripts/health-check.sh" ] && bash -n "scripts/health-check.sh" 2>/dev/null; then
         echo -e "${GREEN}✅ Health check script has valid syntax${NC}"
     else
-        echo -e "${RED}❌ Health check script has syntax errors${NC}"
+        echo -e "${RED}❌ Health check script has syntax errors or not found${NC}"
         ERRORS=$((ERRORS + 1))
     fi
 fi

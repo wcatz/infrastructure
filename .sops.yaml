@@ -1,6 +1,10 @@
 # SOPS Configuration
 # This file defines encryption rules for secrets management
 # See: https://github.com/mozilla/sops
+#
+# ⚠️ IMPORTANT: This file contains placeholder age public keys!
+# You MUST replace all 'age1xxxxxxx...' placeholders with your actual age public key
+# before SOPS will work. See SOPS_SETUP.md for instructions.
 
 creation_rules:
   # Default rule: Encrypt all files with age
