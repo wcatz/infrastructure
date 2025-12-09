@@ -139,8 +139,9 @@ if [ -f "scripts/health-check.sh" ]; then
         WARNINGS=$((WARNINGS + 1))
     fi
     
-    # Check script syntax
-    if bash -n scripts/health-check.sh 2>/dev/null; then
+    # Check script syntax using absolute path
+    SCRIPT_PATH="$(pwd)/scripts/health-check.sh"
+    if bash -n "$SCRIPT_PATH" 2>/dev/null; then
         echo -e "${GREEN}✅ Health check script has valid syntax${NC}"
     else
         echo -e "${RED}❌ Health check script has syntax errors${NC}"
@@ -154,19 +155,19 @@ if command -v yamllint &> /dev/null; then
     echo "Running yamllint..."
     
     # Check .sops.yaml
-    if yamllint .sops.yaml 2>&1 | grep -q "error"; then
+    if yamllint .sops.yaml > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ .sops.yaml is valid YAML${NC}"
+    else
         echo -e "${RED}❌ .sops.yaml has YAML errors${NC}"
         ERRORS=$((ERRORS + 1))
-    else
-        echo -e "${GREEN}✅ .sops.yaml is valid YAML${NC}"
     fi
     
     # Check environment configs
-    if yamllint helmfile/environments/*/enabled.yaml 2>&1 | grep -q "error"; then
+    if yamllint helmfile/environments/*/enabled.yaml > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ Environment configs are valid YAML${NC}"
+    else
         echo -e "${RED}❌ Environment configs have YAML errors${NC}"
         ERRORS=$((ERRORS + 1))
-    else
-        echo -e "${GREEN}✅ Environment configs are valid YAML${NC}"
     fi
 else
     echo -e "${YELLOW}⚠️  yamllint not installed, skipping YAML validation${NC}"

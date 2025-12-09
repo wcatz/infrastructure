@@ -104,17 +104,23 @@ echo ""
 # 5. Secret Exposure Check
 echo "=== 5. Secret Exposure Scan ==="
 echo "Scanning for pods with exposed secrets in environment variables..."
-EXPOSED_COUNT=$(kubectl get pods -A -o json 2>/dev/null | \
-    jq -r '.items[] | select(.spec.containers[].env[]? | .name | contains("PASSWORD") or contains("TOKEN") or contains("SECRET")) | "\(.metadata.namespace)/\(.metadata.name)"' | \
-    wc -l)
 
-if [ "$EXPOSED_COUNT" -eq 0 ]; then
-    echo -e "${GREEN}✅ No environment variable secret exposure detected${NC}"
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+    echo -e "${YELLOW}⚠️  jq not installed, skipping secret exposure scan${NC}"
 else
-    echo -e "${YELLOW}⚠️  Found $EXPOSED_COUNT pod(s) with potential secret exposure:${NC}"
-    kubectl get pods -A -o json 2>/dev/null | \
-        jq -r '.items[] | select(.spec.containers[].env[]? | .name | contains("PASSWORD") or contains("TOKEN") or contains("SECRET")) | "\(.metadata.namespace)/\(.metadata.name)"'
-    echo -e "${YELLOW}Note: Review these pods to ensure secrets are properly managed${NC}"
+    EXPOSED_COUNT=$(kubectl get pods -A -o json 2>/dev/null | \
+        jq -r '.items[] | select(.spec.containers[].env[]? | .name | contains("PASSWORD") or contains("TOKEN") or contains("SECRET")) | "\(.metadata.namespace)/\(.metadata.name)"' | \
+        wc -l)
+
+    if [ "$EXPOSED_COUNT" -eq 0 ]; then
+        echo -e "${GREEN}✅ No environment variable secret exposure detected${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Found $EXPOSED_COUNT pod(s) with potential secret exposure:${NC}"
+        kubectl get pods -A -o json 2>/dev/null | \
+            jq -r '.items[] | select(.spec.containers[].env[]? | .name | contains("PASSWORD") or contains("TOKEN") or contains("SECRET")) | "\(.metadata.namespace)/\(.metadata.name)"'
+        echo -e "${YELLOW}Note: Review these pods to ensure secrets are properly managed${NC}"
+    fi
 fi
 echo ""
 
