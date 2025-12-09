@@ -110,15 +110,14 @@ if ! command -v jq &> /dev/null; then
     echo -e "${YELLOW}⚠️  jq not installed, skipping secret exposure scan${NC}"
 else
     EXPOSED_COUNT=$(kubectl get pods -A -o json 2>/dev/null | \
-        jq -r '.items[] | select(.spec.containers[].env[]? | .name | contains("PASSWORD") or contains("TOKEN") or contains("SECRET")) | "\(.metadata.namespace)/\(.metadata.name)"' | \
-        wc -l)
+        jq -r '[.items[] | select(.spec.containers[]?.env[]? | select(.name | test("(?i)(password|token|secret|key|credential)")))] | length')
 
     if [ "$EXPOSED_COUNT" -eq 0 ]; then
         echo -e "${GREEN}✅ No environment variable secret exposure detected${NC}"
     else
         echo -e "${YELLOW}⚠️  Found $EXPOSED_COUNT pod(s) with potential secret exposure:${NC}"
         kubectl get pods -A -o json 2>/dev/null | \
-            jq -r '.items[] | select(.spec.containers[].env[]? | .name | contains("PASSWORD") or contains("TOKEN") or contains("SECRET")) | "\(.metadata.namespace)/\(.metadata.name)"'
+            jq -r '.items[] | select(.spec.containers[]?.env[]? | select(.name | test("(?i)(password|token|secret|key|credential)"))) | "\(.metadata.namespace)/\(.metadata.name)"'
         echo -e "${YELLOW}Note: Review these pods to ensure secrets are properly managed${NC}"
     fi
 fi
@@ -130,8 +129,7 @@ if kubectl get certificates -A &> /dev/null; then
     CERT_COUNT=$(kubectl get certificates -A --no-headers | wc -l)
     if [ "$CERT_COUNT" -gt 0 ]; then
         NOT_READY=$(kubectl get certificates -A -o json | \
-            jq -r '.items[] | select(.status.conditions[]?.status != "True") | .metadata.name' | \
-            wc -l)
+            jq -r '[.items[] | select(.status.conditions[]? | select(.type == "Ready" and .status != "True"))] | length')
         if [ "$NOT_READY" -eq 0 ]; then
             echo -e "${GREEN}✅ All $CERT_COUNT certificate(s) ready${NC}"
         else

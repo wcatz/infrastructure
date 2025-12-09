@@ -194,10 +194,11 @@ else
 fi
 
 # Check example secrets are encrypted format
-if grep -q "ENC\[AES256_GCM" helmfile/secrets/cloudflared-credentials-example.enc.yaml 2>/dev/null; then
-    echo -e "${GREEN}✅ Example secrets use encrypted format${NC}"
+if grep -q "sops:" helmfile/secrets/cloudflared-credentials-example.enc.yaml 2>/dev/null && \
+   grep -q "mac:" helmfile/secrets/cloudflared-credentials-example.enc.yaml 2>/dev/null; then
+    echo -e "${GREEN}✅ Example secrets use SOPS encrypted format${NC}"
 else
-    echo -e "${YELLOW}⚠️  Example secrets don't show encrypted format${NC}"
+    echo -e "${YELLOW}⚠️  Example secrets don't show SOPS format${NC}"
     WARNINGS=$((WARNINGS + 1))
 fi
 

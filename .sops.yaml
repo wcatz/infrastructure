@@ -5,33 +5,34 @@
 creation_rules:
   # Default rule: Encrypt all files with age
   # IMPORTANT: Replace this placeholder with your actual age public key!
+  # Age public keys are exactly 62 characters (after "age1" prefix)
   # Generate your key with: age-keygen -o ~/.config/sops/age/keys.txt
   # View your public key with: cat ~/.config/sops/age/keys.txt | grep "public key:"
   - path_regex: \.enc\.yaml$
     age: >-
-      age1REPLACEME_YOUR_AGE_PUBLIC_KEY_GOES_HERE_xxxxxxxxxxxxxxxxxxxx
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     encrypted_regex: ^(data|stringData)$
 
   # Environment-specific rules
   - path_regex: helmfile/environments/prod/.*\.enc\.yaml$
     age: >-
-      age1REPLACEME_YOUR_AGE_PUBLIC_KEY_GOES_HERE_xxxxxxxxxxxxxxxxxxxx
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     encrypted_regex: ^(data|stringData|password|token|key|secret|credentials)$
 
   - path_regex: helmfile/environments/staging/.*\.enc\.yaml$
     age: >-
-      age1REPLACEME_YOUR_AGE_PUBLIC_KEY_GOES_HERE_xxxxxxxxxxxxxxxxxxxx
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     encrypted_regex: ^(data|stringData|password|token|key|secret|credentials)$
 
   - path_regex: helmfile/environments/dev/.*\.enc\.yaml$
     age: >-
-      age1REPLACEME_YOUR_AGE_PUBLIC_KEY_GOES_HERE_xxxxxxxxxxxxxxxxxxxx
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     encrypted_regex: ^(data|stringData|password|token|key|secret|credentials)$
 
   # Helm values files that contain secrets
   - path_regex: helmfile/values/.*-secrets\.enc\.yaml$
     age: >-
-      age1REPLACEME_YOUR_AGE_PUBLIC_KEY_GOES_HERE_xxxxxxxxxxxxxxxxxxxx
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     encrypted_regex: ^(.*password.*|.*token.*|.*key.*|.*secret.*|.*credentials.*)$
 
 # Important Notes:
