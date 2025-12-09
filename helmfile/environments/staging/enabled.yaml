@@ -1,5 +1,9 @@
 # Staging environment - enabled services configuration
 #
+# ⚠️ SECURITY: Staging environment is DISABLED to mitigate risk
+# Only production environment should be enabled in production deployments
+# Staging can be enabled for pre-production testing when needed
+#
 # This file overrides the default enabled.yaml for the staging environment.
 # Staging should closely mirror production setup for testing.
 #
@@ -7,20 +11,20 @@
 # If a service is not listed here, the default from config/enabled.yaml applies.
 
 enabled:
-  # Monitoring stack
-  prometheus: true
-  grafana: true
+  # Monitoring stack - DISABLED
+  prometheus: false
+  grafana: false
 
-  # Networking
-  cloudflared: true
-  tailscaleOperator: true
+  # Networking - DISABLED
+  cloudflared: false
+  tailscaleOperator: false
 
-  # Secrets management
-  externalSecrets: true
+  # Secrets management - DISABLED
+  externalSecrets: false
 
-  # CI/CD
-  githubRunner: false  # Can be enabled to test GitHub Actions runner deployments in staging
+  # CI/CD - DISABLED
+  githubRunner: false
 
-  # Additional services
-  certManager: true  # Enable to test certificate management
-  velero: false  # Backups optional in staging
+  # Additional services - DISABLED
+  certManager: false
+  velero: false
