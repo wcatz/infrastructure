@@ -64,7 +64,6 @@ Required status checks before merging:
 - ✅ `helm-lint` - Helm chart linting
 - ✅ `security-scan` - Trivy security scanning
 - ✅ `checkov` - IaC security scanning (Checkov)
-- ✅ `trufflehog-scan` - Secrets detection
 - ✅ `helmfile-diff` - Preview Kubernetes changes
 
 **Status check settings**:
