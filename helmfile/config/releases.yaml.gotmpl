@@ -26,7 +26,6 @@ Adding New Releases:
 When adding a new release to this file:
 1. Add the key to config/enabled.yaml with a default value (true/false)
 2. Add the key to all environment-specific enabled.yaml files
-3. Use the pattern: {{- if index $enabled "yourKey" | default <base_default_value> }}
    - Match the default value to what you set in config/enabled.yaml
    - Example: If enabled.yaml has "myService: true", use "| default true"
    - Example: If enabled.yaml has "myService: false", use "| default false"
@@ -81,7 +80,7 @@ releases:
     namespace: cloudflare
     createNamespace: true
     chart: cloudflare/cloudflare-tunnel-remote
-    version: 0.3.0
+    version: 0.1.2
     values:
       - values/cloudflared-values.yaml
       # Environment-specific overrides
