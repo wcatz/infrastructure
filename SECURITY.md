@@ -5,6 +5,7 @@ This document outlines the security measures and best practices for the hybrid K
 ## Table of Contents
 
 - [Overview](#overview)
+- [GitHub Security Features](#github-security-features)
 - [Cluster Health and Security](#cluster-health-and-security)
 - [Secret Exposure Mitigation](#secret-exposure-mitigation)
 - [Environment Isolation](#environment-isolation)
@@ -23,6 +24,174 @@ This infrastructure implements a **defense-in-depth security model** with multip
 3. **Access control**: RBAC, network policies, firewall rules
 4. **Monitoring**: Prometheus alerts, audit logs, secret scanning
 5. **Isolation**: Environment separation, namespace isolation, pod security
+6. **GitHub Security**: Secret scanning, push protection, code scanning
+
+## GitHub Security Features
+
+GitHub provides built-in security features that must be enabled and verified for this repository.
+
+### Required Security Settings
+
+The following security features **MUST** be enabled:
+
+#### 1. Secret Scanning
+
+**Purpose:** Automatically detects and alerts on accidentally committed secrets (API keys, tokens, credentials).
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Secret scanning**
+3. Click **Enable**
+
+**Supports 200+ secret types:**
+- GitHub tokens and SSH keys
+- AWS, Azure, GCP credentials
+- API keys (Stripe, SendGrid, etc.)
+- Private keys and certificates
+- Database connection strings
+- OAuth tokens
+
+#### 2. Push Protection
+
+**Purpose:** Prevents pushing commits that contain secrets to the repository.
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Push protection** (under Secret scanning section)
+3. Click **Enable**
+
+**How it works:**
+- Scans commits before they are pushed
+- Blocks push if secrets detected
+- Provides remediation guidance
+- Can be bypassed with justification (creates audit trail)
+
+#### 3. Code Scanning (CodeQL)
+
+**Purpose:** Identifies security vulnerabilities and coding errors.
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Code scanning**
+3. Click **Set up** → **Advanced**
+4. Add CodeQL workflow (GitHub provides template)
+
+**Benefits:**
+- Detects SQL injection vulnerabilities
+- Identifies hardcoded secrets
+- Finds authentication bypass issues
+- Checks for insecure crypto usage
+
+#### 4. Dependabot Alerts
+
+**Purpose:** Monitors dependencies for known security vulnerabilities.
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Dependabot alerts**
+3. Click **Enable**
+4. Also enable **Dependabot security updates** (auto-creates PRs for fixes)
+
+### Verification Checklist
+
+Use this checklist to verify all security features are properly configured.
+
+A verification script is provided in `scripts/verify-github-security.sh`. It will check:
+- Secret scanning status
+- Push protection status
+- Dependabot alerts status
+- Open security alerts
+- Code scanning status
+
+**Run verification:**
+
+```bash
+# Run with default repository (wcatz/infrastructure)
+./scripts/verify-github-security.sh
+
+# Or specify a different repository via environment variable
+GITHUB_REPOSITORY="owner/repo" ./scripts/verify-github-security.sh
+```
+
+**Example output:**
+
+```
+=== GitHub Security Features Verification ===
+
+Checking repository: wcatz/infrastructure
+
+✅ GitHub CLI authenticated
+
+✅ Secret Scanning: ENABLED
+✅ Push Protection: ENABLED
+✅ Dependabot Security Updates: ENABLED
+
+=== Security Alerts Summary ===
+
+✅ No open secret scanning alerts
+✅ No open Dependabot alerts
+⚠️  Code Scanning: Not configured (recommended)
+
+=== Verification Complete ===
+```
+
+**Prerequisites:**
+- GitHub CLI (`gh`) installed
+- Authenticated with GitHub (`gh auth login`)
+- Read access to repository security settings
+
+See [scripts/README.md](scripts/README.md#verify-github-securitysh) for detailed usage.
+
+### Manual Verification (Web UI)
+
+If GitHub CLI is not available, verify manually:
+
+1. **Navigate to Security Settings:**
+   ```
+   https://github.com/wcatz/infrastructure/settings/security_analysis
+   ```
+
+2. **Verify each feature shows "Enabled":**
+   - ✅ Secret scanning
+   - ✅ Push protection
+   - ✅ Dependabot alerts
+   - ✅ Dependabot security updates
+
+3. **Check for alerts:**
+   ```
+   https://github.com/wcatz/infrastructure/security
+   ```
+
+4. **Review tabs:**
+   - Secret scanning (should show 0 alerts)
+   - Dependabot (should show 0 or minimal alerts)
+   - Code scanning (if enabled)
+
+### Testing Push Protection
+
+Verify push protection is working:
+
+```bash
+# Create test file with fake secret
+echo "github_token: ghp_1234567890abcdefghijklmnopqrstuvwxyz12" > test-secret.txt
+
+# Try to commit
+git add test-secret.txt
+git commit -m "Test: Verify push protection"
+
+# Try to push (should be blocked)
+git push
+
+# Expected result:
+# ❌ Push blocked with message about detected secret
+# ℹ️  Instructions to remediate or bypass
+
+# Clean up
+git reset HEAD~1
+rm test-secret.txt
+```
+
+If push is NOT blocked, push protection is not properly enabled.
 
 ## Cluster Health and Security
 
@@ -159,6 +328,8 @@ echo -e "\n=== Health Check Complete ==="
 ```
 
 ## Secret Exposure Mitigation
+
+> **📚 Complete Secret Management Documentation**: See [SECRETS.md](SECRETS.md) for comprehensive secret management procedures, rotation schedules, and best practices.
 
 ### Identified Risks and Mitigations
 
@@ -539,14 +710,22 @@ kubectl logs -n cloudflare -l app=cloudflared
 
 ## References
 
-- [SECRETS.md](SECRETS.md) - Complete secret management guide
-- [.sops.yaml](.sops.yaml) - SOPS configuration
-- [docs/setup.md](docs/setup.md) - Infrastructure setup
-- [docs/operate.md](docs/operate.md) - Operations guide
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+### Related Documentation
+
+- **[SECRETS.md](SECRETS.md)** - Complete secret management guide with SOP, rotation procedures, and audit checklists
+- **[docs/setup.md](docs/setup.md)** - Infrastructure setup including secret management configuration
+- **[docs/operate.md](docs/operate.md)** - Operations guide
+- **[.sops.yaml](.sops.yaml)** - SOPS configuration
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
+
+### Security Resources
+
+- [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning) - Automated secret detection
+- [GitHub Push Protection](https://docs.github.com/en/code-security/secret-scanning/push-protection-for-repositories-and-organizations) - Prevent secret commits
+- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html) - Industry best practices
 
 ---
 
-**Last Updated:** 2024-01-15  
+**Last Updated:** 2024-12-09  
 **Review Frequency:** Quarterly  
 **Next Review:** 2024-04-15

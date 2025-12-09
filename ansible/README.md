@@ -1,6 +1,8 @@
 # Ansible Playbooks
 
 > **📚 Complete Documentation**: See [docs/ansible.md](../docs/ansible.md) for the comprehensive Ansible guide.
+> 
+> **🔐 Secret Management**: See [SECRETS.md](../SECRETS.md) for complete secret management and Ansible Vault usage.
 
 Infrastructure automation for hybrid k3s cluster deployment.
 
@@ -76,6 +78,8 @@ kubectl get nodes
 ```
 
 ## Ansible Vault Commands
+
+> **📚 For complete Ansible Vault documentation and CI/CD integration**, see [SECRETS.md - Ansible Vault](../SECRETS.md#ansible-vault)
 
 ```bash
 # Encrypt a file
