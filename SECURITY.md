@@ -5,6 +5,7 @@ This document outlines the security measures and best practices for the hybrid K
 ## Table of Contents
 
 - [Overview](#overview)
+- [GitHub Security Features](#github-security-features)
 - [Cluster Health and Security](#cluster-health-and-security)
 - [Secret Exposure Mitigation](#secret-exposure-mitigation)
 - [Environment Isolation](#environment-isolation)
@@ -23,6 +24,235 @@ This infrastructure implements a **defense-in-depth security model** with multip
 3. **Access control**: RBAC, network policies, firewall rules
 4. **Monitoring**: Prometheus alerts, audit logs, secret scanning
 5. **Isolation**: Environment separation, namespace isolation, pod security
+6. **GitHub Security**: Secret scanning, push protection, code scanning
+
+## GitHub Security Features
+
+GitHub provides built-in security features that must be enabled and verified for this repository.
+
+### Required Security Settings
+
+The following security features **MUST** be enabled:
+
+#### 1. Secret Scanning
+
+**Purpose:** Automatically detects and alerts on accidentally committed secrets (API keys, tokens, credentials).
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Secret scanning**
+3. Click **Enable**
+
+**Supports 200+ secret types:**
+- GitHub tokens and SSH keys
+- AWS, Azure, GCP credentials
+- API keys (Stripe, SendGrid, etc.)
+- Private keys and certificates
+- Database connection strings
+- OAuth tokens
+
+#### 2. Push Protection
+
+**Purpose:** Prevents pushing commits that contain secrets to the repository.
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Push protection** (under Secret scanning section)
+3. Click **Enable**
+
+**How it works:**
+- Scans commits before they are pushed
+- Blocks push if secrets detected
+- Provides remediation guidance
+- Can be bypassed with justification (creates audit trail)
+
+#### 3. Code Scanning (CodeQL)
+
+**Purpose:** Identifies security vulnerabilities and coding errors.
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Code scanning**
+3. Click **Set up** → **Advanced**
+4. Add CodeQL workflow (GitHub provides template)
+
+**Benefits:**
+- Detects SQL injection vulnerabilities
+- Identifies hardcoded secrets
+- Finds authentication bypass issues
+- Checks for insecure crypto usage
+
+#### 4. Dependabot Alerts
+
+**Purpose:** Monitors dependencies for known security vulnerabilities.
+
+**To Enable:**
+1. Navigate to: Repository **Settings** → **Code security and analysis**
+2. Find **Dependabot alerts**
+3. Click **Enable**
+4. Also enable **Dependabot security updates** (auto-creates PRs for fixes)
+
+### Verification Checklist
+
+Use this checklist to verify all security features are properly configured:
+
+```bash
+# Create a verification script
+cat > scripts/verify-github-security.sh <<'EOF'
+#!/bin/bash
+set -e
+
+echo "=== GitHub Security Features Verification ==="
+echo ""
+
+REPO="wcatz/infrastructure"
+
+echo "Checking repository security settings..."
+echo ""
+
+# Requires gh CLI with authentication
+if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI (gh) not installed"
+    echo "   Install: https://cli.github.com/"
+    exit 1
+fi
+
+# Check if authenticated
+if ! gh auth status &> /dev/null; then
+    echo "❌ Not authenticated with GitHub CLI"
+    echo "   Run: gh auth login"
+    exit 1
+fi
+
+echo "✅ GitHub CLI authenticated"
+echo ""
+
+# Fetch security settings
+SECURITY_JSON=$(gh api "repos/$REPO" --jq '.security_and_analysis')
+
+# Secret Scanning
+SECRET_SCANNING=$(echo "$SECURITY_JSON" | jq -r '.secret_scanning.status // "disabled"')
+if [ "$SECRET_SCANNING" == "enabled" ]; then
+    echo "✅ Secret Scanning: ENABLED"
+else
+    echo "❌ Secret Scanning: DISABLED"
+    echo "   Enable at: https://github.com/$REPO/settings/security_analysis"
+fi
+
+# Push Protection
+PUSH_PROTECTION=$(echo "$SECURITY_JSON" | jq -r '.secret_scanning_push_protection.status // "disabled"')
+if [ "$PUSH_PROTECTION" == "enabled" ]; then
+    echo "✅ Push Protection: ENABLED"
+else
+    echo "❌ Push Protection: DISABLED"
+    echo "   Enable at: https://github.com/$REPO/settings/security_analysis"
+fi
+
+# Dependabot Alerts
+DEPENDABOT=$(echo "$SECURITY_JSON" | jq -r '.dependabot_security_updates.status // "disabled"')
+if [ "$DEPENDABOT" == "enabled" ]; then
+    echo "✅ Dependabot Security Updates: ENABLED"
+else
+    echo "⚠️  Dependabot Security Updates: DISABLED (recommended)"
+    echo "   Enable at: https://github.com/$REPO/settings/security_analysis"
+fi
+
+echo ""
+echo "=== Security Alerts Summary ==="
+
+# Check for active secret scanning alerts
+SECRET_ALERTS=$(gh api "repos/$REPO/secret-scanning/alerts?state=open" --jq 'length')
+if [ "$SECRET_ALERTS" -eq 0 ]; then
+    echo "✅ No open secret scanning alerts"
+else
+    echo "⚠️  $SECRET_ALERTS open secret scanning alert(s)"
+    echo "   Review at: https://github.com/$REPO/security/secret-scanning"
+fi
+
+# Check for Dependabot alerts
+VULN_ALERTS=$(gh api "repos/$REPO/dependabot/alerts?state=open" --jq 'length' 2>/dev/null || echo "0")
+if [ "$VULN_ALERTS" -eq 0 ]; then
+    echo "✅ No open Dependabot alerts"
+else
+    echo "⚠️  $VULN_ALERTS open Dependabot alert(s)"
+    echo "   Review at: https://github.com/$REPO/security/dependabot"
+fi
+
+# Check for Code Scanning alerts
+CODE_ALERTS=$(gh api "repos/$REPO/code-scanning/alerts?state=open" --jq 'length' 2>/dev/null || echo "N/A")
+if [ "$CODE_ALERTS" == "N/A" ]; then
+    echo "⚠️  Code Scanning: Not configured (recommended)"
+    echo "   Setup at: https://github.com/$REPO/security/code-scanning"
+elif [ "$CODE_ALERTS" -eq 0 ]; then
+    echo "✅ No open code scanning alerts"
+else
+    echo "⚠️  $CODE_ALERTS open code scanning alert(s)"
+    echo "   Review at: https://github.com/$REPO/security/code-scanning"
+fi
+
+echo ""
+echo "=== Verification Complete ==="
+EOF
+
+chmod +x scripts/verify-github-security.sh
+```
+
+**Run verification:**
+
+```bash
+./scripts/verify-github-security.sh
+```
+
+### Manual Verification (Web UI)
+
+If GitHub CLI is not available, verify manually:
+
+1. **Navigate to Security Settings:**
+   ```
+   https://github.com/wcatz/infrastructure/settings/security_analysis
+   ```
+
+2. **Verify each feature shows "Enabled":**
+   - ✅ Secret scanning
+   - ✅ Push protection
+   - ✅ Dependabot alerts
+   - ✅ Dependabot security updates
+
+3. **Check for alerts:**
+   ```
+   https://github.com/wcatz/infrastructure/security
+   ```
+
+4. **Review tabs:**
+   - Secret scanning (should show 0 alerts)
+   - Dependabot (should show 0 or minimal alerts)
+   - Code scanning (if enabled)
+
+### Testing Push Protection
+
+Verify push protection is working:
+
+```bash
+# Create test file with fake secret
+echo "github_token: ghp_1234567890abcdefghijklmnopqrstuvwxyz12" > test-secret.txt
+
+# Try to commit
+git add test-secret.txt
+git commit -m "Test: Verify push protection"
+
+# Try to push (should be blocked)
+git push
+
+# Expected result:
+# ❌ Push blocked with message about detected secret
+# ℹ️  Instructions to remediate or bypass
+
+# Clean up
+git reset HEAD~1
+rm test-secret.txt
+```
+
+If push is NOT blocked, push protection is not properly enabled.
 
 ## Cluster Health and Security
 
