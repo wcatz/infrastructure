@@ -41,7 +41,7 @@ creation_rules:
 # 4. Never commit unencrypted secrets to Git
 # 5. Use .enc.yaml extension for all encrypted files
 # 6. Store the private key securely (password manager, vault, etc.)
-# 
+#
 # Usage:
 # - Encrypt: sops -e secrets.yaml > secrets.enc.yaml
 # - Decrypt: sops -d secrets.enc.yaml
