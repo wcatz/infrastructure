@@ -3,8 +3,10 @@ ansible/inventory.ini
 ansible/inventory-*.ini
 ansible/*.retry
 ansible/.vault_pass
+ansible/.vault_pass.*
 ansible/.vault_pass.tmp
 ansible/group_vars/all/vault.yml
+!ansible/group_vars/all/vault.yml.example
 *.pyc
 __pycache__/
 
@@ -14,26 +16,56 @@ helmfile/secrets/*
 !helmfile/secrets/README.md
 *.dec
 *-dec.yaml
+*-decrypted.yaml
 
-# SOPS - allow .sops.yaml config, block plaintext secrets
+# SOPS - allow .sops.yaml config and encrypted files only, block plaintext secrets
 !.sops.yaml
 *-secrets.yaml
 !*-secrets.enc.yaml
 !*-secrets-example.enc.yaml
 *credentials*.yaml
 !*credentials*.enc.yaml
+!*credentials*-example.yaml
+*secret*.yaml
+!*secret*.enc.yaml
+!*secret*-example.yaml
 age/keys.txt
+**/age/keys.txt
 .age
+*.age
+.sops.age
 
 # Cloudflare credentials (should be in Kubernetes secrets, not in git)
 *.pem
 *.key
+!helmfile/**/*.key  # Allow encrypted key files in helmfile
 *.crt
 *.p12
 credentials.json
 cert.pem
 *-key.json
 service-account*.json
+.cloudflared/*.json
+!.cloudflared/config.yaml
+tunnel.json
+
+# Private keys and certificates
+*.private
+*.priv
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+*.ppk
+
+# Password and token files
+.password
+.token
+.api_key
+*.password
+*.token
 
 # OS files
 .DS_Store
@@ -55,8 +87,11 @@ Thumbs.db
 *.tmp
 *.bak
 *.orig
+*.backup
 
 # Kubernetes
 kubeconfig
 *.kubeconfig
 .kube/
+config-*
+!helmfile/config/

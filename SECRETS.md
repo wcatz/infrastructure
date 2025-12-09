@@ -1,28 +1,169 @@
 # Secret Management Guide
 
-This document provides comprehensive guidance on managing secrets in the hybrid Kubernetes infrastructure.
+This document provides comprehensive guidance and Standard Operating Procedures (SOP) for managing secrets in the hybrid Kubernetes infrastructure.
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Secret Management Responsibilities](#secret-management-responsibilities)
 - [Secret Management Strategy](#secret-management-strategy)
 - [SOPS with age](#sops-with-age)
+- [Ansible Vault](#ansible-vault)
 - [Cloudflared Secrets](#cloudflared-secrets)
 - [Kubernetes Secrets](#kubernetes-secrets)
 - [GitHub Actions Secrets](#github-actions-secrets)
+- [CI/CD Integration](#cicd-integration)
 - [Secret Rotation](#secret-rotation)
 - [Security Best Practices](#security-best-practices)
+- [Periodic Audits and Maintenance](#periodic-audits-and-maintenance)
 - [Troubleshooting](#troubleshooting)
 
 ## Overview
 
-This infrastructure uses a **defense-in-depth** approach to secret management:
+This infrastructure uses a **defense-in-depth** approach to secret management with multiple layers of protection:
 
 1. **SOPS with age**: Encrypt secrets at rest in Git
 2. **Kubernetes Secrets**: Store encrypted secrets in the cluster
 3. **External Secrets Operator**: Sync secrets from external sources (optional)
 4. **Ansible Vault**: Encrypt infrastructure secrets for Ansible playbooks
 5. **GitHub Secrets**: Store CI/CD credentials securely
+6. **GitHub Secret Scanning**: Automated detection of accidentally committed secrets
+7. **Push Protection**: Prevents pushing commits containing secrets
+
+**Key Principles:**
+- **Never commit plaintext secrets** - All secrets must be encrypted before commit
+- **Encrypt at rest, encrypt in transit** - Multiple encryption layers
+- **Least privilege access** - Limit who can access which secrets
+- **Regular rotation** - All secrets have defined rotation schedules
+- **Audit everything** - Track all secret access and modifications
+
+## Secret Management Responsibilities
+
+Understanding who is responsible for managing different types of secrets is critical for security:
+
+### SOPS Age Keys
+
+**Owner:** Infrastructure Team / Platform Administrators
+
+**Location:** 
+- Private key: `~/.config/sops/age/keys.txt` (local machine, never committed)
+- Public key: `.sops.yaml` (committed to repository)
+
+**Responsibilities:**
+- Generate and securely backup age private keys
+- Add public keys to `.sops.yaml` configuration
+- Rotate keys annually or when compromised
+- Share encrypted secrets via Git repository
+- Never share private keys via email/Slack/unencrypted channels
+
+**Backup Strategy:**
+- Store private key in password manager (e.g., 1Password, Bitwarden)
+- Keep encrypted backup on secure USB drive
+- Document key ownership and recovery procedures
+
+### Kubernetes Secrets
+
+**Owner:** Application Developers / DevOps Team
+
+**Location:**
+- Encrypted in Git: `helmfile/secrets/*.enc.yaml`
+- Deployed in cluster: Kubernetes etcd (encrypted at rest)
+
+**Responsibilities:**
+- Encrypt secrets with SOPS before committing
+- Use appropriate secret types (Opaque, TLS, etc.)
+- Follow naming conventions for secret resources
+- Ensure secrets are namespace-scoped appropriately
+- Document which applications use which secrets
+
+**Access Control:**
+- Kubernetes RBAC controls who can read/write secrets
+- Network policies limit pod-to-pod secret exposure
+- Audit logs track all secret access
+
+### GitHub Actions Secrets
+
+**Owner:** CI/CD Team / Repository Administrators
+
+**Location:** GitHub repository settings → Secrets and variables → Actions
+
+**Responsibilities:**
+- Add required secrets for CI/CD workflows (SOPS_AGE_KEY, KUBECONFIG, etc.)
+- Use environment-specific secrets (production vs. staging)
+- Regularly rotate tokens and keys
+- Review and remove unused secrets
+- Limit secret access to specific workflows/environments
+
+**Required Secrets:**
+- `SOPS_AGE_KEY`: Private age key for decrypting SOPS-encrypted files
+- `KUBECONFIG_PRODUCTION`: Base64-encoded kubeconfig for production deployments
+- `KUBECONFIG_STAGING`: Base64-encoded kubeconfig for staging deployments
+- `ANSIBLE_VAULT_PASSWORD`: Password for Ansible vault decryption
+
+### Ansible Vault
+
+**Owner:** Infrastructure Team
+
+**Location:**
+- Vault password: `ansible/.vault_pass` (local, gitignored)
+- Encrypted data: `ansible/group_vars/all/vault.yml` (committed, encrypted)
+
+**Responsibilities:**
+- Generate strong vault passwords
+- Encrypt sensitive Ansible variables (K3s token, Tailscale keys, etc.)
+- Never commit `.vault_pass` to Git
+- Share vault password securely with team members
+- Rotate vault password annually
+
+**Usage:**
+- Infrastructure secrets: K3s cluster token, Tailscale auth keys
+- API credentials: Cloudflare API tokens, OAuth secrets
+- Initial deployment credentials
+
+### SSH Keys
+
+**Owner:** System Administrators
+
+**Location:** 
+- Private key: `~/.ssh/id_rsa` or `~/.ssh/id_ed25519` (local, never committed)
+- Public key: Deployed to servers in `~/.ssh/authorized_keys`
+
+**Responsibilities:**
+- Use strong key types (Ed25519 or RSA 4096-bit)
+- Protect private keys with passphrase
+- Rotate annually or when employees leave
+- Use separate keys for different environments
+- Remove old keys from servers after rotation
+
+### TLS Certificates
+
+**Owner:** Automated (cert-manager) / Platform Team
+
+**Location:**
+- Managed by cert-manager in Kubernetes
+- Automatically renewed before expiration
+
+**Responsibilities:**
+- Monitor certificate expiration alerts
+- Ensure cert-manager is functioning correctly
+- Maintain backup ACME credentials
+- Handle manual certificate renewals if automation fails
+
+### Cloudflared Tunnel Credentials
+
+**Owner:** Network/Platform Team
+
+**Location:**
+- Original: `~/.cloudflared/<TUNNEL-ID>.json` (should be deleted after encryption)
+- Encrypted: `helmfile/secrets/cloudflared-credentials.enc.yaml`
+- Deployed: Kubernetes secret in `cloudflare` namespace
+
+**Responsibilities:**
+- Create and configure Cloudflare tunnels
+- Encrypt credentials immediately after creation
+- Securely delete plaintext credentials file
+- Rotate tunnel credentials every 90 days
+- Update DNS records when rotating tunnels
 
 ### Secret Types
 
@@ -84,27 +225,46 @@ This infrastructure uses a **defense-in-depth** approach to secret management:
 
 ## SOPS with age
 
-### Setup
+SOPS (Secrets OPerationS) with age encryption provides a secure way to store secrets in Git repositories while maintaining encryption at rest.
 
-#### 1. Install age
+### Quick Start
+
+For a rapid setup, follow these steps:
+
+#### 1. Install age and SOPS
 
 ```bash
 # macOS
-brew install age
+brew install age sops
 
 # Linux
-wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz
-tar xzf age-v1.1.1-linux-amd64.tar.gz
-sudo mv age/age age/age-keygen /usr/local/bin/
+# Detect architecture
+ARCH=$(uname -m)
+case $ARCH in
+  x86_64) AGE_ARCH="amd64" ;;
+  aarch64|arm64) AGE_ARCH="arm64" ;;
+  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+# Install age
+wget https://github.com/FiloSottile/age/releases/latest/download/age-latest-linux-${AGE_ARCH}.tar.gz
+tar xzf age-latest-linux-${AGE_ARCH}.tar.gz
+sudo mv age/age* /usr/local/bin/
+rm -rf age age-latest-linux-${AGE_ARCH}.tar.gz
+
+# Install SOPS
+wget https://github.com/mozilla/sops/releases/latest/download/sops-latest.linux
+chmod +x sops-latest.linux
+sudo mv sops-latest.linux /usr/local/bin/sops
 ```
 
 #### 2. Generate age Key
 
 ```bash
-# Create age directory
+# Create directory
 mkdir -p ~/.config/sops/age
 
-# Generate new key
+# Generate key
 age-keygen -o ~/.config/sops/age/keys.txt
 
 # View public key
@@ -120,7 +280,20 @@ AGE-SECRET-KEY-1ABC...XYZ
 
 #### 3. Update .sops.yaml
 
-Replace the placeholder age public key in `.sops.yaml`:
+Replace the placeholder in `.sops.yaml` with your actual public key:
+
+```bash
+# Get your public key
+PUBLIC_KEY=$(cat ~/.config/sops/age/keys.txt | grep "public key:" | cut -d: -f2 | tr -d ' ')
+
+# Update .sops.yaml (macOS)
+sed -i '' "s/age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/$PUBLIC_KEY/g" .sops.yaml
+
+# Update .sops.yaml (Linux)
+sed -i "s/age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/$PUBLIC_KEY/g" .sops.yaml
+```
+
+Alternatively, manually edit `.sops.yaml`:
 
 ```yaml
 creation_rules:
@@ -133,16 +306,49 @@ creation_rules:
 
 **⚠️ CRITICAL: Backup your age private key securely!**
 
+If you lose this key, you **cannot decrypt your secrets**!
+
 ```bash
-# Copy to secure location (encrypted USB, password manager, vault)
+# Method 1: Copy to encrypted USB or secure location
 cp ~/.config/sops/age/keys.txt /path/to/secure/backup/
 
-# Or encrypt with GPG
+# Method 2: Encrypt with GPG
 gpg -c ~/.config/sops/age/keys.txt
 # Save the .gpg file to backup location
+
+# Method 3: Store in password manager
+cat ~/.config/sops/age/keys.txt
+# Copy the content and save in password manager (1Password, Bitwarden, etc.)
 ```
 
-**If you lose this key, you cannot decrypt your secrets!**
+#### 5. Add to GitHub Secrets
+
+For CI/CD to decrypt secrets:
+
+```bash
+# Using GitHub CLI
+gh secret set SOPS_AGE_KEY < ~/.config/sops/age/keys.txt
+
+# Or manually via web UI:
+# 1. Go to repository Settings → Secrets and variables → Actions
+# 2. Click "New repository secret"
+# 3. Name: SOPS_AGE_KEY
+# 4. Value: Paste content of ~/.config/sops/age/keys.txt
+# 5. Click "Add secret"
+```
+
+### Detailed Setup
+
+The detailed setup section provides additional context for the quick start steps above.
+
+#### Install SOPS
+
+SOPS should be installed as part of prerequisites (see docs/setup.md). Verify installation:
+
+```bash
+sops --version
+age --version
+```
 
 ### Usage
 
@@ -206,6 +412,188 @@ find . -name "*.enc.yaml" -type f -exec sops updatekeys --yes -i {} \;
 
 # Update .sops.yaml with new public key
 # Then backup old key and replace with new one
+```
+
+### Troubleshooting SOPS
+
+#### Error: "no age identities found"
+
+**Solution:**
+```bash
+# Verify age key exists
+ls -la ~/.config/sops/age/keys.txt
+
+# Set environment variable
+export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
+
+# Or use inline:
+SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt sops -d secret.enc.yaml
+```
+
+#### Error: "Failed to get the data key"
+
+**Solution:**
+- Verify the public key in `.sops.yaml` matches your age key
+- Ensure you're using the correct age private key
+- Check file was encrypted with your public key
+
+#### Public Key Mismatch
+
+```bash
+# Get your current public key
+cat ~/.config/sops/age/keys.txt | grep "public key:"
+
+# Check .sops.yaml
+grep "age:" .sops.yaml
+
+# If they don't match, update .sops.yaml with correct key
+```
+
+## Ansible Vault
+
+Ansible Vault encrypts sensitive variables used in Ansible playbooks for infrastructure provisioning.
+
+### Setup
+
+#### 1. Create Vault Password File
+
+```bash
+cd ansible
+
+# Create from example
+cp .vault_pass.example .vault_pass
+
+# Add a strong password
+echo "your-secure-vault-password-here" > .vault_pass
+
+# Secure the file
+chmod 600 .vault_pass
+```
+
+**Important:** The `.vault_pass` file is gitignored and should never be committed to the repository.
+
+#### 2. Create and Encrypt Vault Variables
+
+```bash
+# Create vault variables from example
+cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+
+# Edit with your secrets
+vim group_vars/all/vault.yml
+```
+
+Example `vault.yml` content:
+
+```yaml
+---
+# K3s cluster token (generate with: openssl rand -hex 32)
+vault_k3s_token: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6"
+
+# Tailscale auth key from Tailscale admin console
+vault_tailscale_key: "tskey-auth-kABCDEF1234567890-1234567890ABCDEFGHIJ"
+
+# Tailscale OAuth credentials (for Kubernetes operator)
+vault_tailscale_oauth_client_id: "kABCDEF1234567890"
+vault_tailscale_oauth_client_secret: "tskey-client-kABCDEF1234567890-1234567890ABCDEFGHIJ"
+
+# Cloudflare tunnel token (optional, if managing via Ansible)
+vault_cloudflare_tunnel_token: "eyJhIjoiYWJjZGVmMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYxMjM0NTY3ODkwIn0="
+```
+
+#### 3. Encrypt the Vault File
+
+```bash
+# Encrypt the vault file
+ansible-vault encrypt group_vars/all/vault.yml
+
+# Verify encryption worked
+cat group_vars/all/vault.yml
+# Should show encrypted content starting with $ANSIBLE_VAULT
+```
+
+### Usage
+
+#### Common Vault Commands
+
+```bash
+# Edit encrypted vault (decrypts, opens in $EDITOR, re-encrypts on save)
+ansible-vault edit group_vars/all/vault.yml
+
+# View encrypted vault content
+ansible-vault view group_vars/all/vault.yml
+
+# Decrypt a file (for manual inspection)
+ansible-vault decrypt group_vars/all/vault.yml
+# WARNING: File is now in plaintext!
+
+# Re-encrypt after decrypting
+ansible-vault encrypt group_vars/all/vault.yml
+
+# Change vault password
+ansible-vault rekey group_vars/all/vault.yml
+
+# Verify vault can be decrypted
+ansible-vault view group_vars/all/vault.yml --vault-password-file=.vault_pass
+```
+
+#### Using Vault Variables in Playbooks
+
+Ansible automatically decrypts vault variables when playbooks run. Variables are referenced in roles:
+
+```yaml
+# In roles/k3s/defaults/main.yml
+k3s_token: "{{ vault_k3s_token }}"
+
+# In roles/tailscale/defaults/main.yml  
+tailscale_auth_key: "{{ vault_tailscale_key }}"
+```
+
+#### Running Playbooks with Vault
+
+```bash
+# Ansible automatically uses .vault_pass if configured in ansible.cfg
+ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
+
+# Or explicitly specify vault password file
+ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml \
+  --vault-password-file=.vault_pass
+
+# Or provide password via environment variable
+export ANSIBLE_VAULT_PASSWORD_FILE=.vault_pass
+ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
+```
+
+### Best Practices
+
+1. **Never commit `.vault_pass`** - It's gitignored for a reason
+2. **Use strong passwords** - Generate with: `openssl rand -base64 32`
+3. **Share vault password securely** - Use password managers, not email/Slack
+4. **Keep vault.yml encrypted** - Only decrypt temporarily when needed
+5. **Rotate vault password annually** - Use `ansible-vault rekey`
+6. **Backup vault password** - Store in secure location (password manager)
+7. **Use separate vaults per environment** - Don't reuse production secrets
+
+### Rotating Vault Password
+
+```bash
+# 1. Generate new password
+NEW_PASSWORD=$(openssl rand -base64 32)
+echo "$NEW_PASSWORD" > .vault_pass.new
+
+# 2. Rekey all vaults
+ansible-vault rekey group_vars/all/vault.yml \
+  --vault-password-file=.vault_pass \
+  --new-vault-password-file=.vault_pass.new
+
+# 3. Replace old password file
+mv .vault_pass .vault_pass.old
+mv .vault_pass.new .vault_pass
+
+# 4. Test decryption works
+ansible-vault view group_vars/all/vault.yml
+
+# 5. Securely delete old password
+shred -u .vault_pass.old
 ```
 
 ## Cloudflared Secrets
@@ -397,6 +785,157 @@ Or via web UI:
 2. Click **New repository secret**
 3. Add name and value
 4. Click **Add secret**
+
+## CI/CD Integration
+
+Integrating secret management into CI/CD pipelines ensures secure automated deployments.
+
+### GitHub Actions Integration
+
+#### Setup Repository Secrets
+
+Required secrets for CI/CD (see [GitHub Actions Secrets](#github-actions-secrets) section above):
+- `SOPS_AGE_KEY` - For decrypting SOPS-encrypted files
+- `ANSIBLE_VAULT_PASSWORD` - For Ansible playbook execution
+- `KUBECONFIG_PRODUCTION` - For production Kubernetes deployments
+- `KUBECONFIG_STAGING` - For staging deployments
+
+#### Workflow Example with SOPS
+
+```yaml
+name: Deploy Application
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install SOPS
+        run: |
+          wget https://github.com/mozilla/sops/releases/latest/download/sops-latest.linux
+          chmod +x sops-latest.linux
+          sudo mv sops-latest.linux /usr/local/bin/sops
+      
+      - name: Setup SOPS age key
+        run: |
+          mkdir -p ~/.config/sops/age
+          echo "${{ secrets.SOPS_AGE_KEY }}" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+      
+      - name: Decrypt and deploy secrets
+        run: |
+          export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
+          sops -d helmfile/secrets/app-secrets.enc.yaml | kubectl apply -f -
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG_PRODUCTION }}
+      
+      - name: Cleanup sensitive files
+        if: always()
+        run: |
+          rm -f ~/.config/sops/age/keys.txt
+```
+
+#### Workflow Example with Ansible Vault
+
+```yaml
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Ansible
+        run: |
+          pip install ansible
+      
+      - name: Setup Ansible Vault password
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ansible/.vault_pass
+          chmod 600 ansible/.vault_pass
+      
+      - name: Deploy with Ansible
+        run: |
+          cd ansible
+          ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml \
+            --vault-password-file=.vault_pass
+      
+      - name: Cleanup vault password
+        if: always()
+        run: |
+          rm -f ansible/.vault_pass
+```
+
+### Security Best Practices for CI/CD
+
+1. **Never log decrypted secrets**
+   - Use `echo "::add-mask::$SECRET"` in GitHub Actions to mask values
+   - Avoid `set -x` or verbose mode when handling secrets
+
+2. **Clean up sensitive files**
+   - Always use `if: always()` for cleanup steps
+   - Delete temporary key files after use
+
+3. **Use environment-specific secrets**
+   - Separate secrets for production vs. staging
+   - Use GitHub Environments for additional protection
+
+4. **Limit workflow permissions**
+   - Use OIDC authentication when possible
+   - Grant minimum required permissions
+
+5. **Audit secret access**
+   - Review GitHub Actions logs regularly
+   - Monitor for unauthorized workflow runs
+
+### GitLab CI Integration
+
+For GitLab CI/CD:
+
+```yaml
+variables:
+  ANSIBLE_VAULT_PASSWORD_FILE: ".vault_pass"
+
+before_script:
+  - apt-get update && apt-get install -y ansible sops
+  - echo "$ANSIBLE_VAULT_PASSWORD" > .vault_pass
+  - chmod 600 .vault_pass
+  - mkdir -p ~/.config/sops/age
+  - echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+
+deploy:
+  stage: deploy
+  script:
+    - cd ansible
+    - ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
+  after_script:
+    - rm -f .vault_pass ~/.config/sops/age/keys.txt
+  only:
+    - main
+```
+
+Set `ANSIBLE_VAULT_PASSWORD` and `SOPS_AGE_KEY` as protected and masked variables in GitLab CI/CD settings.
 
 ## Secret Rotation
 
@@ -622,6 +1161,377 @@ resources:
 
 K3s enables this by default with auto-generated keys.
 
+## Periodic Audits and Maintenance
+
+Regular security audits and maintenance are essential for maintaining a secure infrastructure. This section provides guidance on periodic reviews and proactive security measures.
+
+### Monthly Tasks
+
+#### 1. Review GitHub Secret Scanning Alerts
+
+GitHub automatically scans repositories for accidentally committed secrets. Review and address any alerts:
+
+```bash
+# Using GitHub CLI
+gh api repos/wcatz/infrastructure/secret-scanning/alerts
+
+# Or via web UI:
+# Go to: Settings → Security → Secret scanning
+```
+
+**Actions to take:**
+- Investigate each alert immediately
+- Rotate any exposed secrets
+- Remove secrets from Git history if needed
+- Update .gitignore to prevent future occurrences
+
+#### 2. Verify Push Protection is Active
+
+Ensure push protection prevents accidental secret commits:
+
+```bash
+# Check if push protection is enabled
+gh api repos/wcatz/infrastructure | jq '.security_and_analysis.secret_scanning_push_protection.status'
+# Should return: "enabled"
+```
+
+**To enable push protection:**
+1. Go to repository **Settings** → **Code security and analysis**
+2. Enable **Push protection**
+3. Test by attempting to commit a fake secret
+
+#### 3. Review Access Logs
+
+Check who accessed secrets and when:
+
+```bash
+# Kubernetes secret access (if audit logging enabled)
+kubectl logs -n kube-system kube-apiserver-* | grep "secrets"
+
+# GitHub Actions logs
+gh run list --limit 20
+
+# Review for:
+# - Unexpected secret access
+# - Failed authentication attempts  
+# - Unusual access patterns
+```
+
+### Quarterly Tasks
+
+#### 1. Secret Rotation Review
+
+Review secret rotation schedule and rotate due secrets:
+
+```bash
+# Check last rotation dates
+ls -lh helmfile/secrets/*.enc.yaml
+git log --follow helmfile/secrets/*.enc.yaml
+
+# Rotate secrets according to schedule:
+# - Cloudflared credentials: 90 days
+# - API tokens: 90 days
+# - Database passwords: 180 days
+```
+
+#### 2. SOPS Age Key Audit
+
+Verify all team members have current age keys:
+
+```bash
+# List all age public keys in .sops.yaml
+grep "age:" .sops.yaml
+
+# Verify each key owner is still on the team
+# Remove keys for departed team members
+# Add keys for new team members
+```
+
+#### 3. GitHub Actions Secret Audit
+
+Review and clean up GitHub repository secrets:
+
+```bash
+# List all secrets
+gh secret list
+
+# Review each secret:
+# - Is it still needed?
+# - When was it last used?
+# - Does it need rotation?
+# - Remove unused secrets
+```
+
+#### 4. Ansible Vault Review
+
+Verify Ansible vault integrity:
+
+```bash
+cd ansible
+
+# Test vault decryption
+ansible-vault view group_vars/all/vault.yml
+
+# Review vault contents for:
+# - Unused variables
+# - Expired credentials
+# - Secrets that should be rotated
+```
+
+### Semi-Annual Tasks (Every 6 Months)
+
+#### 1. Comprehensive Secret Rotation
+
+Rotate all manually-managed secrets:
+
+```bash
+# 1. Database passwords
+# 2. API tokens
+# 3. Service account credentials
+# 4. SSH keys (if not rotated recently)
+```
+
+See [Secret Rotation](#secret-rotation) section for detailed procedures.
+
+#### 2. Security Code Scanning
+
+Run comprehensive code scanning to detect vulnerabilities:
+
+```bash
+# GitHub Advanced Security Code Scanning
+# Go to: Security → Code scanning alerts
+
+# Review and address all high/critical alerts
+# Focus on:
+# - Hardcoded secrets
+# - Insecure cryptographic algorithms
+# - SQL injection vulnerabilities
+# - Authentication bypass issues
+```
+
+Enable automated code scanning:
+1. Go to **Settings** → **Code security and analysis**
+2. Enable **Code scanning** with CodeQL
+3. Configure scanning on push and pull requests
+
+#### 3. Dependency Scanning
+
+Check for vulnerabilities in dependencies:
+
+```bash
+# Scan Ansible dependencies
+pip list --outdated
+
+# Scan Helm charts
+helm plugin install https://github.com/databus23/helm-diff
+cd helmfile && helmfile diff
+
+# Review Dependabot alerts
+gh api repos/wcatz/infrastructure/dependabot/alerts
+```
+
+Enable Dependabot:
+1. Go to **Settings** → **Code security and analysis**
+2. Enable **Dependabot alerts**
+3. Enable **Dependabot security updates**
+
+### Annual Tasks
+
+#### 1. Age Encryption Key Rotation
+
+Rotate SOPS age encryption keys annually:
+
+See [SOPS Rotation](#rotate-encryption-keys) section for detailed steps.
+
+**Key steps:**
+1. Generate new age keypair
+2. Add new public key to .sops.yaml
+3. Re-encrypt all secrets with new key
+4. Update GitHub secret SOPS_AGE_KEY
+5. Remove old key after verification
+6. Backup new key securely
+
+#### 2. Ansible Vault Password Rotation
+
+Rotate Ansible vault password annually:
+
+See [Ansible Vault Rotation](#rotating-vault-password) section for detailed steps.
+
+#### 3. SSH Key Rotation
+
+Rotate SSH keys for server access:
+
+```bash
+# Generate new SSH key
+ssh-keygen -t ed25519 -C "infrastructure-key-2024" -f ~/.ssh/infrastructure-2024
+
+# Deploy new key to all servers
+ansible all -i inventory.ini -m authorized_key \
+  -a "user={{ ansible_user }} key='{{ lookup('file', '~/.ssh/infrastructure-2024.pub') }}'"
+
+# Test new key
+ssh -i ~/.ssh/infrastructure-2024 user@server
+
+# Remove old key from servers
+ansible all -i inventory.ini -m authorized_key \
+  -a "user={{ ansible_user }} key='{{ lookup('file', '~/.ssh/infrastructure-2023.pub') }}' state=absent"
+
+# Backup old key and update references
+mv ~/.ssh/infrastructure-2023 ~/.ssh/infrastructure-2023.backup
+mv ~/.ssh/infrastructure-2024 ~/.ssh/infrastructure
+```
+
+#### 4. Comprehensive Security Review
+
+Conduct annual security assessment:
+
+**Review checklist:**
+- [ ] All secrets rotated per schedule
+- [ ] Access control lists (RBAC) reviewed
+- [ ] Network policies up to date
+- [ ] Firewall rules validated
+- [ ] TLS certificates auto-renewing
+- [ ] Backup and recovery tested
+- [ ] Incident response plan updated
+- [ ] Security documentation current
+- [ ] Team security training completed
+- [ ] Compliance requirements met
+
+### Automated Monitoring
+
+Set up automated alerts for security events:
+
+#### Prometheus Alerts
+
+```yaml
+# Example: Alert on secret access spike
+- alert: HighSecretAccessRate
+  expr: rate(apiserver_audit_event_total{objectRef_resource="secrets"}[5m]) > 10
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Unusual secret access rate detected"
+    description: "Secret access rate is {{ $value }} per second"
+
+# Alert on failed authentication
+- alert: FailedAuthAttempts
+  expr: rate(apiserver_audit_event_total{verb="create",objectRef_resource="tokenreviews",responseStatus_code!="200"}[5m]) > 5
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Multiple failed authentication attempts"
+```
+
+#### GitHub Actions Workflow
+
+Create a workflow for periodic security checks:
+
+```yaml
+name: Security Audit
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for exposed secrets
+        run: |
+          # Scan for common secret patterns
+          git grep -i "password\|secret\|token\|key" | grep -v ".enc.yaml" || true
+      
+      - name: Verify .gitignore
+        run: |
+          # Check .gitignore includes sensitive patterns
+          grep -q ".vault_pass" .gitignore
+          grep -q "keys.txt" .gitignore
+          grep -q "credentials.json" .gitignore
+      
+      - name: Check secret rotation dates
+        run: |
+          # List secrets older than 90 days
+          find helmfile/secrets -name "*.enc.yaml" -mtime +90
+```
+
+### Secret Leakage Detection
+
+Proactive measures to detect secret leakage:
+
+#### 1. GitHub Secret Scanning
+
+Already covered in monthly tasks. Ensure it's active:
+
+```bash
+# Verify secret scanning is enabled
+gh api repos/wcatz/infrastructure | jq '.security_and_analysis.secret_scanning.status'
+```
+
+#### 2. Git History Scanning
+
+Use tools to scan Git history for secrets:
+
+```bash
+# Install gitleaks
+brew install gitleaks  # macOS
+# or download from: https://github.com/gitleaks/gitleaks
+
+# Scan repository history
+gitleaks detect --source . --verbose
+
+# Scan specific branch
+gitleaks detect --source . --branch main
+
+# If secrets found, follow remediation:
+# 1. Rotate the exposed secret immediately
+# 2. Remove from Git history (use git-filter-repo or BFG)
+# 3. Update .gitignore
+# 4. Document the incident
+```
+
+#### 3. External Monitoring
+
+Monitor for leaked secrets on external sites:
+
+- **GitHub Secret Scanning Partner Program**: Automatically notifies on public leaks
+- **Have I Been Pwned**: Check for credential leaks
+- **Google Alerts**: Set up alerts for your domain/secret patterns
+
+### Incident Response for Secret Exposure
+
+If a secret is exposed:
+
+**Immediate Actions (Within 1 hour):**
+1. Rotate the exposed secret immediately
+2. Revoke old secret/token
+3. Review access logs for unauthorized use
+4. Deploy updated secret to all affected systems
+
+**Investigation (Within 24 hours):**
+1. Determine scope of exposure
+2. Identify how the secret was exposed
+3. Check for unauthorized access or damage
+4. Document findings
+
+**Remediation:**
+1. Remove secret from Git history if committed
+2. Update .gitignore to prevent recurrence
+3. Implement additional controls
+4. Update documentation
+5. Team training if needed
+
+**Follow-up:**
+1. Post-incident review
+2. Update procedures
+3. Test improvements
+4. Schedule follow-up audit
+
 ## Troubleshooting
 
 ### Cannot decrypt SOPS file
@@ -707,16 +1617,45 @@ kubectl delete pod myapp-0 -n production
 
 ## References
 
-- [SOPS Documentation](https://github.com/mozilla/sops)
-- [age Encryption](https://github.com/FiloSottile/age)
-- [Kubernetes Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
-- [External Secrets Operator](https://external-secrets.io/)
-- [Cloudflared Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/)
-- [Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html)
+### External Documentation
+
+- [SOPS Documentation](https://github.com/mozilla/sops) - Mozilla SOPS encryption tool
+- [age Encryption](https://github.com/FiloSottile/age) - Modern encryption tool by Filippo Valsorda
+- [Kubernetes Secrets](https://kubernetes.io/docs/concepts/configuration/secret/) - Kubernetes secrets documentation
+- [External Secrets Operator](https://external-secrets.io/) - Kubernetes operator for external secret management
+- [Cloudflared Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/) - Cloudflare tunnel documentation
+- [Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html) - Ansible vault encryption
+
+### Related Documentation
+
+- [Setup Guide](docs/setup.md) - Complete infrastructure setup guide including secret management setup
+- [Security Policy](SECURITY.md) - Security measures and best practices for the infrastructure
+- [Operations Guide](docs/operate.md) - Day-to-day operations including secret management workflows
+- [Ansible Guide](docs/ansible.md) - Ansible playbooks and vault usage
+- [GitHub Actions OIDC](GITHUB_ACTIONS_OIDC.md) - GitHub Actions OIDC authentication setup
+
+### Quick Navigation
+
+**Setup and Getting Started:**
+- [Initial SOPS Setup](#quick-start) - Get started with SOPS encryption
+- [Ansible Vault Setup](#ansible-vault) - Configure Ansible vault for infrastructure secrets
+- [CI/CD Integration](#cicd-integration) - Integrate secrets into deployment pipelines
+
+**Day-to-Day Operations:**
+- [Encrypt a Secret](#encrypt-a-secret) - How to encrypt secrets with SOPS
+- [Decrypt a Secret](#decrypt-a-secret) - How to decrypt and deploy secrets
+- [Edit Encrypted Secrets](#edit-encrypted-secret) - Modify existing encrypted secrets
+- [Ansible Vault Commands](#common-vault-commands) - Common Ansible vault operations
+
+**Security and Maintenance:**
+- [Secret Rotation](#secret-rotation) - Rotation procedures for all secret types
+- [Periodic Audits](#periodic-audits-and-maintenance) - Regular security audit tasks
+- [Troubleshooting](#troubleshooting) - Common issues and solutions
 
 ---
 
 **For immediate assistance, refer to:**
 - Setup guide: [docs/setup.md](docs/setup.md)
 - Operations guide: [docs/operate.md](docs/operate.md)
+- Security policy: [SECURITY.md](SECURITY.md)
 - GitHub Issues: [infrastructure/issues](https://github.com/wcatz/infrastructure/issues)
