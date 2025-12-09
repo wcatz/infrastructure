@@ -162,18 +162,20 @@ helmfile apply
 
 | Guide | Description |
 |-------|-------------|
-| **[Setup Guide](docs/setup.md)** | Complete setup from prerequisites to deployment |
+| **[Setup Guide](docs/setup.md)** | Complete setup from prerequisites to deployment, including secret management |
+| **[Secret Management](SECRETS.md)** | Comprehensive guide to SOPS, Ansible Vault, and security best practices |
 | **[Operations Guide](docs/operate.md)** | Testing, monitoring, backups, disaster recovery |
 | **[Ansible Guide](docs/ansible.md)** | Infrastructure automation and playbooks |
 | **[Helmfile Guide](docs/helmfile.md)** | Service deployment and configuration |
-| **[Secret Management](SECRETS.md)** | SOPS encryption and secret management |
-| **[Security Policy](SECURITY.md)** | Security measures and best practices |
+| **[Security Policy](SECURITY.md)** | Security measures, incident response, and compliance |
 
 ### 🚀 Quick References
 
+- **[Secret Management Guide](SECRETS.md)** - Complete guide to SOPS, Ansible Vault, rotation, and audits
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to this project
 - **[Changelog](CHANGELOG.md)** - Version history and changes
 - **[DNS Setup Guide](DNS_SETUP.md)** - Configure DNS for Cloudflared tunnels and NodePort services
+- **[GitHub Actions OIDC](GITHUB_ACTIONS_OIDC.md)** - GitHub Actions OIDC authentication setup
 - **[Validation Scripts](scripts/)** - Prerequisite and deployment validation
 
 ## What You Get

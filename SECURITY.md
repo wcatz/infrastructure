@@ -160,6 +160,8 @@ echo -e "\n=== Health Check Complete ==="
 
 ## Secret Exposure Mitigation
 
+> **📚 Complete Secret Management Documentation**: See [SECRETS.md](SECRETS.md) for comprehensive secret management procedures, rotation schedules, and best practices.
+
 ### Identified Risks and Mitigations
 
 #### Risk 1: Plaintext Secrets in Git
@@ -539,14 +541,22 @@ kubectl logs -n cloudflare -l app=cloudflared
 
 ## References
 
-- [SECRETS.md](SECRETS.md) - Complete secret management guide
-- [.sops.yaml](.sops.yaml) - SOPS configuration
-- [docs/setup.md](docs/setup.md) - Infrastructure setup
-- [docs/operate.md](docs/operate.md) - Operations guide
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+### Related Documentation
+
+- **[SECRETS.md](SECRETS.md)** - Complete secret management guide with SOP, rotation procedures, and audit checklists
+- **[docs/setup.md](docs/setup.md)** - Infrastructure setup including secret management configuration
+- **[docs/operate.md](docs/operate.md)** - Operations guide
+- **[.sops.yaml](.sops.yaml)** - SOPS configuration
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
+
+### Security Resources
+
+- [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning) - Automated secret detection
+- [GitHub Push Protection](https://docs.github.com/en/code-security/secret-scanning/push-protection-for-repositories-and-organizations) - Prevent secret commits
+- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html) - Industry best practices
 
 ---
 
-**Last Updated:** 2024-01-15  
+**Last Updated:** 2024-12-09  
 **Review Frequency:** Quarterly  
 **Next Review:** 2024-04-15

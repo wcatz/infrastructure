@@ -2,6 +2,8 @@
 
 Complete guide for using Ansible playbooks to deploy and manage the hybrid Kubernetes infrastructure.
 
+> **🔐 Secret Management**: For complete Ansible Vault documentation, see [SECRETS.md - Ansible Vault](../SECRETS.md#ansible-vault)
+
 ## Table of Contents
 
 - [Overview](#overview)
