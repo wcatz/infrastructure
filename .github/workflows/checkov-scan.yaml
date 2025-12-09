@@ -151,7 +151,7 @@ jobs:
           echo "Full results available in the Security tab and downloadable artifacts." >> $GITHUB_STEP_SUMMARY
 
       - name: Comment PR with Checkov Results
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         if: github.event_name == 'pull_request' && (success() || failure())
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
