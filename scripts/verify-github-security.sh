@@ -4,9 +4,10 @@ set -e
 echo "=== GitHub Security Features Verification ==="
 echo ""
 
-REPO="wcatz/infrastructure"
+# Repository can be set via environment variable or defaults to wcatz/infrastructure
+REPO="${GITHUB_REPOSITORY:-wcatz/infrastructure}"
 
-echo "Checking repository security settings..."
+echo "Checking repository: $REPO"
 echo ""
 
 # Requires gh CLI with authentication
