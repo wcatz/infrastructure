@@ -680,7 +680,7 @@ This infrastructure implements comprehensive automated security and compliance s
 #### 1. TruffleHog - Secrets Detection
 - **Purpose**: Scan for secrets in code and git history
 - **Schedule**: Daily + on every push/PR
-- **Workflow**: `.github/workflows/trufflehog-secrets-scan.yaml`
+- **Workflow**: _Not yet implemented_
 - **Config**: `.trufflehog.yaml`
 
 #### 2. Checkov - IaC Security Scanning
