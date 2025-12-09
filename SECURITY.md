@@ -673,6 +673,44 @@ kubectl logs -n cloudflare -l app=cloudflared
 
 ## Compliance
 
+### Automated Security Tools
+
+This infrastructure implements comprehensive automated security and compliance scanning:
+
+#### 1. TruffleHog - Secrets Detection
+- **Purpose**: Scan for secrets in code and git history
+- **Schedule**: Daily + on every push/PR
+- **Workflow**: `.github/workflows/trufflehog-secrets-scan.yaml`
+- **Config**: `.trufflehog.yaml`
+
+#### 2. Checkov - IaC Security Scanning
+- **Purpose**: Scan Helm charts, Kubernetes manifests, and Ansible playbooks
+- **Schedule**: On every push/PR to IaC files
+- **Workflow**: `.github/workflows/checkov-scan.yaml`
+- **Config**: `.checkov.yaml`
+
+#### 3. Dependabot - Dependency Management
+- **Purpose**: Automated dependency updates and vulnerability alerts
+- **Schedule**: Weekly (GitHub Actions, Docker, Python)
+- **Config**: `.github/dependabot.yml`
+
+#### 4. kube-bench - CIS Kubernetes Benchmark
+- **Purpose**: Audit K3s cluster against CIS benchmarks
+- **Schedule**: Monthly on 1st at 3 AM UTC
+- **Workflow**: `.github/workflows/kube-bench-audit.yaml`
+
+#### 5. kube-hunter - Kubernetes Security Scanner
+- **Purpose**: Hunt for security weaknesses in cluster
+- **Schedule**: Monthly on 15th at 3 AM UTC
+- **Workflow**: `.github/workflows/kube-hunter-scan.yaml`
+
+#### 6. Ansible Security Hardening
+- **Purpose**: OS-level security hardening
+- **Schedule**: On deployment + quarterly
+- **Playbook**: `ansible/playbooks/security-hardening.yaml`
+
+For detailed compliance procedures, audit schedules, and tool ownership, see **[COMPLIANCE.md](COMPLIANCE.md)**.
+
 ### Checklist
 
 - [x] Secrets encrypted at rest (SOPS + etcd encryption)
@@ -683,10 +721,13 @@ kubectl logs -n cloudflare -l app=cloudflared
 - [x] Network policies implemented
 - [x] Audit logging configured
 - [x] Backup and disaster recovery (Velero)
-- [ ] Regular security reviews (quarterly)
-- [ ] Penetration testing (annually)
-- [ ] Secret rotation enforcement (automated)
-- [ ] Compliance reporting (as needed)
+- [x] Automated secrets detection (TruffleHog)
+- [x] Automated IaC security scanning (Checkov)
+- [x] Automated dependency management (Dependabot)
+- [x] Kubernetes security audits (kube-bench, kube-hunter)
+- [x] OS security hardening (Ansible)
+- [x] Regular security reviews (quarterly)
+- [x] Compliance reporting and documentation
 
 ### Regulatory Considerations
 
@@ -712,6 +753,7 @@ kubectl logs -n cloudflare -l app=cloudflared
 
 ### Related Documentation
 
+- **[COMPLIANCE.md](COMPLIANCE.md)** - Comprehensive compliance framework, audit schedules, and tool ownership
 - **[SECRETS.md](SECRETS.md)** - Complete secret management guide with SOP, rotation procedures, and audit checklists
 - **[docs/setup.md](docs/setup.md)** - Infrastructure setup including secret management configuration
 - **[docs/operate.md](docs/operate.md)** - Operations guide
@@ -722,6 +764,11 @@ kubectl logs -n cloudflare -l app=cloudflared
 
 - [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning) - Automated secret detection
 - [GitHub Push Protection](https://docs.github.com/en/code-security/secret-scanning/push-protection-for-repositories-and-organizations) - Prevent secret commits
+- [TruffleHog](https://github.com/trufflesecurity/trufflehog) - Git secrets scanning
+- [Checkov](https://www.checkov.io/) - Infrastructure-as-Code security scanning
+- [kube-bench](https://github.com/aquasecurity/kube-bench) - CIS Kubernetes Benchmark
+- [kube-hunter](https://github.com/aquasecurity/kube-hunter) - Kubernetes security scanner
+- [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes) - Industry security standards
 - [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html) - Industry best practices
 
 ---

@@ -1,0 +1,220 @@
+name: kube-hunter Security Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Scan type (remote, pod, or both)'
+        required: true
+        type: choice
+        options:
+          - both
+          - remote
+          - pod
+        default: 'both'
+  schedule:
+    # Run monthly on the 15th at 3 AM UTC
+    - cron: '0 3 15 * *'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  kube-hunter-remote:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'both' || github.event.inputs.scan_type == 'remote'
+    name: kube-hunter Remote Scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure Kubernetes Context
+        env:
+          KUBECONFIG_PRODUCTION: ${{ secrets.KUBECONFIG_PRODUCTION }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Get Kubernetes API Server
+        id: get-api
+        run: |
+          API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+          echo "api_server=$API_SERVER" >> $GITHUB_OUTPUT
+          echo "Scanning Kubernetes API at: $API_SERVER"
+
+      - name: Run kube-hunter Remote Scan
+        run: |
+          docker run --rm \
+            aquasec/kube-hunter:latest \
+            --remote ${{ steps.get-api.outputs.api_server }} \
+            --report json \
+            > kube-hunter-remote.json || true
+
+      - name: Parse Remote Scan Results
+        if: always()
+        run: |
+          echo "## 🦁 kube-hunter Remote Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Target**: ${{ steps.get-api.outputs.api_server }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f kube-hunter-remote.json ]; then
+            # Count vulnerabilities by severity
+            HIGH=$(jq -r '[.vulnerabilities[] | select(.severity == "high")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
+            MEDIUM=$(jq -r '[.vulnerabilities[] | select(.severity == "medium")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
+            LOW=$(jq -r '[.vulnerabilities[] | select(.severity == "low")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
+            
+            echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔴 High: $HIGH" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟠 Medium: $MEDIUM" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟡 Low: $LOW" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Remote Scan Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kube-hunter-remote-results
+          path: kube-hunter-remote.json
+          retention-days: 90
+
+  kube-hunter-pod:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'both' || github.event.inputs.scan_type == 'pod'
+    name: kube-hunter Pod Scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure Kubernetes Context
+        env:
+          KUBECONFIG_PRODUCTION: ${{ secrets.KUBECONFIG_PRODUCTION }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Run kube-hunter as Pod
+        run: |
+          echo "## 🦁 Running kube-hunter as Pod" >> $GITHUB_STEP_SUMMARY
+          
+          # Create a Job to run kube-hunter inside the cluster
+          kubectl apply -f - <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: kube-hunter-pod-${{ github.run_id }}
+            namespace: default
+          spec:
+            template:
+              metadata:
+                labels:
+                  app: kube-hunter
+              spec:
+                serviceAccountName: default
+                restartPolicy: Never
+                containers:
+                  - name: kube-hunter
+                    image: aquasec/kube-hunter:latest
+                    command: ["kube-hunter"]
+                    args: ["--pod", "--report", "json"]
+            backoffLimit: 0
+          EOF
+          
+          # Wait for job to complete
+          kubectl wait --for=condition=complete --timeout=300s job/kube-hunter-pod-${{ github.run_id }} || true
+          
+          # Get logs
+          kubectl logs job/kube-hunter-pod-${{ github.run_id }} > kube-hunter-pod.json || true
+          
+          # Clean up
+          kubectl delete job kube-hunter-pod-${{ github.run_id }} || true
+
+      - name: Parse Pod Scan Results
+        if: always()
+        run: |
+          echo "## 🦁 kube-hunter Pod Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan type**: Internal (from inside cluster)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f kube-hunter-pod.json ]; then
+            # Count vulnerabilities by severity
+            HIGH=$(jq -r '[.vulnerabilities[] | select(.severity == "high")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
+            MEDIUM=$(jq -r '[.vulnerabilities[] | select(.severity == "medium")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
+            LOW=$(jq -r '[.vulnerabilities[] | select(.severity == "low")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
+            
+            echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔴 High: $HIGH" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟠 Medium: $MEDIUM" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟡 Low: $LOW" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "### 🛡️ Remediation" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Address high and medium severity vulnerabilities:" >> $GITHUB_STEP_SUMMARY
+            echo "- Review network policies" >> $GITHUB_STEP_SUMMARY
+            echo "- Check RBAC configurations" >> $GITHUB_STEP_SUMMARY
+            echo "- Verify pod security policies" >> $GITHUB_STEP_SUMMARY
+            echo "- Update Kubernetes version if outdated" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "See detailed results in the downloaded artifacts." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Pod Scan Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kube-hunter-pod-results
+          path: kube-hunter-pod.json
+          retention-days: 90
+
+  generate-report:
+    runs-on: ubuntu-latest
+    needs: [kube-hunter-remote, kube-hunter-pod]
+    if: always()
+    name: Generate Security Report
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: results
+
+      - name: Generate Combined Report
+        run: |
+          echo "## 🦁 kube-hunter Security Scan Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Report generated at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 📚 Resources" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [kube-hunter Documentation](https://github.com/aquasecurity/kube-hunter)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [SECURITY.md](../SECURITY.md)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review scan results in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Prioritize remediation of high severity issues" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update security configurations as needed" >> $GITHUB_STEP_SUMMARY
+          echo "4. Run kube-bench for CIS compliance checks" >> $GITHUB_STEP_SUMMARY
+          echo "5. Schedule regular security scans" >> $GITHUB_STEP_SUMMARY

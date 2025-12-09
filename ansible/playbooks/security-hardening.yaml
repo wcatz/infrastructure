@@ -1,0 +1,262 @@
+---
+# Ansible playbook for OS security hardening
+# This playbook applies security hardening to all cluster nodes
+# Based on CIS benchmarks and security best practices
+
+- name: Apply Security Hardening to All Nodes
+  hosts: all
+  become: true
+  gather_facts: true
+  
+  vars:
+    # Security hardening configuration
+    security_hardening_enabled: true
+    
+    # SSH hardening
+    ssh_permit_root_login: "no"
+    ssh_password_authentication: "no"
+    ssh_permit_empty_passwords: "no"
+    ssh_challenge_response_authentication: "no"
+    ssh_gssapi_authentication: "no"
+    ssh_x11_forwarding: "no"
+    ssh_max_auth_tries: 3
+    ssh_client_alive_interval: 300
+    ssh_client_alive_count_max: 2
+    ssh_login_grace_time: 60
+    
+    # Firewall configuration
+    ufw_enabled: true
+    ufw_default_incoming: "deny"
+    ufw_default_outgoing: "allow"
+    
+    # Allowed SSH sources (Tailscale network)
+    ufw_allowed_networks:
+      - "100.64.0.0/10"  # Tailscale CGNAT range
+    
+    # System hardening
+    kernel_hardening_enabled: true
+    disable_unused_filesystems: true
+    disable_uncommon_network_protocols: true
+    
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install security packages
+      ansible.builtin.apt:
+        name:
+          - ufw
+          - fail2ban
+          - aide
+          - auditd
+          - unattended-upgrades
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Configure SSH hardening
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+        validate: '/usr/sbin/sshd -t -f %s'
+      loop:
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin {{ ssh_permit_root_login }}' }
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication {{ ssh_password_authentication }}' }
+        - { regexp: '^#?PermitEmptyPasswords', line: 'PermitEmptyPasswords {{ ssh_permit_empty_passwords }}' }
+        - { regexp: '^#?ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication {{ ssh_challenge_response_authentication }}' }
+        - { regexp: '^#?GSSAPIAuthentication', line: 'GSSAPIAuthentication {{ ssh_gssapi_authentication }}' }
+        - { regexp: '^#?X11Forwarding', line: 'X11Forwarding {{ ssh_x11_forwarding }}' }
+        - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries {{ ssh_max_auth_tries }}' }
+        - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval {{ ssh_client_alive_interval }}' }
+        - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax {{ ssh_client_alive_count_max }}' }
+        - { regexp: '^#?LoginGraceTime', line: 'LoginGraceTime {{ ssh_login_grace_time }}' }
+      notify: restart sshd
+
+    - name: Configure UFW default policies
+      community.general.ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: '{{ ufw_default_incoming }}' }
+        - { direction: 'outgoing', policy: '{{ ufw_default_outgoing }}' }
+      when: ufw_enabled
+
+    - name: Allow SSH from Tailscale network
+      community.general.ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+        from_ip: "{{ item }}"
+      loop: "{{ ufw_allowed_networks }}"
+      when: ufw_enabled
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled
+      when: ufw_enabled
+
+    - name: Apply kernel hardening via sysctl
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: true
+        sysctl_set: true
+      loop:
+        # Network security
+        - { name: 'net.ipv4.conf.all.rp_filter', value: '1' }
+        - { name: 'net.ipv4.conf.default.rp_filter', value: '1' }
+        - { name: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+        - { name: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+        - { name: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+        - { name: 'net.ipv4.conf.all.send_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.send_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.all.secure_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.secure_redirects', value: '0' }
+        - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+        - { name: 'net.ipv4.tcp_syncookies', value: '1' }
+        - { name: 'net.ipv4.conf.all.log_martians', value: '1' }
+        - { name: 'net.ipv4.conf.default.log_martians', value: '1' }
+        # IPv6 security (if IPv6 is used)
+        - { name: 'net.ipv6.conf.all.accept_source_route', value: '0' }
+        - { name: 'net.ipv6.conf.default.accept_source_route', value: '0' }
+        - { name: 'net.ipv6.conf.all.accept_redirects', value: '0' }
+        - { name: 'net.ipv6.conf.default.accept_redirects', value: '0' }
+        # Kernel hardening
+        - { name: 'kernel.randomize_va_space', value: '2' }
+        - { name: 'kernel.yama.ptrace_scope', value: '1' }
+        - { name: 'kernel.kptr_restrict', value: '2' }
+        - { name: 'kernel.dmesg_restrict', value: '1' }
+      when: kernel_hardening_enabled
+
+    - name: Disable unused filesystems
+      ansible.builtin.lineinfile:
+        path: /etc/modprobe.d/disable-filesystems.conf
+        line: "install {{ item }} /bin/true"
+        create: true
+        mode: '0644'
+      loop:
+        - cramfs
+        - freevxfs
+        - jffs2
+        - hfs
+        - hfsplus
+        - udf
+      when: disable_unused_filesystems
+
+    - name: Disable uncommon network protocols
+      ansible.builtin.lineinfile:
+        path: /etc/modprobe.d/disable-protocols.conf
+        line: "install {{ item }} /bin/true"
+        create: true
+        mode: '0644'
+      loop:
+        - dccp
+        - sctp
+        - rds
+        - tipc
+      when: disable_uncommon_network_protocols
+
+    - name: Configure fail2ban
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [DEFAULT]
+          bantime = 3600
+          findtime = 600
+          maxretry = 3
+          
+          [sshd]
+          enabled = true
+          port = 22
+          logpath = /var/log/auth.log
+          backend = systemd
+        mode: '0644'
+      notify: restart fail2ban
+
+    - name: Enable and start fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        enabled: true
+        state: started
+
+    - name: Configure unattended-upgrades
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Allowed-Origins {
+              "${distro_id}:${distro_codename}-security";
+              "${distro_id}ESMApps:${distro_codename}-apps-security";
+              "${distro_id}ESM:${distro_codename}-infra-security";
+          };
+          Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+          Unattended-Upgrade::MinimalSteps "true";
+          Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot "false";
+        mode: '0644'
+      when: ansible_os_family == "Debian"
+
+    - name: Enable unattended-upgrades
+      ansible.builtin.systemd:
+        name: unattended-upgrades
+        enabled: true
+        state: started
+      when: ansible_os_family == "Debian"
+
+    - name: Set up auditd rules for security monitoring
+      ansible.builtin.copy:
+        dest: /etc/audit/rules.d/hardening.rules
+        content: |
+          # Monitor changes to system configuration
+          -w /etc/passwd -p wa -k identity
+          -w /etc/group -p wa -k identity
+          -w /etc/shadow -p wa -k identity
+          -w /etc/sudoers -p wa -k sudoers
+          -w /etc/ssh/sshd_config -p wa -k sshd
+          
+          # Monitor authentication events
+          -w /var/log/auth.log -p wa -k auth
+          -w /var/log/faillog -p wa -k auth
+          -w /var/log/lastlog -p wa -k auth
+          
+          # Monitor network configuration changes
+          -w /etc/hosts -p wa -k network
+          -w /etc/network/ -p wa -k network
+          
+          # Monitor kernel module loading
+          -w /sbin/insmod -p x -k modules
+          -w /sbin/rmmod -p x -k modules
+          -w /sbin/modprobe -p x -k modules
+          
+          # Make configuration immutable
+          -e 2
+        mode: '0640'
+      notify: restart auditd
+
+    - name: Enable and start auditd
+      ansible.builtin.systemd:
+        name: auditd
+        enabled: true
+        state: started
+
+  handlers:
+    - name: restart sshd
+      ansible.builtin.systemd:
+        name: sshd
+        state: restarted
+
+    - name: restart fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: restarted
+
+    - name: restart auditd
+      ansible.builtin.command: service auditd restart
+      changed_when: true
