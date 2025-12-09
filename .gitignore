@@ -8,15 +8,22 @@ ansible/group_vars/all/vault.yml
 *.pyc
 __pycache__/
 
-# Helmfile
-helmfile/secrets/
+# Helmfile - allow encrypted secrets, block plaintext
+helmfile/secrets/*
+!helmfile/secrets/*.enc.yaml
+!helmfile/secrets/README.md
 *.dec
 *-dec.yaml
-*.enc
 
-# SOPS
-.sops.yaml
+# SOPS - allow .sops.yaml config, block plaintext secrets
+!.sops.yaml
 *-secrets.yaml
+!*-secrets.enc.yaml
+!*-secrets-example.enc.yaml
+*credentials*.yaml
+!*credentials*.enc.yaml
+age/keys.txt
+.age
 
 # Cloudflare credentials (should be in Kubernetes secrets, not in git)
 *.pem

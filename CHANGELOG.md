@@ -8,8 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- SOPS configuration file (.sops.yaml) for age-based encryption
+- Comprehensive SECRETS.md documentation for secret management
+- SECURITY.md policy document for cluster health and security
+- Example encrypted secret files (Cloudflared, GitHub runner, monitoring)
+- Health check script (scripts/health-check.sh) for cluster security validation
+- helmfile/secrets/ directory with README and examples
 - External Secrets Operator for secure secret management
-- SOPS integration for encryption with detailed examples
 - Velero for backup and disaster recovery
 - DISASTER_RECOVERY.md guide with RTO/RPO expectations
 - Grafana dashboards for HAProxy, k3s, and Cloudflared
@@ -19,9 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security and policy checks in CI workflows
 - CONTRIBUTING.md for contribution guidelines
 - CHANGELOG.md for tracking changes
-- SECRETS.md for comprehensive secret management guide
 
 ### Changed
+- Non-production environments (dev/staging) disabled by default for security
+- Updated .gitignore to allow encrypted secrets while blocking plaintext
+- Enhanced README with links to SECRETS.md and SECURITY.md
 - Enhanced HAProxy configuration with externalized backend services
 - Improved health checks for HAProxy
 - Added environment-specific template support for HAProxy
@@ -30,9 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced monitoring and alerting documentation
 
 ### Security
+- Implemented SOPS with age encryption for all secrets
+- Non-production environments disabled to mitigate risk exposure
+- Documented secret exposure mitigation strategies
 - Implemented NetworkPolicies for workload isolation
 - Added security scanning to CI/CD workflows
 - Enhanced secret management practices
+- Cloudflared credentials secured with SOPS encryption
+- GitHub Actions secrets properly configured for SOPS decryption
 
 ## [1.0.0] - Previous Release
 

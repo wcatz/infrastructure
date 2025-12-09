@@ -1,5 +1,9 @@
 # Development environment - enabled services configuration
 #
+# ⚠️ SECURITY: Development environment is DISABLED to mitigate risk
+# Only production environment should be enabled in production deployments
+# To enable dev environment for local testing, change all values to true
+#
 # This file overrides the default enabled.yaml for the dev environment.
 # Services are enabled/disabled based on development needs.
 #
@@ -7,20 +11,20 @@
 # If a service is not listed here, the default from config/enabled.yaml applies.
 
 enabled:
-  # Monitoring stack
-  prometheus: true
-  grafana: true
+  # Monitoring stack - DISABLED
+  prometheus: false
+  grafana: false
 
-  # Networking
-  cloudflared: true
-  tailscaleOperator: true
+  # Networking - DISABLED
+  cloudflared: false
+  tailscaleOperator: false
 
-  # Secrets management
-  externalSecrets: true
+  # Secrets management - DISABLED
+  externalSecrets: false
 
-  # CI/CD
-  githubRunner: false  # Usually disabled in dev to save resources
+  # CI/CD - DISABLED
+  githubRunner: false
 
-  # Additional services
+  # Additional services - DISABLED
   certManager: false
-  velero: false  # Backups not needed in dev
+  velero: false

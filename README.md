@@ -166,6 +166,8 @@ helmfile apply
 | **[Operations Guide](docs/operate.md)** | Testing, monitoring, backups, disaster recovery |
 | **[Ansible Guide](docs/ansible.md)** | Infrastructure automation and playbooks |
 | **[Helmfile Guide](docs/helmfile.md)** | Service deployment and configuration |
+| **[Secret Management](SECRETS.md)** | SOPS encryption and secret management |
+| **[Security Policy](SECURITY.md)** | Security measures and best practices |
 
 ### 🚀 Quick References
 
