@@ -302,7 +302,6 @@ pip install checkov
 checkov --directory . --config-file .checkov.yaml
 
 # Trigger GitHub workflows manually
-gh workflow run trufflehog-secrets-scan.yaml
 gh workflow run checkov-scan.yaml
 gh workflow run kube-bench-audit.yaml
 gh workflow run kube-hunter-scan.yaml
