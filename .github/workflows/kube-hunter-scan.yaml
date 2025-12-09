@@ -30,7 +30,7 @@ jobs:
     name: kube-hunter Remote Scan
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
@@ -99,7 +99,7 @@ jobs:
     name: kube-hunter Pod Scan
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
@@ -197,7 +197,7 @@ jobs:
     name: Generate Security Report
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4.1.3

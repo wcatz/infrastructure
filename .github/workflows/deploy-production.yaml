@@ -28,7 +28,7 @@ jobs:
       commit_sha: ${{ steps.determine-commit.outputs.commit_sha }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.staging_commit || 'main' }}
 
@@ -107,7 +107,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.validate.outputs.commit_sha }}
 
