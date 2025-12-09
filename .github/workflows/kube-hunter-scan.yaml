@@ -23,7 +23,10 @@ permissions:
 jobs:
   kube-hunter-remote:
     runs-on: ubuntu-latest
-    if: github.event.inputs.scan_type == 'both' || github.event.inputs.scan_type == 'remote'
+    if: |
+      github.event.inputs.scan_type == 'both' || 
+      github.event.inputs.scan_type == 'remote' || 
+      github.event_name == 'schedule'
     name: kube-hunter Remote Scan
     steps:
       - name: Checkout code
@@ -89,7 +92,10 @@ jobs:
 
   kube-hunter-pod:
     runs-on: ubuntu-latest
-    if: github.event.inputs.scan_type == 'both' || github.event.inputs.scan_type == 'pod'
+    if: |
+      github.event.inputs.scan_type == 'both' || 
+      github.event.inputs.scan_type == 'pod' || 
+      github.event_name == 'schedule'
     name: kube-hunter Pod Scan
     steps:
       - name: Checkout code

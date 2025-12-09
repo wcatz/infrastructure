@@ -42,7 +42,10 @@ jobs:
           chmod 600 $HOME/.kube/config
 
       - name: Run kube-bench on Control Plane
-        if: github.event.inputs.node_type == 'both' || github.event.inputs.node_type == 'control-plane'
+        if: |
+          github.event.inputs.node_type == 'both' || 
+          github.event.inputs.node_type == 'control-plane' || 
+          github.event_name == 'schedule'
         run: |
           echo "## 🔍 Running kube-bench on Control Plane Nodes" >> $GITHUB_STEP_SUMMARY
           
@@ -123,7 +126,10 @@ jobs:
           kubectl delete job kube-bench-control-plane-${{ github.run_id }} || true
 
       - name: Run kube-bench on Worker Nodes
-        if: github.event.inputs.node_type == 'both' || github.event.inputs.node_type == 'worker'
+        if: |
+          github.event.inputs.node_type == 'both' || 
+          github.event.inputs.node_type == 'worker' || 
+          github.event_name == 'schedule'
         run: |
           echo "## 🔍 Running kube-bench on Worker Nodes" >> $GITHUB_STEP_SUMMARY
           
