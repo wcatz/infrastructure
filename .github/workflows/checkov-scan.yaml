@@ -145,8 +145,8 @@ jobs:
           echo "### 📚 Documentation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "For detailed security guidelines, see:" >> $GITHUB_STEP_SUMMARY
-          echo "- [SECURITY.md](../SECURITY.md)" >> $GITHUB_STEP_SUMMARY
-          echo "- [SECRETS.md](../SECRETS.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [SECURITY.md](SECURITY.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [SECRETS.md](SECRETS.md)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Full results available in the Security tab and downloadable artifacts." >> $GITHUB_STEP_SUMMARY
 
@@ -187,7 +187,7 @@ jobs:
             comment += '- Review failed checks in the Security tab\n';
             comment += '- Address critical and high severity issues\n';
             comment += '- Update `.checkov.yaml` to skip known false positives\n';
-            comment += '- See [SECURITY.md](../SECURITY.md) for security best practices\n';
+            comment += '- See [SECURITY.md](SECURITY.md) for security best practices\n';
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,

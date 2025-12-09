@@ -215,7 +215,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- [kube-hunter Documentation](https://github.com/aquasecurity/kube-hunter)" >> $GITHUB_STEP_SUMMARY
           echo "- [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)" >> $GITHUB_STEP_SUMMARY
-          echo "- [SECURITY.md](../SECURITY.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [SECURITY.md](SECURITY.md)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -152,8 +152,10 @@ jobs:
                   scan-type: worker
               spec:
                 hostPID: true
+                # K3s uses node-role.kubernetes.io/agent for worker nodes
+                # If this doesn't match, remove the nodeSelector to run on all nodes
                 nodeSelector:
-                  node-role.kubernetes.io/worker: "true"
+                  node-role.kubernetes.io/agent: "true"
                 containers:
                   - name: kube-bench
                     image: aquasec/kube-bench:latest
