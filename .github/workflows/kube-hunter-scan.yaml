@@ -55,7 +55,7 @@ jobs:
       - name: Run kube-hunter Remote Scan
         run: |
           docker run --rm \
-            aquasec/kube-hunter:latest \
+            aquasec/kube-hunter:v0.6.8 \
             --remote ${{ steps.get-api.outputs.api_server }} \
             --report json \
             > kube-hunter-remote.json || true
