@@ -189,10 +189,13 @@ metrics:
 # ==============================================================================
 
 # Security context for the container
+# Note: runAsUser and fsGroup are set to the same value (65532) for simplicity
+# This is the "nonroot" user ID commonly used in container images
+# If your Kubernetes environment requires different values, adjust accordingly
 securityContext:
   runAsNonRoot: true           # Don't run as root
-  runAsUser: 65532             # Run as unprivileged user
-  fsGroup: 65532               # Filesystem group
+  runAsUser: 65532             # Run as unprivileged user (nonroot)
+  fsGroup: 65532               # Filesystem group (same as user for simplicity)
   capabilities:
     drop:
       - ALL                    # Drop all capabilities

@@ -164,32 +164,40 @@ print_info "Checking credentials secret..."
 if kubectl get secret cloudflared-credentials -n "$NAMESPACE" &>/dev/null; then
     print_success "Secret 'cloudflared-credentials' exists"
     
+    # Fetch secret data once
+    CREDS_DATA=$(kubectl get secret cloudflared-credentials -n "$NAMESPACE" -o jsonpath='{.data.credentials\.json}' 2>/dev/null)
+    
     # Verify secret has the required key
-    if kubectl get secret cloudflared-credentials -n "$NAMESPACE" -o jsonpath='{.data.credentials\.json}' | base64 -d &>/dev/null; then
-        print_success "Secret contains 'credentials.json' key"
+    if [ -n "$CREDS_DATA" ]; then
+        CREDS_JSON=$(echo "$CREDS_DATA" | base64 -d 2>/dev/null)
         
-        # Try to parse as JSON
-        CREDS_JSON=$(kubectl get secret cloudflared-credentials -n "$NAMESPACE" -o jsonpath='{.data.credentials\.json}' | base64 -d)
-        if command -v jq &> /dev/null; then
-            if echo "$CREDS_JSON" | jq empty 2>/dev/null; then
-                print_success "Credentials JSON is valid"
-                
-                # Extract tunnel info
-                SECRET_TUNNEL_NAME=$(echo "$CREDS_JSON" | jq -r '.TunnelName // empty')
-                SECRET_TUNNEL_ID=$(echo "$CREDS_JSON" | jq -r '.TunnelID // empty')
-                
-                echo "  Tunnel Name: $SECRET_TUNNEL_NAME"
-                echo "  Tunnel ID:   $SECRET_TUNNEL_ID"
-                
-                # Verify tunnel name matches if provided
-                if [ -n "$TUNNEL_NAME" ] && [ "$SECRET_TUNNEL_NAME" != "$TUNNEL_NAME" ]; then
-                    print_warning "Tunnel name mismatch"
-                    echo "  Expected: $TUNNEL_NAME"
-                    echo "  Found:    $SECRET_TUNNEL_NAME"
+        if [ -n "$CREDS_JSON" ]; then
+            print_success "Secret contains 'credentials.json' key"
+            
+            # Try to parse as JSON
+            if command -v jq &> /dev/null; then
+                if echo "$CREDS_JSON" | jq empty 2>/dev/null; then
+                    print_success "Credentials JSON is valid"
+                    
+                    # Extract tunnel info
+                    SECRET_TUNNEL_NAME=$(echo "$CREDS_JSON" | jq -r '.TunnelName // empty')
+                    SECRET_TUNNEL_ID=$(echo "$CREDS_JSON" | jq -r '.TunnelID // empty')
+                    
+                    echo "  Tunnel Name: $SECRET_TUNNEL_NAME"
+                    echo "  Tunnel ID:   $SECRET_TUNNEL_ID"
+                    
+                    # Verify tunnel name matches if provided
+                    if [ -n "$TUNNEL_NAME" ] && [ "$SECRET_TUNNEL_NAME" != "$TUNNEL_NAME" ]; then
+                        print_warning "Tunnel name mismatch"
+                        echo "  Expected: $TUNNEL_NAME"
+                        echo "  Found:    $SECRET_TUNNEL_NAME"
+                    fi
+                else
+                    print_error "Credentials JSON is invalid"
                 fi
-            else
-                print_error "Credentials JSON is invalid"
             fi
+        else
+            print_error "Failed to decode credentials data"
         fi
     else
         print_error "Secret missing 'credentials.json' key"

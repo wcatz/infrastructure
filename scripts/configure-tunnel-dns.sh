@@ -224,6 +224,10 @@ echo ""
 SUCCESS_COUNT=0
 FAILED_DOMAINS=()
 
+# Create a temporary file securely (once for all operations)
+TEMP_OUTPUT=$(mktemp)
+trap "rm -f $TEMP_OUTPUT" EXIT
+
 # Process each domain
 for domain in "${CLEAN_DOMAINS[@]}"; do
     echo "Processing: $domain"
@@ -241,10 +245,6 @@ for domain in "${CLEAN_DOMAINS[@]}"; do
         ((SUCCESS_COUNT++))
     else
         # Add DNS route
-        # Create a temporary file securely
-        TEMP_OUTPUT=$(mktemp)
-        trap "rm -f $TEMP_OUTPUT" EXIT
-        
         if cloudflared tunnel route dns "$TUNNEL_NAME" "$domain" 2>&1 | tee "$TEMP_OUTPUT" | grep -q "error\|Error\|already exists"; then
             OUTPUT=$(cat "$TEMP_OUTPUT")
             
@@ -256,11 +256,9 @@ for domain in "${CLEAN_DOMAINS[@]}"; do
                 echo "  Error: $OUTPUT"
                 FAILED_DOMAINS+=("$domain")
             fi
-            rm -f "$TEMP_OUTPUT"
         else
             print_success "Added DNS route for $domain"
             ((SUCCESS_COUNT++))
-            rm -f "$TEMP_OUTPUT"
         fi
     fi
     
