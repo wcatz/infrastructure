@@ -164,6 +164,7 @@ helmfile apply
 |-------|-------------|
 | **[Setup Guide](docs/setup.md)** | Complete setup from prerequisites to deployment, including secret management |
 | **[Secret Management](SECRETS.md)** | Comprehensive guide to SOPS, Ansible Vault, and security best practices |
+| **[Cloudflare Tunnel Setup](helmfile/CLOUDFLARED_SETUP.md)** | Using existing tunnel credentials for secure ingress |
 | **[Operations Guide](docs/operate.md)** | Testing, monitoring, backups, disaster recovery |
 | **[Ansible Guide](docs/ansible.md)** | Infrastructure automation and playbooks |
 | **[Helmfile Guide](docs/helmfile.md)** | Service deployment and configuration |
@@ -174,6 +175,7 @@ helmfile apply
 
 - **[Compliance Framework](COMPLIANCE.md)** - Audit schedules, compliance procedures, and security tools
 - **[Secret Management Guide](SECRETS.md)** - Complete guide to SOPS, Ansible Vault, rotation, and audits
+- **[Cloudflare Tunnel Setup](helmfile/CLOUDFLARED_SETUP.md)** - Guide for using existing tunnel credentials
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to this project
 - **[Changelog](CHANGELOG.md)** - Version history and changes
 - **[DNS Setup Guide](DNS_SETUP.md)** - Configure DNS for Cloudflared tunnels and NodePort services

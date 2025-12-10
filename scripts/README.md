@@ -354,9 +354,149 @@ gh auth status
 export GH_TOKEN=your_personal_access_token
 ```
 
+## Cloudflare Tunnel Management Scripts
+
+### import-cloudflared-credentials.sh
+
+**Purpose:** Import existing Cloudflare Tunnel credentials into Kubernetes.
+
+**Usage:**
+```bash
+./scripts/import-cloudflared-credentials.sh \
+  -t <TUNNEL-ID> \
+  -n <TUNNEL-NAME> \
+  -e <ENVIRONMENT>
+```
+
+**Options:**
+- `-t, --tunnel-id` - Tunnel ID (required)
+- `-n, --tunnel-name` - Tunnel name (optional)
+- `-c, --creds-file` - Path to credentials file (default: `~/.cloudflared/<TUNNEL-ID>.json`)
+- `-e, --environment` - Target environment: dev/staging/prod (default: production)
+- `-s, --skip-validation` - Skip tunnel validation
+- `-h, --help` - Show help message
+
+**What it does:**
+1. Validates tunnel ID and credentials file
+2. Creates Kubernetes secret YAML manifest
+3. Encrypts credentials with SOPS
+4. Saves encrypted secret to repository
+5. Securely deletes plaintext files
+6. Provides next steps for deployment
+
+**Example:**
+```bash
+# Import production tunnel credentials
+./scripts/import-cloudflared-credentials.sh \
+  -t 12345678-1234-1234-1234-123456789abc \
+  -n infrastructure-prod-tunnel \
+  -e prod
+```
+
+### configure-tunnel-dns.sh
+
+**Purpose:** Configure DNS routes for Cloudflare Tunnel.
+
+**Usage:**
+```bash
+./scripts/configure-tunnel-dns.sh \
+  -t <TUNNEL-NAME> \
+  -d <DOMAINS>
+```
+
+**Options:**
+- `-t, --tunnel-name` - Tunnel name (required)
+- `-d, --domains` - Comma-separated domains (required)
+- `-r, --remove` - Remove DNS routes instead of adding
+- `-l, --list` - List existing DNS routes
+- `-v, --verify` - Verify DNS propagation
+- `-h, --help` - Show help message
+
+**Example:**
+```bash
+# Add DNS routes for multiple domains
+./scripts/configure-tunnel-dns.sh \
+  -t infrastructure-prod-tunnel \
+  -d "app.example.com,api.example.com,grafana.example.com"
+
+# List existing routes
+./scripts/configure-tunnel-dns.sh -t infrastructure-prod-tunnel -l
+```
+
+### validate-tunnel-setup.sh
+
+**Purpose:** Validate Cloudflare Tunnel setup in Kubernetes.
+
+**Usage:**
+```bash
+./scripts/validate-tunnel-setup.sh [OPTIONS]
+```
+
+**Options:**
+- `-n, --namespace` - Kubernetes namespace (default: cloudflare)
+- `-t, --tunnel-name` - Expected tunnel name
+- `-d, --domains` - Domains to test
+- `-s, --skip-dns` - Skip DNS verification
+- `-h, --help` - Show help message
+
+**What it validates:**
+1. Kubernetes cluster connectivity
+2. Namespace existence
+3. Secret existence and validity
+4. Deployment and pod status
+5. Pod logs for errors
+6. Tunnel connectivity
+7. DNS configuration (optional)
+8. HTTP accessibility (optional)
+
+**Example:**
+```bash
+# Basic validation
+./scripts/validate-tunnel-setup.sh
+
+# Validate with specific tunnel and test domains
+./scripts/validate-tunnel-setup.sh \
+  -t infrastructure-prod-tunnel \
+  -d "app.example.com,api.example.com"
+```
+
+## Complete Workflow Example
+
+### Reusing Existing Cloudflare Tunnel
+
+```bash
+# 1. Import existing tunnel credentials
+./scripts/import-cloudflared-credentials.sh \
+  -t 12345678-1234-1234-1234-123456789abc \
+  -n infrastructure-prod-tunnel \
+  -e prod
+
+# 2. Configure DNS routes
+./scripts/configure-tunnel-dns.sh \
+  -t infrastructure-prod-tunnel \
+  -d "app.example.com,api.example.com,grafana.example.com" \
+  -v
+
+# 3. Update Helmfile configuration
+vim helmfile/values/cloudflared-values.yaml
+# Set tunnel ID, name, and ingress rules
+
+# 4. Deploy to Kubernetes
+cd helmfile
+helmfile diff
+helmfile apply
+
+# 5. Validate deployment
+cd ..
+./scripts/validate-tunnel-setup.sh \
+  -t infrastructure-prod-tunnel \
+  -d "app.example.com,api.example.com,grafana.example.com"
+```
+
 ## Related Documentation
 
 - [Setup Guide](../docs/setup.md) - Complete infrastructure setup
+- [Cloudflare Tunnel Setup](../helmfile/CLOUDFLARED_SETUP.md) - Comprehensive Cloudflare Tunnel guide
 - [Secret Management](../SECRETS.md) - Secret management best practices
 - [Security Policy](../SECURITY.md) - Security measures and verification
 - [Operations Guide](../docs/operate.md) - Day-to-day operations

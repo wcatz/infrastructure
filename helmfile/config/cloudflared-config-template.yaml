@@ -1,0 +1,359 @@
+# Cloudflare Tunnel Configuration Template
+# This template demonstrates how to configure Cloudflared with existing tunnel credentials
+#
+# IMPORTANT: This is a template file with placeholders. Copy and customize for your environment.
+#
+# Usage:
+#   1. Copy this file: cp cloudflared-config-template.yaml ../values/cloudflared-values.yaml
+#   2. Replace all <PLACEHOLDER> values with your actual configuration
+#   3. Deploy: helmfile apply
+
+# ==============================================================================
+# BASIC CONFIGURATION
+# ==============================================================================
+
+# Number of replicas for high availability
+# Recommendation: At least 2 for production
+replicaCount: 2
+
+# Cloudflare tunnel configuration
+cloudflare:
+  # Tunnel name from your existing tunnel
+  # Get with: cloudflared tunnel list
+  tunnelName: "<YOUR-TUNNEL-NAME>"
+  # Example: "infrastructure-prod-tunnel"
+
+  # Tunnel ID from your existing tunnel
+  # Get with: cloudflared tunnel list
+  # Format: UUID (e.g., 12345678-1234-1234-1234-123456789abc)
+  tunnelId: "<YOUR-TUNNEL-ID>"
+  # Example: "12345678-1234-1234-1234-123456789abc"
+
+  # Optional: Account ID (usually not required for basic setup)
+  # account: "<YOUR-CLOUDFLARE-ACCOUNT-ID>"
+
+  # Optional: Zone/domain (usually not required for basic setup)
+  # zone: "example.com"
+
+# ==============================================================================
+# INGRESS RULES - Define your service routing
+# ==============================================================================
+
+ingress:
+  # Route traffic to your services based on hostname
+  # Format:
+  #   - hostname: <SUBDOMAIN>.<DOMAIN>
+  #     service: http://<SERVICE-NAME>.<NAMESPACE>.svc.cluster.local:<PORT>
+
+  # Example: Web application
+  # - hostname: app.example.com
+  #   service: http://web-app.default.svc.cluster.local:80
+
+  # Example: API service
+  # - hostname: api.example.com
+  #   service: http://api-service.default.svc.cluster.local:8080
+
+  # Example: Grafana monitoring
+  # - hostname: grafana.example.com
+  #   service: http://prometheus-grafana.monitoring.svc.cluster.local:80
+
+  # Example: Prometheus metrics
+  # - hostname: prometheus.example.com
+  #   service: http://prometheus-server.monitoring.svc.cluster.local:80
+
+  # Example: Custom service with authentication
+  # - hostname: admin.example.com
+  #   service: http://admin-panel.admin.svc.cluster.local:3000
+
+  # REQUIRED: Catch-all rule (must be last)
+  # Returns 404 for unmatched hostnames
+  - service: http_status:404
+
+# ==============================================================================
+# RESOURCE CONFIGURATION
+# ==============================================================================
+
+# Resource requests and limits
+# Adjust based on your traffic volume
+resources:
+  requests:
+    cpu: 100m        # Minimum CPU
+    memory: 128Mi    # Minimum memory
+  limits:
+    cpu: 200m        # Maximum CPU
+    memory: 256Mi    # Maximum memory
+
+# Production settings (higher traffic):
+# resources:
+#   requests:
+#     cpu: 200m
+#     memory: 256Mi
+#   limits:
+#     cpu: 500m
+#     memory: 512Mi
+
+# ==============================================================================
+# AUTO-SCALING CONFIGURATION
+# ==============================================================================
+
+autoscaling:
+  enabled: true
+  minReplicas: 2              # Minimum number of pods
+  maxReplicas: 10             # Maximum number of pods
+  targetCPUUtilizationPercentage: 80     # Scale up when CPU > 80%
+  targetMemoryUtilizationPercentage: 80  # Scale up when memory > 80%
+
+# Production settings (more aggressive scaling):
+# autoscaling:
+#   enabled: true
+#   minReplicas: 3
+#   maxReplicas: 20
+#   targetCPUUtilizationPercentage: 70
+#   targetMemoryUtilizationPercentage: 70
+
+# ==============================================================================
+# POD CONFIGURATION
+# ==============================================================================
+
+# Annotations for monitoring and tracking
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "2000"
+  # Add custom annotations as needed
+  # app.version: "1.0.0"
+  # team: "platform"
+
+# Service account configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: cloudflared
+
+# ==============================================================================
+# SCHEDULING AND PLACEMENT
+# ==============================================================================
+
+# Node selector - Deploy to specific nodes
+nodeSelector: {}
+# Example: Deploy only to worker nodes
+# nodeSelector:
+#   node-role.kubernetes.io/worker: "true"
+
+# Tolerations - Allow pods on tainted nodes
+tolerations: []
+# Example: Tolerate worker node taints
+# tolerations:
+#   - key: "workload"
+#     operator: "Equal"
+#     value: "edge"
+#     effect: "NoSchedule"
+
+# Affinity rules - Control pod placement
+affinity:
+  # Pod anti-affinity - Spread replicas across nodes for HA
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - cloudflared
+          topologyKey: kubernetes.io/hostname
+
+# For production, use required anti-affinity:
+# affinity:
+#   podAntiAffinity:
+#     requiredDuringSchedulingIgnoredDuringExecution:
+#       - labelSelector:
+#           matchExpressions:
+#             - key: app.kubernetes.io/name
+#               operator: In
+#               values:
+#                 - cloudflared
+#         topologyKey: kubernetes.io/hostname
+
+# ==============================================================================
+# MONITORING AND METRICS
+# ==============================================================================
+
+# Metrics endpoint configuration
+metrics:
+  enabled: true
+  port: 2000
+
+# ==============================================================================
+# SECURITY CONFIGURATION
+# ==============================================================================
+
+# Security context for the container
+# Note: runAsUser and fsGroup are set to the same value (65532) for simplicity
+# This is the "nonroot" user ID commonly used in container images
+# If your Kubernetes environment requires different values, adjust accordingly
+securityContext:
+  runAsNonRoot: true           # Don't run as root
+  runAsUser: 65532             # Run as unprivileged user (nonroot)
+  fsGroup: 65532               # Filesystem group (same as user for simplicity)
+  capabilities:
+    drop:
+      - ALL                    # Drop all capabilities
+  readOnlyRootFilesystem: true # Immutable container filesystem
+  allowPrivilegeEscalation: false
+
+# Pod-level security context
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault       # Use default seccomp profile
+  fsGroupChangePolicy: OnRootMismatch  # Only change permissions when needed
+
+# ==============================================================================
+# HEALTH CHECKS
+# ==============================================================================
+
+# Liveness probe - Restart pod if failing
+livenessProbe:
+  httpGet:
+    path: /ready
+    port: 2000
+  initialDelaySeconds: 30     # Wait before first check
+  periodSeconds: 10           # Check every 10 seconds
+  timeoutSeconds: 5           # Timeout after 5 seconds
+  failureThreshold: 3         # Restart after 3 failures
+
+# Readiness probe - Remove from service if failing
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 2000
+  initialDelaySeconds: 10     # Wait before first check
+  periodSeconds: 5            # Check every 5 seconds
+  timeoutSeconds: 3           # Timeout after 3 seconds
+  failureThreshold: 2         # Remove after 2 failures
+
+# ==============================================================================
+# ADVANCED CONFIGURATION (Optional)
+# ==============================================================================
+
+# Additional environment variables for fine-tuning
+env: []
+  # Log level: debug, info, warn, error
+  # - name: TUNNEL_LOGLEVEL
+  #   value: "info"
+  
+  # Transport protocol: quic or http2
+  # - name: TUNNEL_TRANSPORT_PROTOCOL
+  #   value: "quic"
+  
+  # Disable automatic updates (recommended for Kubernetes)
+  # - name: TUNNEL_NO_AUTOUPDATE
+  #   value: "true"
+  
+  # Connection retry settings
+  # - name: TUNNEL_RETRIES
+  #   value: "5"
+  # - name: TUNNEL_MAX_RETRIES
+  #   value: "5"
+  
+  # Grace period for shutdown (in seconds)
+  # - name: TUNNEL_GRACE_PERIOD
+  #   value: "30s"
+
+# ==============================================================================
+# SECRET CONFIGURATION
+# ==============================================================================
+
+# The tunnel credentials MUST be stored in a Kubernetes secret before deploying
+# This should reference your encrypted secret created from existing credentials
+#
+# To create the required secret from existing tunnel credentials:
+#   1. Copy existing credentials:
+#      cp ~/.cloudflared/<TUNNEL-ID>.json /tmp/credentials.json
+#
+#   2. Create Kubernetes secret YAML:
+#      kubectl create secret generic cloudflared-credentials \
+#        --from-file=credentials.json=/tmp/credentials.json \
+#        -n cloudflare \
+#        --dry-run=client -o yaml > cloudflared-credentials.yaml
+#
+#   3. Encrypt with SOPS:
+#      sops -e cloudflared-credentials.yaml > cloudflared-credentials.enc.yaml
+#
+#   4. Deploy:
+#      sops -d cloudflared-credentials.enc.yaml | kubectl apply -f -
+#
+#   5. Clean up:
+#      shred -u cloudflared-credentials.yaml /tmp/credentials.json
+
+# Reference to the existing secret name
+existingSecret: "cloudflared-credentials"
+
+# Key within the secret that contains the credentials JSON
+existingSecretKey: "credentials.json"
+
+# ==============================================================================
+# QUICK START EXAMPLES
+# ==============================================================================
+
+# Example 1: Basic Web Application
+# ---------------------------------
+# ingress:
+#   - hostname: app.example.com
+#     service: http://webapp.default.svc.cluster.local:80
+#   - service: http_status:404
+
+# Example 2: Multiple Services
+# ---------------------------------
+# ingress:
+#   - hostname: app.example.com
+#     service: http://webapp.default.svc.cluster.local:80
+#   - hostname: api.example.com
+#     service: http://api.default.svc.cluster.local:8080
+#   - hostname: admin.example.com
+#     service: http://admin.admin.svc.cluster.local:3000
+#   - service: http_status:404
+
+# Example 3: Monitoring Stack
+# ---------------------------------
+# ingress:
+#   - hostname: grafana.example.com
+#     service: http://prometheus-grafana.monitoring.svc.cluster.local:80
+#   - hostname: prometheus.example.com
+#     service: http://prometheus-server.monitoring.svc.cluster.local:80
+#   - hostname: alertmanager.example.com
+#     service: http://prometheus-alertmanager.monitoring.svc.cluster.local:9093
+#   - service: http_status:404
+
+# Example 4: Wildcard Routing (requires wildcard DNS)
+# ---------------------------------
+# ingress:
+#   - hostname: "*.apps.example.com"
+#     service: http://router.default.svc.cluster.local:80
+#   - hostname: app.example.com
+#     service: http://webapp.default.svc.cluster.local:80
+#   - service: http_status:404
+
+# ==============================================================================
+# DEPLOYMENT CHECKLIST
+# ==============================================================================
+
+# Before deploying, ensure:
+# ✓ Tunnel exists and is active (cloudflared tunnel list)
+# ✓ Credentials file is available (~/.cloudflared/<TUNNEL-ID>.json)
+# ✓ Secret is encrypted and deployed to cluster
+# ✓ DNS routes are configured (cloudflared tunnel route list)
+# ✓ All <PLACEHOLDER> values are replaced with actual values
+# ✓ Ingress rules match your services and namespaces
+# ✓ SOPS age key is configured for decryption
+# ✓ Namespace 'cloudflare' exists or will be created
+
+# Deploy with:
+# cd helmfile
+# helmfile diff  # Preview changes
+# helmfile apply # Deploy
+
+# Verify with:
+# kubectl get pods -n cloudflare
+# kubectl logs -n cloudflare -l app.kubernetes.io/name=cloudflared
+# curl -I https://app.example.com
