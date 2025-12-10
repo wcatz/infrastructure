@@ -600,7 +600,59 @@ shred -u .vault_pass.old
 
 Cloudflared requires tunnel credentials to establish secure tunnels to Cloudflare's edge network.
 
-### Create Cloudflared Tunnel
+### Using Existing Tunnel Credentials
+
+If you already have a Cloudflare Tunnel and want to reuse its credentials:
+
+```bash
+# Use the automated import script
+./scripts/import-cloudflared-credentials.sh \
+  -t <TUNNEL-ID> \
+  -n <TUNNEL-NAME> \
+  -e prod
+
+# The script will:
+# 1. Validate your existing credentials
+# 2. Create a Kubernetes secret manifest
+# 3. Encrypt with SOPS
+# 4. Save to helmfile/secrets/cloudflared-credentials.enc.yaml
+# 5. Securely delete plaintext files
+```
+
+**Manual import process:**
+
+```bash
+# 1. Locate existing credentials
+TUNNEL_ID="your-tunnel-id"
+cp ~/.cloudflared/${TUNNEL_ID}.json /tmp/credentials.json
+
+# 2. Create Kubernetes secret YAML
+cat > /tmp/cloudflared-credentials.yaml <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflared-credentials
+  namespace: cloudflare
+type: Opaque
+stringData:
+  credentials.json: |
+$(cat /tmp/credentials.json | sed 's/^/    /')
+EOF
+
+# 3. Encrypt with SOPS
+export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
+sops -e /tmp/cloudflared-credentials.yaml > \
+  helmfile/secrets/cloudflared-credentials.enc.yaml
+
+# 4. Securely delete plaintext files
+shred -u /tmp/cloudflared-credentials.yaml /tmp/credentials.json
+```
+
+See [CLOUDFLARED_SETUP.md](helmfile/CLOUDFLARED_SETUP.md) for comprehensive setup instructions.
+
+### Create New Cloudflared Tunnel
+
+If creating a new tunnel:
 
 ```bash
 # Authenticate with Cloudflare
