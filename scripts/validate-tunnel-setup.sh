@@ -67,7 +67,7 @@ print_warning() {
 
 # Function to display help
 show_help() {
-    head -n 24 "$0" | tail -n 22 | sed 's/^# //' | sed 's/^#//'
+    sed -n '/^# Cloudflare Tunnel Validation Script/,/^$/p' "$0" | sed 's/^# //' | sed 's/^#//'
     exit 0
 }
 

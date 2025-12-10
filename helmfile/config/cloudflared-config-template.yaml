@@ -203,6 +203,7 @@ securityContext:
 podSecurityContext:
   seccompProfile:
     type: RuntimeDefault       # Use default seccomp profile
+  fsGroupChangePolicy: OnRootMismatch  # Only change permissions when needed
 
 # ==============================================================================
 # HEALTH CHECKS

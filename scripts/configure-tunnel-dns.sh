@@ -67,7 +67,7 @@ print_warning() {
 
 # Function to display help
 show_help() {
-    head -n 30 "$0" | tail -n 28 | sed 's/^# //' | sed 's/^#//'
+    sed -n '/^# Cloudflare Tunnel DNS Configuration Script/,/^$/p' "$0" | sed 's/^# //' | sed 's/^#//'
     exit 0
 }
 
@@ -230,18 +230,23 @@ for domain in "${CLEAN_DOMAINS[@]}"; do
     
     if [ "$REMOVE_MODE" = true ]; then
         # Remove DNS route
-        if cloudflared tunnel route dns --overwrite-dns "$TUNNEL_NAME" "$domain" 2>&1 | grep -q "error\|Error"; then
-            print_error "Failed to remove route for $domain"
-            FAILED_DOMAINS+=("$domain")
-        else
-            # Cloudflare doesn't have a direct 'remove' command, so we verify it was processed
-            print_success "Processed removal request for $domain"
-            ((SUCCESS_COUNT++))
-        fi
+        # Note: cloudflared doesn't have a direct remove command for DNS routes
+        # Routes need to be deleted via API or dashboard
+        print_warning "DNS route removal via CLI not directly supported"
+        echo "  To remove route for $domain:"
+        echo "  1. Go to https://dash.cloudflare.com/"
+        echo "  2. Navigate to DNS → Records"
+        echo "  3. Delete the CNAME record for $domain"
+        echo "  Or use Cloudflare API to delete the DNS record"
+        ((SUCCESS_COUNT++))
     else
         # Add DNS route
-        if cloudflared tunnel route dns "$TUNNEL_NAME" "$domain" 2>&1 | tee /tmp/cloudflared-output-$$.txt | grep -q "error\|Error\|already exists"; then
-            OUTPUT=$(cat /tmp/cloudflared-output-$$.txt)
+        # Create a temporary file securely
+        TEMP_OUTPUT=$(mktemp)
+        trap "rm -f $TEMP_OUTPUT" EXIT
+        
+        if cloudflared tunnel route dns "$TUNNEL_NAME" "$domain" 2>&1 | tee "$TEMP_OUTPUT" | grep -q "error\|Error\|already exists"; then
+            OUTPUT=$(cat "$TEMP_OUTPUT")
             
             if echo "$OUTPUT" | grep -q "already exists"; then
                 print_warning "DNS route already exists for $domain"
@@ -251,11 +256,11 @@ for domain in "${CLEAN_DOMAINS[@]}"; do
                 echo "  Error: $OUTPUT"
                 FAILED_DOMAINS+=("$domain")
             fi
-            rm -f /tmp/cloudflared-output-$$.txt
+            rm -f "$TEMP_OUTPUT"
         else
             print_success "Added DNS route for $domain"
             ((SUCCESS_COUNT++))
-            rm -f /tmp/cloudflared-output-$$.txt
+            rm -f "$TEMP_OUTPUT"
         fi
     fi
     
