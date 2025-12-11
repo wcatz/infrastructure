@@ -1,4 +1,6 @@
 name: Test Self-Hosted Runner
+permissions:
+  contents: read
 
 # This workflow demonstrates using the self-hosted GitHub Actions runner
 # with Tailscale connectivity to access the Kubernetes cluster
