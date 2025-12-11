@@ -168,12 +168,15 @@ ansible-vault encrypt group_vars/all/vault.yml
 
 4. **Validate Ansible playbooks:**
    ```bash
-   ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml --syntax-check
+   # Note: ansible.cfg sets default inventory, but explicit is clearer
+   cd ansible
+   ansible-playbook playbooks/deploy-k3s.yaml --syntax-check
    ```
 
 5. **Test Ansible in dry-run mode:**
    ```bash
-   ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml --check
+   cd ansible
+   ansible-playbook playbooks/deploy-k3s.yaml --check
    ```
 
 ### CI/CD Integration
@@ -285,10 +288,12 @@ All documentation follows a clear structure:
 # Complete deployment
 ./runme.sh
 
-# Or step-by-step (with vault password for encrypted secrets):
-ansible-playbook -i inventory.ini --vault-password-file .vault_pass playbooks/setup-tailscale.yaml
-ansible-playbook -i inventory.ini --vault-password-file .vault_pass playbooks/deploy-k3s.yaml
-cd helmfile && helmfile apply
+# Or step-by-step:
+# Note: ansible.cfg sets inventory and vault_password_file defaults
+cd ansible
+ansible-playbook playbooks/setup-tailscale.yaml
+ansible-playbook playbooks/deploy-k3s.yaml
+cd ../helmfile && helmfile apply
 ```
 
 ### Deploy Services
