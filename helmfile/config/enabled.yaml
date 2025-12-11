@@ -30,8 +30,7 @@ enabled:
   # Observability
   grafana: true
 
-  # Secrets management
-  externalSecrets: true
+
 
   # CI/CD
   githubRunner: false  # GitHub Actions self-hosted runner with Tailscale (disabled by default)

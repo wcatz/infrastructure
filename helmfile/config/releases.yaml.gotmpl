@@ -11,7 +11,6 @@ These values are loaded as the base configuration for all environments.
 - prometheus: true (core monitoring, always recommended)
 - grafana: true (visualization and dashboards)
 - cloudflared: true (Cloudflare tunnel ingress)
-- externalSecrets: true (secrets management)
 - tailscaleOperator: true (Tailscale mesh networking)
 - velero: false (backup/DR, enable per environment as needed)
 - certManager: false (TLS certificate management, enable per environment as needed)
@@ -93,15 +92,7 @@ releases:
       {{- end }}
 {{- end }}
 
-{{- if index $enabled "externalSecrets" | default true }}
-  - name: external-secrets
-    namespace: external-secrets-system
-    createNamespace: true
-    chart: external-secrets/external-secrets
-    version: 0.9.11
-    values:
-      - values/external-secrets-values.yaml
-{{- end }}
+
 
 {{- if index $enabled "tailscaleOperator" | default true }}
   - name: tailscale-operator
