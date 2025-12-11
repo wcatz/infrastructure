@@ -30,8 +30,6 @@ enabled:
   # Observability
   grafana: true
 
-
-
   # CI/CD
   githubRunner: false  # GitHub Actions self-hosted runner with Tailscale (disabled by default)
 
