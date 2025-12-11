@@ -73,19 +73,20 @@ fi
 # Test DNS functionality
 print_info "Testing DNS resolution..."
 DNS_TEST_POD="dns-test-$(date +%s)"
-if kubectl run "$DNS_TEST_POD" --image=busybox:1.28 --rm -i --restart=Never --command -- nslookup kubernetes.default &> /tmp/dns-test.log 2>&1; then
+DNS_TEST_LOG="/tmp/dns-test.log"
+if kubectl run "$DNS_TEST_POD" --image=busybox:1.28 --rm -i --restart=Never --command -- nslookup kubernetes.default &> "$DNS_TEST_LOG" 2>&1; then
     print_success "DNS resolution is working"
 else
     # Check if it's just because the pod already exists or other temporary issue
-    if grep -q "kubernetes.default.svc.cluster.local" /tmp/dns-test.log; then
+    if grep -q "kubernetes.default.svc.cluster.local" "$DNS_TEST_LOG"; then
         print_success "DNS resolution is working"
     else
         print_warning "DNS resolution test failed"
         print_info "DNS test output:"
-        head -n 10 /tmp/dns-test.log
+        head -n 10 "$DNS_TEST_LOG"
     fi
 fi
-rm -f /tmp/dns-test.log
+rm -f "$DNS_TEST_LOG"
 
 # Check monitoring pods (if enabled)
 if kubectl get namespace monitoring &> /dev/null; then
