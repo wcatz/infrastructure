@@ -31,8 +31,9 @@ Helmfile provides declarative Helm chart management for the k3s infrastructure.
 - Grafana (monitoring dashboards)
 - Tailscale Operator (Kubernetes Tailscale resources)
 - cert-manager (TLS certificate management)
-- External Secrets Operator (external secret management)
 - Velero (backup and restore)
+
+**Note**: External Secrets Operator has been removed. Secrets are now managed using Ansible Vault and SOPS for encryption at rest.
 
 ## Quick Start
 
@@ -88,7 +89,6 @@ helmfile/
 │   ├── prometheus-values.yaml
 │   ├── tailscale-operator-values.yaml
 │   ├── cert-manager-values.yaml
-│   ├── external-secrets-values.yaml
 │   └── velero-values.yaml
 ├── environments/              # Environment overrides
 │   ├── dev/
@@ -119,9 +119,6 @@ enabled:
   
   # Certificate management
   certManager: true
-  
-  # Secrets management
-  externalSecrets: true
   
   # Backup and restore
   velero: true
@@ -531,40 +528,6 @@ spec:
     - http01:
         ingress:
           class: nginx
-```
-
-### External Secrets Operator
-
-**Location**: `values/external-secrets-values.yaml`
-
-```yaml
-installCRDs: true
-
-webhook:
-  port: 9443
-
-certController:
-  create: true
-```
-
-**Configure SecretStore (Vault example):**
-
-```yaml
-apiVersion: external-secrets.io/v1beta1
-kind: SecretStore
-metadata:
-  name: vault-backend
-  namespace: production
-spec:
-  provider:
-    vault:
-      server: "https://vault.example.com"
-      path: "secret"
-      version: "v2"
-      auth:
-        kubernetes:
-          mountPath: "kubernetes"
-          role: "external-secrets"
 ```
 
 ### Velero

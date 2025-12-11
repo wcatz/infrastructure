@@ -339,9 +339,9 @@ The chart creates a ClusterRole with broad permissions for deployments. For prod
 Never commit secrets to Git. Use one of:
 
 1. **SOPS**: Encrypt secrets with age or GPG
-2. **External Secrets Operator**: Sync from external secret stores
-3. **Sealed Secrets**: Encrypt secrets for Git storage
-4. **GitHub Secrets**: Store secrets in GitHub (for tokens)
+2. **Sealed Secrets**: Encrypt secrets for Git storage
+3. **GitHub Secrets**: Store secrets in GitHub (for tokens)
+4. **Ansible Vault**: For infrastructure-level secrets
 
 ## Troubleshooting
 

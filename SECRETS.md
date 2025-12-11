@@ -24,11 +24,12 @@ This infrastructure uses a **defense-in-depth** approach to secret management wi
 
 1. **SOPS with age**: Encrypt secrets at rest in Git
 2. **Kubernetes Secrets**: Store encrypted secrets in the cluster
-3. **External Secrets Operator**: Sync secrets from external sources (optional)
-4. **Ansible Vault**: Encrypt infrastructure secrets for Ansible playbooks
-5. **GitHub Secrets**: Store CI/CD credentials securely
-6. **GitHub Secret Scanning**: Automated detection of accidentally committed secrets
-7. **Push Protection**: Prevents pushing commits containing secrets
+3. **Ansible Vault**: Encrypt infrastructure secrets for Ansible playbooks
+4. **GitHub Secrets**: Store CI/CD credentials securely
+5. **GitHub Secret Scanning**: Automated detection of accidentally committed secrets
+6. **Push Protection**: Prevents pushing commits containing secrets
+
+**Note**: External Secrets Operator has been removed. Secrets are now managed using Ansible Vault and SOPS for encryption at rest.
 
 **Key Principles:**
 - **Never commit plaintext secrets** - All secrets must be encrypted before commit
@@ -219,7 +220,6 @@ Understanding who is responsible for managing different types of secrets is crit
 │                  Kubernetes Cluster                          │
 │  - Secrets stored in etcd (encrypted at rest)               │
 │  - Mounted to pods as volumes or env vars                   │
-│  - External Secrets Operator syncs from vault (optional)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1099,7 +1099,6 @@ kubectl rollout restart deployment/myapp -n production
 - **Limit secret access** with RBAC
 - **Audit secret access** regularly
 - **Backup encryption keys** securely
-- **Use External Secrets Operator** for centralized secret management
 - **Enable Kubernetes secrets encryption at rest**
 - **Use service accounts** with minimal permissions
 
@@ -1674,7 +1673,6 @@ kubectl delete pod myapp-0 -n production
 - [SOPS Documentation](https://github.com/mozilla/sops) - Mozilla SOPS encryption tool
 - [age Encryption](https://github.com/FiloSottile/age) - Modern encryption tool by Filippo Valsorda
 - [Kubernetes Secrets](https://kubernetes.io/docs/concepts/configuration/secret/) - Kubernetes secrets documentation
-- [External Secrets Operator](https://external-secrets.io/) - Kubernetes operator for external secret management
 - [Cloudflared Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/) - Cloudflare tunnel documentation
 - [Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html) - Ansible vault encryption
 

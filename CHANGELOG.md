@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- External Secrets Operator (replaced with Ansible Vault + SOPS for secret management)
+
 ### Added
 - SOPS configuration file (.sops.yaml) for age-based encryption
 - Comprehensive SECRETS.md documentation for secret management
@@ -14,7 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example encrypted secret files (Cloudflared, GitHub runner, monitoring)
 - Health check script (scripts/health-check.sh) for cluster security validation
 - helmfile/secrets/ directory with README and examples
-- External Secrets Operator for secure secret management
 - Velero for backup and disaster recovery
 - DISASTER_RECOVERY.md guide with RTO/RPO expectations
 - Grafana dashboards for HAProxy, k3s, and Cloudflared

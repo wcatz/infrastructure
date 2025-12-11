@@ -109,7 +109,8 @@ Then create a pull request on GitHub.
 
 3. **Check for Secrets**
    - Never commit secrets, API keys, or credentials
-   - Use Kubernetes secrets or external secret managers
+   - Use SOPS with age encryption for secrets in Git
+   - Use Ansible Vault for infrastructure secrets
    - Review files for sensitive data before committing
 
 ### PR Guidelines
@@ -328,7 +329,8 @@ When making changes, consider updating:
   - Secrets include: passwords, API keys, certificates, tokens
   - Use `.gitignore` to exclude credential files
   - Use Kubernetes secrets for sensitive data
-  - Consider External Secrets Operator for production
+  - Use SOPS with age encryption for secrets in Git
+  - Use Ansible Vault for infrastructure-level secrets
 
 - **Creating Kubernetes Secrets**
   ```bash
