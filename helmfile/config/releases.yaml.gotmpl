@@ -92,8 +92,6 @@ releases:
       {{- end }}
 {{- end }}
 
-
-
 {{- if index $enabled "tailscaleOperator" | default true }}
   - name: tailscale-operator
     namespace: tailscale
