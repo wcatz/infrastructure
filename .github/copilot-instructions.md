@@ -354,17 +354,17 @@ When adding new services:
 
 ### Configuration Files
 
-- Ansible inventory: `ansible/inventory.ini`
-- Ansible vault: `ansible/group_vars/all/vault.yml`
+- Ansible inventory: `ansible/inventory.ini` (create from `inventory.ini.example`)
+- Ansible vault: `ansible/group_vars/all/vault.yml` (create from `vault.yml.example`, then encrypt)
 - Helmfile enabled apps: `helmfile/config/enabled.yaml`
 - SOPS configuration: `.sops.yaml`
 - Yamllint rules: `.yamllint`
 
-### Secrets
+### Secrets (Examples provided, create actual files without -example suffix)
 
-- Kubernetes secrets: `helmfile/secrets/*.enc.yaml`
-- Cloudflared credentials: `helmfile/secrets/cloudflared-credentials.enc.yaml`
-- GitHub runner tokens: `helmfile/secrets/github-runner-token.enc.yaml`
+- Kubernetes secrets pattern: `helmfile/secrets/*.enc.yaml`
+- Examples: `cloudflared-credentials-example.enc.yaml`, `github-runner-secrets-example.enc.yaml`
+- Actual files (not in repo): `cloudflared-credentials.enc.yaml`, `github-runner-secrets.enc.yaml`
 
 ### Scripts
 
