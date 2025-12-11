@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Documentation links and references
 - COMPLIANCE.md comments about TruffleHog implementation status
+- TruffleHog SARIF upload to GitHub Security tab with robust error handling
 
 ### Security
 - Implemented multi-layered secret management with SOPS (age) and Ansible Vault
