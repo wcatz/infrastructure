@@ -15,9 +15,6 @@ enabled:
   cloudflared: true
   tailscaleOperator: true
 
-  # Secrets management
-  externalSecrets: true
-
   # CI/CD
   githubRunner: true  # Self-hosted runners for production deployments
 

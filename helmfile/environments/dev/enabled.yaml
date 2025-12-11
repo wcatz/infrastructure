@@ -19,9 +19,6 @@ enabled:
   cloudflared: false
   tailscaleOperator: false
 
-  # Secrets management - DISABLED
-  externalSecrets: false
-
   # CI/CD - DISABLED
   githubRunner: false
 

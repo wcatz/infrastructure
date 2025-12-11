@@ -56,7 +56,6 @@ enabled:
   grafana: true
   cloudflared: true
   tailscaleOperator: true
-  externalSecrets: true
   githubRunner: false   # Disabled by default
   certManager: false
   velero: false
@@ -69,7 +68,6 @@ enabled:
   grafana: true
   cloudflared: true
   tailscaleOperator: true
-  externalSecrets: true
   githubRunner: true    # Enable in production
   certManager: true     # Enable in production
   velero: true          # Enable in production
