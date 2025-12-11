@@ -23,7 +23,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # OIDC Authentication (configure based on your cloud provider)
       # - name: Configure AWS Credentials (OIDC)
