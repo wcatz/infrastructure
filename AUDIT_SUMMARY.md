@@ -52,12 +52,7 @@
    - Version tracking established
    - Following Keep a Changelog format
 
-3. ✅ **Fixed TruffleHog SARIF Upload**
-   - Security findings now visible in GitHub Security tab
-   - Added security-events write permission
-   - Configured SARIF output format
-
-4. ✅ **Updated COMPLIANCE.md**
+3. ✅ **Updated COMPLIANCE.md**
    - Removed outdated comment about TruffleHog
    - Documentation now accurate
 
@@ -69,6 +64,7 @@
 - [ ] Pin TruffleHog action to version instead of `@main`
 - [ ] Fix broken documentation links (~10 links)
 - [ ] Standardize checkout actions to `@v6`
+- [ ] Consider TruffleHog SARIF upload (test carefully - workflow currently working)
 
 ### Medium Priority (Consider)
 - [ ] Add workflow caching (pip, helm) for faster CI/CD

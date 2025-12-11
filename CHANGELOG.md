@@ -24,7 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Documentation links and references
-- TruffleHog workflow SARIF upload configuration for GitHub Security tab integration
 - COMPLIANCE.md comments about TruffleHog implementation status
 
 ### Security
