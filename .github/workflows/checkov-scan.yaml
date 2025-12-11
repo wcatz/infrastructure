@@ -35,6 +35,10 @@ jobs:
         run: |
           pip install checkov
 
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+
       - name: Run Checkov on Helm Charts
         id: checkov-helm
         run: |
@@ -43,7 +47,7 @@ jobs:
             --framework helm \
             --output cli \
             --output json \
-            --output-file-path console,checkov-helm-results.json \
+            --output-file-path checkov-helm-results.json \
             --soft-fail || true
 
       - name: Run Checkov on Kubernetes Manifests
@@ -54,7 +58,7 @@ jobs:
             --framework kubernetes \
             --output cli \
             --output json \
-            --output-file-path console,checkov-k8s-results.json \
+            --output-file-path checkov-k8s-results.json \
             --soft-fail || true
 
       - name: Run Checkov on Helmfile Values
@@ -65,7 +69,7 @@ jobs:
             --framework kubernetes \
             --output cli \
             --output json \
-            --output-file-path console,checkov-values-results.json \
+            --output-file-path checkov-values-results.json \
             --soft-fail || true
 
       - name: Run Checkov on Ansible Playbooks
@@ -76,7 +80,7 @@ jobs:
             --framework ansible \
             --output cli \
             --output json \
-            --output-file-path console,checkov-ansible-results.json \
+            --output-file-path checkov-ansible-results.json \
             --soft-fail || true
 
       - name: Run Checkov Full Scan with SARIF
@@ -84,7 +88,7 @@ jobs:
           checkov --directory . \
             --framework helm,kubernetes,ansible \
             --output sarif \
-            --output-file-path console,checkov-results.sarif \
+            --output-file-path checkov-results.sarif \
             --skip-path .git \
             --skip-path node_modules \
             --soft-fail || true
@@ -113,7 +117,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Scan completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Parse results if available
           if [ -f checkov-helm-results.json ]; then
             echo "### Helm Charts Scan" >> $GITHUB_STEP_SUMMARY
@@ -123,7 +127,7 @@ jobs:
             echo "- ❌ Failed: $HELM_FAILED checks" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ -f checkov-k8s-results.json ]; then
             echo "### Kubernetes Manifests Scan" >> $GITHUB_STEP_SUMMARY
             K8S_PASSED=$(jq -r '.summary.passed' checkov-k8s-results.json || echo "0")
@@ -132,7 +136,7 @@ jobs:
             echo "- ❌ Failed: $K8S_FAILED checks" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ -f checkov-ansible-results.json ]; then
             echo "### Ansible Playbooks Scan" >> $GITHUB_STEP_SUMMARY
             ANSIBLE_PASSED=$(jq -r '.summary.passed' checkov-ansible-results.json || echo "0")
@@ -141,7 +145,7 @@ jobs:
             echo "- ❌ Failed: $ANSIBLE_FAILED checks" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "### 📚 Documentation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "For detailed security guidelines, see:" >> $GITHUB_STEP_SUMMARY
@@ -157,16 +161,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            
+
             let comment = '## 🔒 Checkov IaC Security Scan Results\n\n';
-            
+
             const files = [
               { name: 'Helm Charts', file: 'checkov-helm-results.json' },
               { name: 'Kubernetes Manifests', file: 'checkov-k8s-results.json' },
               { name: 'Helmfile Values', file: 'checkov-values-results.json' },
               { name: 'Ansible Playbooks', file: 'checkov-ansible-results.json' }
             ];
-            
+
             for (const {name, file} of files) {
               if (fs.existsSync(file)) {
                 try {
@@ -182,13 +186,13 @@ jobs:
                 }
               }
             }
-            
+
             comment += '\n### 📋 Next Steps\n\n';
             comment += '- Review failed checks in the Security tab\n';
             comment += '- Address critical and high severity issues\n';
             comment += '- Update `.checkov.yaml` to skip known false positives\n';
             comment += '- See [SECURITY.md](SECURITY.md) for security best practices\n';
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

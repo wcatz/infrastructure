@@ -28,6 +28,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -37,18 +41,27 @@ jobs:
         env:
           KUBECONFIG_PRODUCTION: ${{ secrets.KUBECONFIG_PRODUCTION }}
         run: |
+          if [ -z "$KUBECONFIG_PRODUCTION" ]; then
+            echo "❌ Error: KUBECONFIG_PRODUCTION secret not set"
+            echo "Please configure the KUBECONFIG_PRODUCTION secret in repository settings"
+            exit 1
+          fi
+
           mkdir -p $HOME/.kube
           echo "$KUBECONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
+          # Verify connection
+          kubectl cluster-info || echo "⚠️ Warning: Unable to connect to cluster"
+
       - name: Run kube-bench on Control Plane
         if: |
-          github.event.inputs.node_type == 'both' || 
-          github.event.inputs.node_type == 'control-plane' || 
+          github.event.inputs.node_type == 'both' ||
+          github.event.inputs.node_type == 'control-plane' ||
           github.event_name == 'schedule'
         run: |
           echo "## 🔍 Running kube-bench on Control Plane Nodes" >> $GITHUB_STEP_SUMMARY
-          
+
           # Run kube-bench as a Job on control plane nodes
           kubectl apply -f - <<EOF
           apiVersion: batch/v1
@@ -115,24 +128,24 @@ jobs:
                       path: "/usr/bin"
             backoffLimit: 0
           EOF
-          
+
           # Wait for job to complete
           kubectl wait --for=condition=complete --timeout=300s job/kube-bench-control-plane-${{ github.run_id }} || true
-          
+
           # Get logs
           kubectl logs job/kube-bench-control-plane-${{ github.run_id }} > kube-bench-control-plane.json || true
-          
+
           # Clean up
           kubectl delete job kube-bench-control-plane-${{ github.run_id }} || true
 
       - name: Run kube-bench on Worker Nodes
         if: |
-          github.event.inputs.node_type == 'both' || 
-          github.event.inputs.node_type == 'worker' || 
+          github.event.inputs.node_type == 'both' ||
+          github.event.inputs.node_type == 'worker' ||
           github.event_name == 'schedule'
         run: |
           echo "## 🔍 Running kube-bench on Worker Nodes" >> $GITHUB_STEP_SUMMARY
-          
+
           # Run kube-bench as a DaemonSet on worker nodes
           kubectl apply -f - <<EOF
           apiVersion: apps/v1
@@ -193,16 +206,16 @@ jobs:
                     hostPath:
                       path: "/usr/bin"
           EOF
-          
+
           # Wait for pods to be ready
           sleep 30
-          
+
           # Get logs from one worker node
           WORKER_POD=$(kubectl get pods -l app=kube-bench,scan-type=worker -o jsonpath='{.items[0].metadata.name}')
           if [ -n "$WORKER_POD" ]; then
             kubectl logs $WORKER_POD > kube-bench-worker.json || true
           fi
-          
+
           # Clean up
           kubectl delete daemonset kube-bench-worker-${{ github.run_id }} || true
 
@@ -213,7 +226,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Audit completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Parse control plane results if available
           if [ -f kube-bench-control-plane.json ]; then
             echo "### Control Plane Node Results" >> $GITHUB_STEP_SUMMARY
@@ -227,7 +240,7 @@ jobs:
             echo "- ℹ️  Total checks: $TOTAL" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           # Parse worker results if available
           if [ -f kube-bench-worker.json ]; then
             echo "### Worker Node Results" >> $GITHUB_STEP_SUMMARY
@@ -241,7 +254,7 @@ jobs:
             echo "- ℹ️  Total checks: $TOTAL" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "### 📚 Documentation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Review the CIS Kubernetes Benchmark results and address any failures." >> $GITHUB_STEP_SUMMARY

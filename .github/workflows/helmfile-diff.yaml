@@ -54,10 +54,14 @@ jobs:
       - name: Lint Helm values files
         run: |
           echo "Validating Helm values files..."
-          for values_file in helmfile/values/*.yaml; do
-            echo "Checking $values_file..."
-            # Basic YAML syntax validation already done, skip duplicates
-          done
+          if compgen -G "helmfile/values/*.yaml" > /dev/null; then
+            for values_file in helmfile/values/*.yaml; do
+              echo "Checking $values_file..."
+              # Basic YAML syntax validation already done, skip duplicates
+            done
+          else
+            echo "No Helm values files found, skipping"
+          fi
 
   security-scan:
     runs-on: ubuntu-latest
@@ -76,13 +80,13 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'  # Don't fail the build, just report
+          exit-code: '0'
 
       - name: Check for secrets in code
         run: |
           echo "Checking for exposed secrets..."
           # Look for common secret patterns
-          if grep -rE '(password|secret|key|token)\s*[:=]\s*["\047][^"\047]+["\047]' helmfile/ ansible/ --exclude-dir=.git || true; then
+          if grep -rE '(password|secret|key|token)\s*[:=]\s*["\047][^"\047]+["\047]' helmfile/ ansible/ --exclude-dir=.git 2>/dev/null || true; then
             echo "⚠️  Warning: Potential secrets found in code. Please review."
             echo "Secrets should be stored in Kubernetes secrets or external secret stores."
           else
@@ -95,6 +99,8 @@ jobs:
           if [ -f helmfile/manifests/network-policies.yaml ]; then
             # Basic validation that policies are well-formed
             kubectl --dry-run=client apply -f helmfile/manifests/network-policies.yaml 2>&1 || echo "NetworkPolicy validation completed"
+          else
+            echo "No NetworkPolicy manifest found, skipping validation"
           fi
 
   helmfile-diff:
