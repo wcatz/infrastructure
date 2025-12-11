@@ -30,8 +30,8 @@ This is a **production-ready hybrid Kubernetes infrastructure** repository that:
 
 - Use **2 spaces** for indentation (never tabs)
 - Keep lines under **120 characters** (yamllint configured)
-- Follow `.yamllint` configuration rules
-- Always include YAML document start (`---`) for Ansible playbooks
+- Follow `.yamllint` configuration rules (document-start disabled for flexibility)
+- **Convention**: Include YAML document start (`---`) for Ansible playbooks (best practice)
 - Add comments for complex configurations
 - Use consistent naming conventions (kebab-case for files)
 
@@ -346,7 +346,7 @@ helmfile status
 - **HTTP/HTTPS traffic**: Route through Cloudflared tunnels
 - **TCP/UDP services**: Expose via NodePort (30000-32767) on workers
 - **No load balancers**: Architecture uses Cloudflared + NodePorts (cost optimization)
-- **No traditional Ingress controllers**: Traefik is intentionally disabled in k3s configuration (using Cloudflared instead)
+- **No traditional Ingress**: Traefik (k3s default ingress controller) is intentionally disabled in k3s configuration (using Cloudflared instead)
 
 ### Service Exposure
 
