@@ -24,13 +24,17 @@ jobs:
   kube-hunter-remote:
     runs-on: ubuntu-latest
     if: |
-      github.event.inputs.scan_type == 'both' || 
-      github.event.inputs.scan_type == 'remote' || 
+      github.event.inputs.scan_type == 'both' ||
+      github.event.inputs.scan_type == 'remote' ||
       github.event_name == 'schedule'
     name: kube-hunter Remote Scan
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
@@ -41,24 +45,44 @@ jobs:
         env:
           KUBECONFIG_PRODUCTION: ${{ secrets.KUBECONFIG_PRODUCTION }}
         run: |
+          if [ -z "$KUBECONFIG_PRODUCTION" ]; then
+            echo "❌ Error: KUBECONFIG_PRODUCTION secret not set"
+            echo "Please configure the KUBECONFIG_PRODUCTION secret in repository settings"
+            exit 1
+          fi
+
           mkdir -p $HOME/.kube
           echo "$KUBECONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
+          # Verify connection
+          kubectl cluster-info || echo "⚠️ Warning: Unable to connect to cluster"
+
       - name: Get Kubernetes API Server
         id: get-api
         run: |
-          API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+          API_SERVER_URL=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+          # Extract hostname/IP from URL (remove https:// and port)
+          API_SERVER=$(echo "$API_SERVER_URL" | sed -E 's|https?://||' | cut -d':' -f1)
           echo "api_server=$API_SERVER" >> $GITHUB_OUTPUT
+          echo "Full API server URL: $API_SERVER_URL"
           echo "Scanning Kubernetes API at: $API_SERVER"
 
       - name: Run kube-hunter Remote Scan
         run: |
+          echo "Running kube-hunter remote scan..."
           docker run --rm \
             aquasec/kube-hunter:v0.6.8 \
             --remote ${{ steps.get-api.outputs.api_server }} \
-            --report json \
-            > kube-hunter-remote.json || true
+            --report json > kube-hunter-remote.json 2>&1 || true
+
+          # Ensure file exists even if scan failed
+          if [ ! -f kube-hunter-remote.json ]; then
+            echo '{"vulnerabilities": [], "services": [], "nodes": []}' > kube-hunter-remote.json
+          fi
+
+          echo "Scan output:"
+          cat kube-hunter-remote.json
 
       - name: Parse Remote Scan Results
         if: always()
@@ -68,18 +92,20 @@ jobs:
           echo "**Scan completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
           echo "**Target**: ${{ steps.get-api.outputs.api_server }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f kube-hunter-remote.json ]; then
+
+          if [ -f kube-hunter-remote.json ] && [ -s kube-hunter-remote.json ]; then
             # Count vulnerabilities by severity
-            HIGH=$(jq -r '[.vulnerabilities[] | select(.severity == "high")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
-            MEDIUM=$(jq -r '[.vulnerabilities[] | select(.severity == "medium")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
-            LOW=$(jq -r '[.vulnerabilities[] | select(.severity == "low")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
-            
+            HIGH=$(jq -r '[.vulnerabilities[]? | select(.severity == "high")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
+            MEDIUM=$(jq -r '[.vulnerabilities[]? | select(.severity == "medium")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
+            LOW=$(jq -r '[.vulnerabilities[]? | select(.severity == "low")] | length' kube-hunter-remote.json 2>/dev/null || echo "0")
+
             echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
             echo "- 🔴 High: $HIGH" >> $GITHUB_STEP_SUMMARY
             echo "- 🟠 Medium: $MEDIUM" >> $GITHUB_STEP_SUMMARY
             echo "- 🟡 Low: $LOW" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No results file found or file is empty" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload Remote Scan Results
@@ -87,14 +113,16 @@ jobs:
         if: always()
         with:
           name: kube-hunter-remote-results
-          path: kube-hunter-remote.json
+          path: |
+            kube-hunter-remote.json
           retention-days: 90
+          if-no-files-found: warn
 
   kube-hunter-pod:
     runs-on: ubuntu-latest
     if: |
-      github.event.inputs.scan_type == 'both' || 
-      github.event.inputs.scan_type == 'pod' || 
+      github.event.inputs.scan_type == 'both' ||
+      github.event.inputs.scan_type == 'pod' ||
       github.event_name == 'schedule'
     name: kube-hunter Pod Scan
     steps:
@@ -117,7 +145,7 @@ jobs:
       - name: Run kube-hunter as Pod
         run: |
           echo "## 🦁 Running kube-hunter as Pod" >> $GITHUB_STEP_SUMMARY
-          
+
           # Create a Job to run kube-hunter inside the cluster
           kubectl apply -f - <<EOF
           apiVersion: batch/v1
@@ -140,13 +168,13 @@ jobs:
                     args: ["--pod", "--report", "json"]
             backoffLimit: 0
           EOF
-          
+
           # Wait for job to complete
           kubectl wait --for=condition=complete --timeout=300s job/kube-hunter-pod-${{ github.run_id }} || true
-          
+
           # Get logs
           kubectl logs job/kube-hunter-pod-${{ github.run_id }} > kube-hunter-pod.json || true
-          
+
           # Clean up
           kubectl delete job kube-hunter-pod-${{ github.run_id }} || true
 
@@ -158,19 +186,19 @@ jobs:
           echo "**Scan completed at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
           echo "**Scan type**: Internal (from inside cluster)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f kube-hunter-pod.json ]; then
+
+          if [ -f kube-hunter-pod.json ] && [ -s kube-hunter-pod.json ]; then
             # Count vulnerabilities by severity
-            HIGH=$(jq -r '[.vulnerabilities[] | select(.severity == "high")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
-            MEDIUM=$(jq -r '[.vulnerabilities[] | select(.severity == "medium")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
-            LOW=$(jq -r '[.vulnerabilities[] | select(.severity == "low")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
-            
+            HIGH=$(jq -r '[.vulnerabilities[]? | select(.severity == "high")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
+            MEDIUM=$(jq -r '[.vulnerabilities[]? | select(.severity == "medium")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
+            LOW=$(jq -r '[.vulnerabilities[]? | select(.severity == "low")] | length' kube-hunter-pod.json 2>/dev/null || echo "0")
+
             echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
             echo "- 🔴 High: $HIGH" >> $GITHUB_STEP_SUMMARY
             echo "- 🟠 Medium: $MEDIUM" >> $GITHUB_STEP_SUMMARY
             echo "- 🟡 Low: $LOW" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
+
             echo "### 🛡️ Remediation" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Address high and medium severity vulnerabilities:" >> $GITHUB_STEP_SUMMARY
@@ -180,6 +208,8 @@ jobs:
             echo "- Update Kubernetes version if outdated" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "See detailed results in the downloaded artifacts." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No results file found or file is empty" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload Pod Scan Results
@@ -187,8 +217,10 @@ jobs:
         if: always()
         with:
           name: kube-hunter-pod-results
-          path: kube-hunter-pod.json
+          path: |
+            kube-hunter-pod.json
           retention-days: 90
+          if-no-files-found: warn
 
   generate-report:
     runs-on: ubuntu-latest
@@ -210,7 +242,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Report generated at**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 📚 Resources" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- [kube-hunter Documentation](https://github.com/aquasecurity/kube-hunter)" >> $GITHUB_STEP_SUMMARY

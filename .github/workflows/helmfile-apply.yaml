@@ -94,8 +94,9 @@ jobs:
       - name: Setup SOPS
         run: |
           # Install SOPS for secret decryption with age encryption
-          wget -O /usr/local/bin/sops https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
-          chmod +x /usr/local/bin/sops
+          wget -O /tmp/sops https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+          chmod +x /tmp/sops
+          sudo mv /tmp/sops /usr/local/bin/sops
           sops --version
 
       - name: Setup age for SOPS decryption
@@ -122,13 +123,61 @@ jobs:
           echo "SOPS age key configured successfully"
 
       - name: Configure Kubernetes Context
+        env:
+          KUBECONFIG_DEV: ${{ secrets.KUBECONFIG_DEV }}
+          KUBECONFIG_STAGING: ${{ secrets.KUBECONFIG_STAGING }}
+          KUBECONFIG_PRODUCTION: ${{ secrets.KUBECONFIG_PRODUCTION }}
+          KUBECONFIG_DEFAULT: ${{ secrets.KUBECONFIG }}
         run: |
-          # This is a placeholder for configuring kubectl context
-          # In a real scenario, you would configure kubeconfig here
-          # Example:
-          # echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
-          echo "Note: Configure your Kubernetes cluster credentials via repository secrets"
-          echo "Set KUBECONFIG secret with base64-encoded kubeconfig content"
+          mkdir -p $HOME/.kube
+
+          # Select appropriate kubeconfig based on environment input
+          ENV="${{ github.event.inputs.environment }}"
+
+          case "$ENV" in
+            dev)
+              if [ -z "$KUBECONFIG_DEV" ]; then
+                echo "❌ Error: KUBECONFIG_DEV secret not set"
+                echo "Please configure the KUBECONFIG_DEV secret in repository settings"
+                exit 1
+              fi
+              echo "$KUBECONFIG_DEV" | base64 -d > $HOME/.kube/config
+              ;;
+            staging)
+              if [ -z "$KUBECONFIG_STAGING" ]; then
+                echo "❌ Error: KUBECONFIG_STAGING secret not set"
+                echo "Please configure the KUBECONFIG_STAGING secret in repository settings"
+                exit 1
+              fi
+              echo "$KUBECONFIG_STAGING" | base64 -d > $HOME/.kube/config
+              ;;
+            production)
+              if [ -z "$KUBECONFIG_PRODUCTION" ]; then
+                echo "❌ Error: KUBECONFIG_PRODUCTION secret not set"
+                echo "Please configure the KUBECONFIG_PRODUCTION secret in repository settings"
+                exit 1
+              fi
+              echo "$KUBECONFIG_PRODUCTION" | base64 -d > $HOME/.kube/config
+              ;;
+            default)
+              if [ -z "$KUBECONFIG_DEFAULT" ]; then
+                echo "❌ Error: KUBECONFIG secret not set"
+                echo "Please configure the KUBECONFIG secret in repository settings"
+                exit 1
+              fi
+              echo "$KUBECONFIG_DEFAULT" | base64 -d > $HOME/.kube/config
+              ;;
+            *)
+              echo "❌ Error: Unknown environment: $ENV"
+              exit 1
+              ;;
+          esac
+
+          chmod 600 $HOME/.kube/config
+          echo "✅ Kubernetes context configured for environment: $ENV"
+
+          # Verify connection
+          kubectl cluster-info || echo "⚠️ Warning: Unable to connect to cluster"
 
       - name: Helmfile Diff (Pre-deployment)
         working-directory: helmfile
@@ -150,12 +199,48 @@ jobs:
             helmfile -e ${{ github.event.inputs.environment }} apply --suppress-secrets
           fi
 
+      - name: Wait for Deployments to be Ready
+        run: |
+          echo "⏳ Waiting for deployments to become ready..."
+
+          # Determine namespace based on environment
+          ENV="${{ github.event.inputs.environment }}"
+          case "$ENV" in
+            production|prod)
+              NAMESPACES="production monitoring cloudflare"
+              ;;
+            staging)
+              NAMESPACES="staging monitoring"
+              ;;
+            dev)
+              NAMESPACES="dev"
+              ;;
+            default)
+              NAMESPACES="default"
+              ;;
+            *)
+              NAMESPACES="default"
+              ;;
+          esac
+
+          # Wait for deployments in each namespace
+          for ns in $NAMESPACES; do
+            echo "Checking namespace: $ns"
+            if kubectl get namespace "$ns" >/dev/null 2>&1; then
+              echo "Waiting for deployments in $ns..."
+              kubectl wait --for=condition=available --timeout=300s deployment --all -n "$ns" || echo "⚠️ Some deployments in $ns did not become ready in time"
+            else
+              echo "Namespace $ns does not exist, skipping..."
+            fi
+          done
+
+          echo "✅ Deployment wait completed"
+
       - name: Verify Deployment
         run: |
           echo "Verifying deployment..."
-          # Add verification commands here
-          # kubectl get pods -A
-          # kubectl get svc -A
+          kubectl get pods -A
+          kubectl get svc -A
 
       - name: Deployment Summary
         run: |

@@ -85,21 +85,25 @@ jobs:
           if ! command -v helm &> /dev/null; then
             echo "Installing Helm..."
             curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          else
+            echo "Helm already installed"
           fi
-          helm version
+          helm version || echo "⚠️ Warning: Helm not available"
 
       - name: Setup Helmfile
         run: |
           if ! command -v helmfile &> /dev/null; then
             echo "Installing Helmfile..."
             HELMFILE_URL="https://github.com/helmfile/helmfile/releases"
-            wget -O /tmp/helmfile \
+            wget -O /tmp/helmfile.tar.gz \
               ${HELMFILE_URL}/download/v0.159.0/helmfile_0.159.0_linux_amd64.tar.gz
-            tar -xzf /tmp/helmfile -C /tmp
+            tar -xzf /tmp/helmfile.tar.gz -C /tmp
             sudo mv /tmp/helmfile /usr/local/bin/
             sudo chmod +x /usr/local/bin/helmfile
+          else
+            echo "Helmfile already installed"
           fi
-          helmfile version
+          helmfile version || echo "⚠️ Warning: Helmfile not available"
 
       - name: Setup SOPS
         run: |
@@ -108,8 +112,10 @@ jobs:
             wget -O /tmp/sops https://github.com/mozilla/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
             sudo mv /tmp/sops /usr/local/bin/sops
             sudo chmod +x /usr/local/bin/sops
+          else
+            echo "SOPS already installed"
           fi
-          sops --version
+          sops --version || echo "⚠️ Warning: SOPS not available"
 
       - name: Setup age for SOPS decryption
         run: |
@@ -118,13 +124,21 @@ jobs:
             wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz
             tar xzf age-v1.1.1-linux-amd64.tar.gz
             sudo mv age/age age/age-keygen /usr/local/bin/
+          else
+            echo "age already installed"
           fi
-          age --version
+          age --version || echo "⚠️ Warning: age not available"
 
       - name: Configure SOPS Age Key
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: |
+          if [ -z "$SOPS_AGE_KEY" ]; then
+            echo "❌ Error: SOPS_AGE_KEY secret not set"
+            echo "Please configure the SOPS_AGE_KEY secret in repository settings"
+            exit 1
+          fi
+
           mkdir -p ~/.config/sops/age
           echo "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
           chmod 600 ~/.config/sops/age/keys.txt
