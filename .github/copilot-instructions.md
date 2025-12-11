@@ -340,8 +340,8 @@ helmfile status
 
 - **HTTP/HTTPS traffic**: Route through Cloudflared tunnels
 - **TCP/UDP services**: Expose via NodePort (30000-32767) on workers
-- **No load balancers**: Architecture uses Cloudflared + NodePorts
-- **No traditional Ingress controllers**: Traefik disabled in k3s
+- **No load balancers**: Architecture uses Cloudflared + NodePorts (cost optimization)
+- **No traditional Ingress controllers**: Traefik is intentionally disabled in k3s configuration (using Cloudflared instead)
 
 ### Service Exposure
 
@@ -385,12 +385,12 @@ When adding new services:
 
 ### What to Avoid
 
-- Don't remove or weaken security configurations
-- Don't commit secrets or credentials
-- Don't make breaking changes without discussion
-- Don't ignore linting or validation errors
-- Don't skip testing steps
-- Don't use `latest` tags for production deployments
+- Don't remove or weaken security configurations (e.g., disabling RBAC, removing network policies, weakening pod security standards, disabling encryption, or relaxing firewall rules)
+- Don't commit secrets or credentials (plaintext passwords, API keys, private keys, tokens)
+- Don't make breaking changes without discussion (changing service ports, removing features, modifying APIs)
+- Don't ignore linting or validation errors (yamllint, Helmfile template errors, Ansible syntax errors)
+- Don't skip testing steps (dry-run validation, diff previews, syntax checks)
+- Don't use `latest` tags for production deployments (always pin specific versions)
 
 ### When Uncertain
 
