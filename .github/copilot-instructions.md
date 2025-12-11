@@ -16,7 +16,7 @@ This is a **production-ready hybrid Kubernetes infrastructure** repository that:
 ## Technology Stack
 
 - **Orchestration**: Kubernetes (k3s), Helm v3, Helmfile
-- **Infrastructure as Code**: Ansible 2.10+
+- **Infrastructure as Code**: Ansible 2.10+ (minimum; newer versions recommended for security and features)
 - **Networking**: Tailscale VPN mesh, Cloudflared tunnels
 - **Secret Management**: SOPS with age encryption, Ansible Vault
 - **CI/CD**: GitHub Actions with OIDC authentication
@@ -168,12 +168,12 @@ ansible-vault encrypt group_vars/all/vault.yml
 
 4. **Validate Ansible playbooks:**
    ```bash
-   ansible-playbook playbooks/deploy-k3s.yaml --syntax-check
+   ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml --syntax-check
    ```
 
 5. **Test Ansible in dry-run mode:**
    ```bash
-   ansible-playbook playbooks/deploy-k3s.yaml --check
+   ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml --check
    ```
 
 ### CI/CD Integration
@@ -285,9 +285,9 @@ All documentation follows a clear structure:
 # Complete deployment
 ./runme.sh
 
-# Or step-by-step:
-ansible-playbook -i inventory.ini playbooks/setup-tailscale.yaml
-ansible-playbook -i inventory.ini playbooks/deploy-k3s.yaml
+# Or step-by-step (with vault password for encrypted secrets):
+ansible-playbook -i inventory.ini --vault-password-file .vault_pass playbooks/setup-tailscale.yaml
+ansible-playbook -i inventory.ini --vault-password-file .vault_pass playbooks/deploy-k3s.yaml
 cd helmfile && helmfile apply
 ```
 
