@@ -252,7 +252,7 @@ jobs:
           echo "- [kube-bench Documentation](https://github.com/aquasecurity/kube-bench)" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload kube-bench results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: kube-bench-results

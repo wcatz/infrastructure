@@ -83,7 +83,7 @@ jobs:
           fi
 
       - name: Upload Remote Scan Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: kube-hunter-remote-results
@@ -183,7 +183,7 @@ jobs:
           fi
 
       - name: Upload Pod Scan Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: kube-hunter-pod-results
