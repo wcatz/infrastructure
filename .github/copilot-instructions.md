@@ -385,12 +385,24 @@ When adding new services:
 
 ### What to Avoid
 
-- Don't remove or weaken security configurations (e.g., disabling RBAC, removing network policies, weakening pod security standards, disabling encryption, or relaxing firewall rules)
-- Don't commit secrets or credentials (plaintext passwords, API keys, private keys, tokens)
-- Don't make breaking changes without discussion (changing service ports, removing features, modifying APIs)
-- Don't ignore linting or validation errors (yamllint, Helmfile template errors, Ansible syntax errors)
-- Don't skip testing steps (dry-run validation, diff previews, syntax checks)
-- Don't use `latest` tags for production deployments (always pin specific versions)
+- Don't remove or weaken security configurations:
+  - Disabling RBAC or network policies
+  - Weakening pod security standards or encryption
+  - Relaxing firewall rules or access controls
+- Don't commit secrets or credentials:
+  - Plaintext passwords, API keys, private keys, tokens
+  - Unencrypted certificate files or credential JSONs
+- Don't make breaking changes without discussion:
+  - Changing service ports or removing features
+  - Modifying APIs or changing resource names
+- Don't ignore linting or validation errors:
+  - yamllint, Helmfile template errors, Ansible syntax errors
+  - Security scan findings from Checkov or TruffleHog
+- Don't skip testing steps:
+  - Dry-run validation, diff previews, syntax checks
+  - CI/CD automated test results
+- Don't use `latest` tags for production deployments:
+  - Always pin specific versions for charts and images
 
 ### When Uncertain
 
