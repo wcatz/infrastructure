@@ -193,8 +193,9 @@ Deployed automatically via Helmfile:
 - **🌐 Cloudflared** - HTTP/S ingress via Cloudflare tunnels
 - **🔐 Tailscale Operator** - Kubernetes Tailscale resource management
 - **📜 cert-manager** - Automatic TLS certificate management
-- **🔑 External Secrets** - Integration with Vault/AWS Secrets Manager
 - **💾 Velero** - Backup and disaster recovery
+
+**Note**: Secrets are managed using Ansible Vault and SOPS for encryption at rest (External Secrets Operator removed).
 
 ### Automation & GitOps
 
