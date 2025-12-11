@@ -168,7 +168,6 @@ ansible-vault encrypt group_vars/all/vault.yml
 
 4. **Validate Ansible playbooks:**
    ```bash
-   # Note: ansible.cfg sets default inventory, but explicit is clearer
    cd ansible
    ansible-playbook playbooks/deploy-k3s.yaml --syntax-check
    ```
@@ -178,6 +177,8 @@ ansible-vault encrypt group_vars/all/vault.yml
    cd ansible
    ansible-playbook playbooks/deploy-k3s.yaml --check
    ```
+   
+   Note: The `ansible.cfg` file sets default inventory and vault password file paths.
 
 ### CI/CD Integration
 
@@ -288,8 +289,7 @@ All documentation follows a clear structure:
 # Complete deployment
 ./runme.sh
 
-# Or step-by-step:
-# Note: ansible.cfg sets inventory and vault_password_file defaults
+# Or step-by-step (ansible.cfg sets inventory and vault_password_file):
 cd ansible
 ansible-playbook playbooks/setup-tailscale.yaml
 ansible-playbook playbooks/deploy-k3s.yaml
