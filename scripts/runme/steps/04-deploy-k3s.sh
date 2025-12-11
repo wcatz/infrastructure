@@ -27,11 +27,11 @@ cd "$REPO_ROOT"
 # Get kubeconfig
 print_info "Retrieving kubeconfig..."
 
-# Initialize KUBECONFIG_PATH variable
-KUBECONFIG_PATH=""
-
 # Parse the first k3s_servers host line
-FIRST_K3S_LINE=$(get_first_host_line "k3s_servers" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+FIRST_K3S_LINE=$(get_first_host_line "k3s_servers" "$REPO_ROOT/ansible/inventory.ini" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+# Initialize KUBECONFIG_PATH variable (will be set if kubeconfig is successfully retrieved)
+KUBECONFIG_PATH=""
 
 if [ -z "$FIRST_K3S_LINE" ]; then
     print_error "Could not find any hosts under [k3s_servers] in ansible/inventory.ini"

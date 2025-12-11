@@ -120,6 +120,7 @@ validate_cloudflared_tunnel() {
 # Robust function to get the first non-comment host line for a given group
 get_first_host_line() {
     local group="$1"
+    local inventory_file="${2:-ansible/inventory.ini}"
     # Prints first non-blank, non-comment line after matching [group] and before next [othergroup]
     awk -v grp="$group" '
     $0 ~ /^\[.*\]/ {
@@ -130,7 +131,7 @@ get_first_host_line() {
       if ($0 ~ /^\s*#/ || $0 ~ /^\s*$/) next
       print; exit
     }
-    ' ansible/inventory.ini || true
+    ' "$inventory_file" || true
 }
 
 # Remote SCP helper function

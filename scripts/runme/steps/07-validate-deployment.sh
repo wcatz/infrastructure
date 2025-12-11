@@ -82,7 +82,7 @@ else
     else
         print_warning "DNS resolution test failed"
         print_info "DNS test output:"
-        head -10 /tmp/dns-test.log
+        head -n 10 /tmp/dns-test.log
     fi
 fi
 rm -f /tmp/dns-test.log
