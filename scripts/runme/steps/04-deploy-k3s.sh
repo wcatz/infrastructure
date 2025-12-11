@@ -27,6 +27,9 @@ cd "$REPO_ROOT"
 # Get kubeconfig
 print_info "Retrieving kubeconfig..."
 
+# Initialize KUBECONFIG_PATH variable
+KUBECONFIG_PATH=""
+
 # Parse the first k3s_servers host line
 FIRST_K3S_LINE=$(get_first_host_line "k3s_servers" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
@@ -90,9 +93,9 @@ else
     fi
 fi
 
-# Verify cluster access (if KUBECONFIG is already set or default config exists)
+# Verify cluster access (if KUBECONFIG_PATH was set)
 print_info "Verifying cluster access..."
-if [ -f "$KUBECONFIG_PATH" ]; then
+if [ -n "$KUBECONFIG_PATH" ] && [ -f "$KUBECONFIG_PATH" ]; then
     if KUBECONFIG="$KUBECONFIG_PATH" kubectl get nodes &> /dev/null; then
         print_success "Cluster is accessible"
         KUBECONFIG="$KUBECONFIG_PATH" kubectl get nodes
