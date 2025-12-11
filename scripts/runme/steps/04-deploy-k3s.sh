@@ -54,7 +54,7 @@ else
     # Find SSH user: prefer per-host ansible_user, else first ansible_user found in inventory, else current user
     SSH_USER=$(echo "$FIRST_K3S_LINE" | grep -oE 'ansible_user=[^[:space:]]+' | cut -d'=' -f2 || true)
     if [ -z "$SSH_USER" ]; then
-        SSH_USER=$(grep -m1 -oE 'ansible_user=[^[:space:]]+' "$REPO_ROOT/ansible/inventory.ini" | head -1 | cut -d'=' -f2 || true)
+        SSH_USER=$(grep -m1 -oE 'ansible_user=[^[:space:]]+' "$REPO_ROOT/ansible/inventory.ini" | cut -d'=' -f2 || true)
     fi
     if [ -z "$SSH_USER" ]; then
         print_warning "Could not determine SSH user from inventory; falling back to current user: $USER"
