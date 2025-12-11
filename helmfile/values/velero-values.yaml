@@ -1,7 +1,7 @@
 # Velero configuration for cluster-wide backups
 # See DISASTER_RECOVERY.md for setup and usage instructions
 
-# Configure credentials via secret (create manually or via External Secrets Operator)
+# Configure credentials via secret (create manually or use SOPS encryption)
 # kubectl create secret generic cloud-credentials \
 #   --from-file=cloud=credentials-velero \
 #   -n velero

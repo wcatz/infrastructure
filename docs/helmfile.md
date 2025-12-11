@@ -89,7 +89,6 @@ helmfile/
 │   ├── prometheus-values.yaml
 │   ├── tailscale-operator-values.yaml
 │   ├── cert-manager-values.yaml
-│   ├── external-secrets-values.yaml
 │   └── velero-values.yaml
 ├── environments/              # Environment overrides
 │   ├── dev/

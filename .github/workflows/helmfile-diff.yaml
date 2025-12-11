@@ -47,7 +47,6 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo add haproxy-ingress https://haproxy-ingress.github.io/charts
           helm repo add cloudflare https://cloudflare.github.io/helm-charts
-          helm repo add external-secrets https://charts.external-secrets.io
           helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
           helm repo add grafana https://grafana.github.io/helm-charts
           helm repo update
